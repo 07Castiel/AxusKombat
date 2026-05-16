@@ -14,16 +14,735 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      alunos: {
+        Row: {
+          altura: number | null
+          categoria: Database["public"]["Enums"]["categoria_aluno"]
+          contato_emergencia: string | null
+          created_at: string
+          data_entrada: string
+          data_nascimento: string | null
+          foto_url: string | null
+          graduacao_atual_id: string | null
+          id: string
+          nome_completo: string
+          observacoes: string | null
+          observacoes_medicas: string | null
+          peso: number | null
+          responsavel_cpf: string | null
+          responsavel_nome: string | null
+          responsavel_telefone: string | null
+          status: Database["public"]["Enums"]["status_aluno"]
+          telefone: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          altura?: number | null
+          categoria?: Database["public"]["Enums"]["categoria_aluno"]
+          contato_emergencia?: string | null
+          created_at?: string
+          data_entrada?: string
+          data_nascimento?: string | null
+          foto_url?: string | null
+          graduacao_atual_id?: string | null
+          id?: string
+          nome_completo: string
+          observacoes?: string | null
+          observacoes_medicas?: string | null
+          peso?: number | null
+          responsavel_cpf?: string | null
+          responsavel_nome?: string | null
+          responsavel_telefone?: string | null
+          status?: Database["public"]["Enums"]["status_aluno"]
+          telefone?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          altura?: number | null
+          categoria?: Database["public"]["Enums"]["categoria_aluno"]
+          contato_emergencia?: string | null
+          created_at?: string
+          data_entrada?: string
+          data_nascimento?: string | null
+          foto_url?: string | null
+          graduacao_atual_id?: string | null
+          id?: string
+          nome_completo?: string
+          observacoes?: string | null
+          observacoes_medicas?: string | null
+          peso?: number | null
+          responsavel_cpf?: string | null
+          responsavel_nome?: string | null
+          responsavel_telefone?: string | null
+          status?: Database["public"]["Enums"]["status_aluno"]
+          telefone?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alunos_graduacao_atual_id_fkey"
+            columns: ["graduacao_atual_id"]
+            isOneToOne: false
+            referencedRelation: "graduacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alunos_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      despesas: {
+        Row: {
+          categoria: string | null
+          created_at: string
+          data: string
+          descricao: string
+          id: string
+          observacoes: string | null
+          tenant_id: string
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          categoria?: string | null
+          created_at?: string
+          data?: string
+          descricao: string
+          id?: string
+          observacoes?: string | null
+          tenant_id: string
+          updated_at?: string
+          valor: number
+        }
+        Update: {
+          categoria?: string | null
+          created_at?: string
+          data?: string
+          descricao?: string
+          id?: string
+          observacoes?: string | null
+          tenant_id?: string
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesas_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      graduacoes: {
+        Row: {
+          categoria: Database["public"]["Enums"]["categoria_aluno"]
+          cor: string | null
+          created_at: string
+          id: string
+          modalidade_id: string | null
+          nome: string
+          ordem: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          categoria?: Database["public"]["Enums"]["categoria_aluno"]
+          cor?: string | null
+          created_at?: string
+          id?: string
+          modalidade_id?: string | null
+          nome: string
+          ordem?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          categoria?: Database["public"]["Enums"]["categoria_aluno"]
+          cor?: string | null
+          created_at?: string
+          id?: string
+          modalidade_id?: string | null
+          nome?: string
+          ordem?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "graduacoes_modalidade_id_fkey"
+            columns: ["modalidade_id"]
+            isOneToOne: false
+            referencedRelation: "modalidades"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "graduacoes_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      historico_graduacoes: {
+        Row: {
+          aluno_id: string
+          created_at: string
+          data: string
+          graduacao_anterior_id: string | null
+          graduacao_nova_id: string
+          id: string
+          observacoes: string | null
+          tenant_id: string
+        }
+        Insert: {
+          aluno_id: string
+          created_at?: string
+          data?: string
+          graduacao_anterior_id?: string | null
+          graduacao_nova_id: string
+          id?: string
+          observacoes?: string | null
+          tenant_id: string
+        }
+        Update: {
+          aluno_id?: string
+          created_at?: string
+          data?: string
+          graduacao_anterior_id?: string | null
+          graduacao_nova_id?: string
+          id?: string
+          observacoes?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "historico_graduacoes_aluno_id_fkey"
+            columns: ["aluno_id"]
+            isOneToOne: false
+            referencedRelation: "alunos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "historico_graduacoes_graduacao_anterior_id_fkey"
+            columns: ["graduacao_anterior_id"]
+            isOneToOne: false
+            referencedRelation: "graduacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "historico_graduacoes_graduacao_nova_id_fkey"
+            columns: ["graduacao_nova_id"]
+            isOneToOne: false
+            referencedRelation: "graduacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "historico_graduacoes_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      horarios: {
+        Row: {
+          ativo: boolean
+          categoria: Database["public"]["Enums"]["categoria_aluno"]
+          created_at: string
+          dia: Database["public"]["Enums"]["dia_semana"]
+          hora: string
+          id: string
+          modalidade_id: string
+          observacao: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          categoria?: Database["public"]["Enums"]["categoria_aluno"]
+          created_at?: string
+          dia: Database["public"]["Enums"]["dia_semana"]
+          hora: string
+          id?: string
+          modalidade_id: string
+          observacao?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          categoria?: Database["public"]["Enums"]["categoria_aluno"]
+          created_at?: string
+          dia?: Database["public"]["Enums"]["dia_semana"]
+          hora?: string
+          id?: string
+          modalidade_id?: string
+          observacao?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "horarios_modalidade_id_fkey"
+            columns: ["modalidade_id"]
+            isOneToOne: false
+            referencedRelation: "modalidades"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "horarios_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      matriculas: {
+        Row: {
+          aluno_id: string
+          created_at: string
+          data_inicio: string
+          data_vencimento: string
+          desconto: number
+          id: string
+          observacoes: string | null
+          plano_id: string
+          status: Database["public"]["Enums"]["status_matricula"]
+          tenant_id: string
+          updated_at: string
+          valor_final: number
+        }
+        Insert: {
+          aluno_id: string
+          created_at?: string
+          data_inicio?: string
+          data_vencimento: string
+          desconto?: number
+          id?: string
+          observacoes?: string | null
+          plano_id: string
+          status?: Database["public"]["Enums"]["status_matricula"]
+          tenant_id: string
+          updated_at?: string
+          valor_final: number
+        }
+        Update: {
+          aluno_id?: string
+          created_at?: string
+          data_inicio?: string
+          data_vencimento?: string
+          desconto?: number
+          id?: string
+          observacoes?: string | null
+          plano_id?: string
+          status?: Database["public"]["Enums"]["status_matricula"]
+          tenant_id?: string
+          updated_at?: string
+          valor_final?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matriculas_aluno_id_fkey"
+            columns: ["aluno_id"]
+            isOneToOne: false
+            referencedRelation: "alunos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matriculas_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "planos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matriculas_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      modalidades: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          nome: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "modalidades_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notificacoes: {
+        Row: {
+          agendada_para: string | null
+          aluno_id: string | null
+          canal: string
+          created_at: string
+          destinatario: string | null
+          enviada_em: string | null
+          erro: string | null
+          id: string
+          matricula_id: string | null
+          mensagem: string
+          status: Database["public"]["Enums"]["status_notificacao"]
+          tenant_id: string
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          agendada_para?: string | null
+          aluno_id?: string | null
+          canal?: string
+          created_at?: string
+          destinatario?: string | null
+          enviada_em?: string | null
+          erro?: string | null
+          id?: string
+          matricula_id?: string | null
+          mensagem: string
+          status?: Database["public"]["Enums"]["status_notificacao"]
+          tenant_id: string
+          tipo: string
+          updated_at?: string
+        }
+        Update: {
+          agendada_para?: string | null
+          aluno_id?: string | null
+          canal?: string
+          created_at?: string
+          destinatario?: string | null
+          enviada_em?: string | null
+          erro?: string | null
+          id?: string
+          matricula_id?: string | null
+          mensagem?: string
+          status?: Database["public"]["Enums"]["status_notificacao"]
+          tenant_id?: string
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notificacoes_aluno_id_fkey"
+            columns: ["aluno_id"]
+            isOneToOne: false
+            referencedRelation: "alunos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notificacoes_matricula_id_fkey"
+            columns: ["matricula_id"]
+            isOneToOne: false
+            referencedRelation: "matriculas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notificacoes_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pagamentos: {
+        Row: {
+          aluno_id: string
+          created_at: string
+          data_pagamento: string | null
+          data_vencimento: string
+          id: string
+          matricula_id: string
+          mercado_pago_id: string | null
+          metodo: Database["public"]["Enums"]["metodo_pagamento"]
+          observacoes: string | null
+          status: Database["public"]["Enums"]["status_pagamento"]
+          tenant_id: string
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          aluno_id: string
+          created_at?: string
+          data_pagamento?: string | null
+          data_vencimento: string
+          id?: string
+          matricula_id: string
+          mercado_pago_id?: string | null
+          metodo?: Database["public"]["Enums"]["metodo_pagamento"]
+          observacoes?: string | null
+          status?: Database["public"]["Enums"]["status_pagamento"]
+          tenant_id: string
+          updated_at?: string
+          valor: number
+        }
+        Update: {
+          aluno_id?: string
+          created_at?: string
+          data_pagamento?: string | null
+          data_vencimento?: string
+          id?: string
+          matricula_id?: string
+          mercado_pago_id?: string | null
+          metodo?: Database["public"]["Enums"]["metodo_pagamento"]
+          observacoes?: string | null
+          status?: Database["public"]["Enums"]["status_pagamento"]
+          tenant_id?: string
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pagamentos_aluno_id_fkey"
+            columns: ["aluno_id"]
+            isOneToOne: false
+            referencedRelation: "alunos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pagamentos_matricula_id_fkey"
+            columns: ["matricula_id"]
+            isOneToOne: false
+            referencedRelation: "matriculas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pagamentos_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      planos: {
+        Row: {
+          ativo: boolean
+          categoria: Database["public"]["Enums"]["categoria_aluno"]
+          created_at: string
+          descricao: string | null
+          duracao: Database["public"]["Enums"]["duracao_plano"]
+          frequencia_semanal: number | null
+          id: string
+          modalidades: string[]
+          nome: string
+          tenant_id: string
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          ativo?: boolean
+          categoria?: Database["public"]["Enums"]["categoria_aluno"]
+          created_at?: string
+          descricao?: string | null
+          duracao?: Database["public"]["Enums"]["duracao_plano"]
+          frequencia_semanal?: number | null
+          id?: string
+          modalidades?: string[]
+          nome: string
+          tenant_id: string
+          updated_at?: string
+          valor: number
+        }
+        Update: {
+          ativo?: boolean
+          categoria?: Database["public"]["Enums"]["categoria_aluno"]
+          created_at?: string
+          descricao?: string | null
+          duracao?: Database["public"]["Enums"]["duracao_plano"]
+          frequencia_semanal?: number | null
+          id?: string
+          modalidades?: string[]
+          nome?: string
+          tenant_id?: string
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planos_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          email: string
+          id: string
+          nome_completo: string
+          telefone: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          email: string
+          id: string
+          nome_completo: string
+          telefone?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          nome_completo?: string
+          telefone?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenants: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          logo_url: string | null
+          nome: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          logo_url?: string | null
+          nome: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          logo_url?: string | null
+          nome?: string
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          tenant_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          tenant_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          tenant_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_current_tenant: { Args: never; Returns: string }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_admin: { Args: never; Returns: boolean }
+      is_professor_kids: { Args: never; Returns: boolean }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "professor_kids"
+      categoria_aluno: "adulto" | "kids"
+      dia_semana:
+        | "segunda"
+        | "terca"
+        | "quarta"
+        | "quinta"
+        | "sexta"
+        | "sabado"
+        | "domingo"
+      duracao_plano: "mensal" | "trimestral" | "semestral" | "anual"
+      metodo_pagamento: "pix" | "dinheiro" | "cartao"
+      status_aluno: "ativo" | "inativo" | "pendente"
+      status_matricula: "ativa" | "vencida" | "cancelada" | "pendente"
+      status_notificacao: "agendada" | "enviada" | "falhou" | "cancelada"
+      status_pagamento: "pago" | "pendente" | "atrasado" | "cancelado"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +869,24 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "professor_kids"],
+      categoria_aluno: ["adulto", "kids"],
+      dia_semana: [
+        "segunda",
+        "terca",
+        "quarta",
+        "quinta",
+        "sexta",
+        "sabado",
+        "domingo",
+      ],
+      duracao_plano: ["mensal", "trimestral", "semestral", "anual"],
+      metodo_pagamento: ["pix", "dinheiro", "cartao"],
+      status_aluno: ["ativo", "inativo", "pendente"],
+      status_matricula: ["ativa", "vencida", "cancelada", "pendente"],
+      status_notificacao: ["agendada", "enviada", "falhou", "cancelada"],
+      status_pagamento: ["pago", "pendente", "atrasado", "cancelado"],
+    },
   },
 } as const
