@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
+import { PasswordInput } from "@/components/PasswordInput";
 import { toast } from "sonner";
 import { Swords, Loader2 } from "lucide-react";
 
@@ -52,14 +53,14 @@ function LoginPage() {
           </div>
           <div>
             <Label htmlFor="pwd">Senha</Label>
-            <Input id="pwd" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5" />
+            <PasswordInput id="pwd" required value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5" />
           </div>
           <Button type="submit" className="w-full gradient-primary text-primary-foreground shadow-glow" disabled={loading}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Entrar"}
           </Button>
         </form>
         <p className="text-sm text-center mt-6 text-muted-foreground">
-          Primeira vez? <Link to="/signup" className="text-primary hover:underline">Cadastre sua academia</Link>
+          Primeira vez? <Link to="/signup" className="text-primary hover:underline font-medium">Cadastre sua academia</Link>
         </p>
       </Card>
     </div>

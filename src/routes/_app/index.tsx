@@ -63,7 +63,7 @@ function Dashboard() {
 
   return (
     <div>
-      <PageHeader title={`Olá, ${profile?.nome_completo.split(" ")[0]}`} description="Visão geral da sua academia" />
+      <PageHeader title={`Bem-vindo, ${profile?.nome_completo?.split(" ")[0] ?? ""}`} description={profile?.nome_completo ? `${profile.nome_completo} · Visão geral da sua academia` : "Visão geral da sua academia"} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Stat icon={Users} label="Alunos Ativos" value={ativos} accent="text-success" />
