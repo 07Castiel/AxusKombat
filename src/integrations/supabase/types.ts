@@ -768,7 +768,7 @@ export type Database = {
         | "sabado"
         | "domingo"
       duracao_plano: "mensal" | "trimestral" | "semestral" | "anual"
-      metodo_pagamento: "pix" | "dinheiro" | "cartao"
+      metodo_pagamento: "pix" | "dinheiro" | "cartao" | "boleto"
       status_aluno: "ativo" | "inativo" | "pendente"
       status_matricula: "ativa" | "vencida" | "cancelada" | "pendente"
       status_notificacao: "agendada" | "enviada" | "falhou" | "cancelada"
@@ -912,7 +912,7 @@ export const Constants = {
         "domingo",
       ],
       duracao_plano: ["mensal", "trimestral", "semestral", "anual"],
-      metodo_pagamento: ["pix", "dinheiro", "cartao"],
+      metodo_pagamento: ["pix", "dinheiro", "cartao", "boleto"],
       status_aluno: ["ativo", "inativo", "pendente"],
       status_matricula: ["ativa", "vencida", "cancelada", "pendente"],
       status_notificacao: ["agendada", "enviada", "falhou", "cancelada"],
