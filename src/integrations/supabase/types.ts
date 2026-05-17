@@ -19,9 +19,12 @@ export type Database = {
           altura: number | null
           categoria: Database["public"]["Enums"]["categoria_aluno"]
           contato_emergencia: string | null
+          cpf: string | null
           created_at: string
           data_entrada: string
           data_nascimento: string | null
+          email: string | null
+          endereco: string | null
           foto_url: string | null
           graduacao_atual_id: string | null
           id: string
@@ -41,9 +44,12 @@ export type Database = {
           altura?: number | null
           categoria?: Database["public"]["Enums"]["categoria_aluno"]
           contato_emergencia?: string | null
+          cpf?: string | null
           created_at?: string
           data_entrada?: string
           data_nascimento?: string | null
+          email?: string | null
+          endereco?: string | null
           foto_url?: string | null
           graduacao_atual_id?: string | null
           id?: string
@@ -63,9 +69,12 @@ export type Database = {
           altura?: number | null
           categoria?: Database["public"]["Enums"]["categoria_aluno"]
           contato_emergencia?: string | null
+          cpf?: string | null
           created_at?: string
           data_entrada?: string
           data_nascimento?: string | null
+          email?: string | null
+          endereco?: string | null
           foto_url?: string | null
           graduacao_atual_id?: string | null
           id?: string
@@ -258,37 +267,46 @@ export type Database = {
       horarios: {
         Row: {
           ativo: boolean
+          capacidade_maxima: number | null
           categoria: Database["public"]["Enums"]["categoria_aluno"]
           created_at: string
           dia: Database["public"]["Enums"]["dia_semana"]
           hora: string
+          hora_fim: string | null
           id: string
           modalidade_id: string
           observacao: string | null
+          professor: string | null
           tenant_id: string
           updated_at: string
         }
         Insert: {
           ativo?: boolean
+          capacidade_maxima?: number | null
           categoria?: Database["public"]["Enums"]["categoria_aluno"]
           created_at?: string
           dia: Database["public"]["Enums"]["dia_semana"]
           hora: string
+          hora_fim?: string | null
           id?: string
           modalidade_id: string
           observacao?: string | null
+          professor?: string | null
           tenant_id: string
           updated_at?: string
         }
         Update: {
           ativo?: boolean
+          capacidade_maxima?: number | null
           categoria?: Database["public"]["Enums"]["categoria_aluno"]
           created_at?: string
           dia?: Database["public"]["Enums"]["dia_semana"]
           hora?: string
+          hora_fim?: string | null
           id?: string
           modalidade_id?: string
           observacao?: string | null
+          professor?: string | null
           tenant_id?: string
           updated_at?: string
         }
@@ -491,7 +509,7 @@ export type Database = {
           data_pagamento: string | null
           data_vencimento: string
           id: string
-          matricula_id: string
+          matricula_id: string | null
           mercado_pago_id: string | null
           metodo: Database["public"]["Enums"]["metodo_pagamento"]
           observacoes: string | null
@@ -506,7 +524,7 @@ export type Database = {
           data_pagamento?: string | null
           data_vencimento: string
           id?: string
-          matricula_id: string
+          matricula_id?: string | null
           mercado_pago_id?: string | null
           metodo?: Database["public"]["Enums"]["metodo_pagamento"]
           observacoes?: string | null
@@ -521,7 +539,7 @@ export type Database = {
           data_pagamento?: string | null
           data_vencimento?: string
           id?: string
-          matricula_id?: string
+          matricula_id?: string | null
           mercado_pago_id?: string | null
           metodo?: Database["public"]["Enums"]["metodo_pagamento"]
           observacoes?: string | null
@@ -651,29 +669,41 @@ export type Database = {
       tenants: {
         Row: {
           ativo: boolean
+          cnpj_cpf: string | null
           created_at: string
           id: string
           logo_url: string | null
           nome: string
+          responsavel_email: string | null
+          responsavel_nome: string | null
           slug: string
+          telefone: string | null
           updated_at: string
         }
         Insert: {
           ativo?: boolean
+          cnpj_cpf?: string | null
           created_at?: string
           id?: string
           logo_url?: string | null
           nome: string
+          responsavel_email?: string | null
+          responsavel_nome?: string | null
           slug: string
+          telefone?: string | null
           updated_at?: string
         }
         Update: {
           ativo?: boolean
+          cnpj_cpf?: string | null
           created_at?: string
           id?: string
           logo_url?: string | null
           nome?: string
+          responsavel_email?: string | null
+          responsavel_nome?: string | null
           slug?: string
+          telefone?: string | null
           updated_at?: string
         }
         Relationships: []
