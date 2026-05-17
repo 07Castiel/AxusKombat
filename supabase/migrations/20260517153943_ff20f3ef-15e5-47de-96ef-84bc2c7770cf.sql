@@ -1,0 +1,1 @@
+ALTER TYPE metodo_pagamento ADD VALUE IF NOT EXISTS 'boleto';

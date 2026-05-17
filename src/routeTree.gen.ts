@@ -12,7 +12,9 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
+import { Route as AdminMasterIndexRouteImport } from './routes/admin-master.index'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AdminMasterDashboardRouteImport } from './routes/admin-master.dashboard'
 import { Route as AppRelatoriosRouteImport } from './routes/_app/relatorios'
 import { Route as AppPlanosRouteImport } from './routes/_app/planos'
 import { Route as AppPagamentosRouteImport } from './routes/_app/pagamentos'
@@ -21,6 +23,7 @@ import { Route as AppHorariosRouteImport } from './routes/_app/horarios'
 import { Route as AppGraduacoesRouteImport } from './routes/_app/graduacoes'
 import { Route as AppConfiguracoesRouteImport } from './routes/_app/configuracoes'
 import { Route as AppAlunosRouteImport } from './routes/_app/alunos'
+import { Route as AdminMasterTenantIdRouteImport } from './routes/admin-master.tenant.$id'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -36,10 +39,20 @@ const AppRoute = AppRouteImport.update({
   id: '/_app',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminMasterIndexRoute = AdminMasterIndexRouteImport.update({
+  id: '/admin-master/',
+  path: '/admin-master/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppRoute,
+} as any)
+const AdminMasterDashboardRoute = AdminMasterDashboardRouteImport.update({
+  id: '/admin-master/dashboard',
+  path: '/admin-master/dashboard',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AppRelatoriosRoute = AppRelatoriosRouteImport.update({
   id: '/relatorios',
@@ -81,6 +94,11 @@ const AppAlunosRoute = AppAlunosRouteImport.update({
   path: '/alunos',
   getParentRoute: () => AppRoute,
 } as any)
+const AdminMasterTenantIdRoute = AdminMasterTenantIdRouteImport.update({
+  id: '/admin-master/tenant/$id',
+  path: '/admin-master/tenant/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -94,6 +112,9 @@ export interface FileRoutesByFullPath {
   '/pagamentos': typeof AppPagamentosRoute
   '/planos': typeof AppPlanosRoute
   '/relatorios': typeof AppRelatoriosRoute
+  '/admin-master/dashboard': typeof AdminMasterDashboardRoute
+  '/admin-master/': typeof AdminMasterIndexRoute
+  '/admin-master/tenant/$id': typeof AdminMasterTenantIdRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -106,7 +127,10 @@ export interface FileRoutesByTo {
   '/pagamentos': typeof AppPagamentosRoute
   '/planos': typeof AppPlanosRoute
   '/relatorios': typeof AppRelatoriosRoute
+  '/admin-master/dashboard': typeof AdminMasterDashboardRoute
   '/': typeof AppIndexRoute
+  '/admin-master': typeof AdminMasterIndexRoute
+  '/admin-master/tenant/$id': typeof AdminMasterTenantIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -121,7 +145,10 @@ export interface FileRoutesById {
   '/_app/pagamentos': typeof AppPagamentosRoute
   '/_app/planos': typeof AppPlanosRoute
   '/_app/relatorios': typeof AppRelatoriosRoute
+  '/admin-master/dashboard': typeof AdminMasterDashboardRoute
   '/_app/': typeof AppIndexRoute
+  '/admin-master/': typeof AdminMasterIndexRoute
+  '/admin-master/tenant/$id': typeof AdminMasterTenantIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -137,6 +164,9 @@ export interface FileRouteTypes {
     | '/pagamentos'
     | '/planos'
     | '/relatorios'
+    | '/admin-master/dashboard'
+    | '/admin-master/'
+    | '/admin-master/tenant/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -149,7 +179,10 @@ export interface FileRouteTypes {
     | '/pagamentos'
     | '/planos'
     | '/relatorios'
+    | '/admin-master/dashboard'
     | '/'
+    | '/admin-master'
+    | '/admin-master/tenant/$id'
   id:
     | '__root__'
     | '/_app'
@@ -163,13 +196,19 @@ export interface FileRouteTypes {
     | '/_app/pagamentos'
     | '/_app/planos'
     | '/_app/relatorios'
+    | '/admin-master/dashboard'
     | '/_app/'
+    | '/admin-master/'
+    | '/admin-master/tenant/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
   SignupRoute: typeof SignupRoute
+  AdminMasterDashboardRoute: typeof AdminMasterDashboardRoute
+  AdminMasterIndexRoute: typeof AdminMasterIndexRoute
+  AdminMasterTenantIdRoute: typeof AdminMasterTenantIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -195,12 +234,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin-master/': {
+      id: '/admin-master/'
+      path: '/admin-master'
+      fullPath: '/admin-master/'
+      preLoaderRoute: typeof AdminMasterIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_app/': {
       id: '/_app/'
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/admin-master/dashboard': {
+      id: '/admin-master/dashboard'
+      path: '/admin-master/dashboard'
+      fullPath: '/admin-master/dashboard'
+      preLoaderRoute: typeof AdminMasterDashboardRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_app/relatorios': {
       id: '/_app/relatorios'
@@ -258,6 +311,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAlunosRouteImport
       parentRoute: typeof AppRoute
     }
+    '/admin-master/tenant/$id': {
+      id: '/admin-master/tenant/$id'
+      path: '/admin-master/tenant/$id'
+      fullPath: '/admin-master/tenant/$id'
+      preLoaderRoute: typeof AdminMasterTenantIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -291,6 +351,9 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
   SignupRoute: SignupRoute,
+  AdminMasterDashboardRoute: AdminMasterDashboardRoute,
+  AdminMasterIndexRoute: AdminMasterIndexRoute,
+  AdminMasterTenantIdRoute: AdminMasterTenantIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
