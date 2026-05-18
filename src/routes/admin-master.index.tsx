@@ -10,7 +10,8 @@ import { PasswordInput } from "@/components/PasswordInput";
 import { toast } from "sonner";
 import { Shield, Loader2 } from "lucide-react";
 
-export const Route = createFileRoute("/admin-master/")({ component: MasterLoginPage });
+export const Route = createFileRoute("/admin-master/")({
+  head: () => ({ meta: [{ title: "Admin Master · Entrar" }, { name: "robots", content: "noindex, nofollow" }] }), component: MasterLoginPage });
 
 function MasterLoginPage() {
   const navigate = useNavigate();

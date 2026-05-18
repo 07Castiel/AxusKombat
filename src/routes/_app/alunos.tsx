@@ -18,7 +18,16 @@ import { Plus, Search, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { fmtDate } from "@/lib/utils";
 
-export const Route = createFileRoute("/_app/alunos")({ component: AlunosPage });
+export const Route = createFileRoute("/_app/alunos")({
+  component: AlunosPage,
+  head: () => ({
+    meta: [
+      { title: "Alunos | CT Aquiles" },
+      { name: "description", content: "Cadastro e gestão de alunos da academia." },
+      { name: "robots", content: "noindex, nofollow" },
+    ],
+  }),
+});
 
 const EMPTY = {
   nome_completo: "", email: "", telefone: "", data_nascimento: "", cpf: "", endereco: "",

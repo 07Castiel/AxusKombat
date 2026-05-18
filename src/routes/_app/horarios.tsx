@@ -17,7 +17,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/_app/horarios")({ component: HorariosPage });
+export const Route = createFileRoute("/_app/horarios")({
+  component: HorariosPage,
+  head: () => ({
+    meta: [
+      { title: "Horários | CT Aquiles" },
+      { name: "description", content: "Grade de horários de aulas, modalidades e professores." },
+      { name: "robots", content: "noindex, nofollow" },
+    ],
+  }),
+});
 
 const DIAS = ["segunda", "terca", "quarta", "quinta", "sexta", "sabado", "domingo"] as const;
 const LBL: Record<string, string> = { segunda: "Segunda", terca: "Terça", quarta: "Quarta", quinta: "Quinta", sexta: "Sexta", sabado: "Sábado", domingo: "Domingo" };

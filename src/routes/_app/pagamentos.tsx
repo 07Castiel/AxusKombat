@@ -18,7 +18,16 @@ import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { fmtMoney, fmtDate, toISODate } from "@/lib/utils";
 
-export const Route = createFileRoute("/_app/pagamentos")({ component: PagamentosPage });
+export const Route = createFileRoute("/_app/pagamentos")({
+  component: PagamentosPage,
+  head: () => ({
+    meta: [
+      { title: "Pagamentos | CT Aquiles" },
+      { name: "description", content: "Mensalidades, status de pagamento e inadimplência." },
+      { name: "robots", content: "noindex, nofollow" },
+    ],
+  }),
+});
 
 const EMPTY = {
   aluno_id: "",

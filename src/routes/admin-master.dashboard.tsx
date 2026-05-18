@@ -11,7 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Shield, Building2, Users, LogOut, Search, Eye } from "lucide-react";
 import { fmtDate } from "@/lib/utils";
 
-export const Route = createFileRoute("/admin-master/dashboard")({ component: MasterDashboard });
+export const Route = createFileRoute("/admin-master/dashboard")({
+  head: () => ({ meta: [{ title: "Admin Master · Academias" }, { name: "robots", content: "noindex, nofollow" }] }), component: MasterDashboard });
 
 function MasterDashboard() {
   const navigate = useNavigate();

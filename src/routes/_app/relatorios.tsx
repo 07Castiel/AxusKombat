@@ -6,7 +6,16 @@ import { PageHeader } from "@/components/PageHeader";
 import { Card } from "@/components/ui/card";
 import { fmtMoney } from "@/lib/utils";
 
-export const Route = createFileRoute("/_app/relatorios")({ component: RelatoriosPage });
+export const Route = createFileRoute("/_app/relatorios")({
+  component: RelatoriosPage,
+  head: () => ({
+    meta: [
+      { title: "Relatórios | CT Aquiles" },
+      { name: "description", content: "Relatórios financeiros e de desempenho da academia." },
+      { name: "robots", content: "noindex, nofollow" },
+    ],
+  }),
+});
 
 function RelatoriosPage() {
   const { profile } = useAuth();

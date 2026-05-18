@@ -16,7 +16,16 @@ import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { fmtMoney } from "@/lib/utils";
 
-export const Route = createFileRoute("/_app/planos")({ component: PlanosPage });
+export const Route = createFileRoute("/_app/planos")({
+  component: PlanosPage,
+  head: () => ({
+    meta: [
+      { title: "Planos | CT Aquiles" },
+      { name: "description", content: "Configuração dos planos de mensalidade da academia." },
+      { name: "robots", content: "noindex, nofollow" },
+    ],
+  }),
+});
 
 function PlanosPage() {
   const { profile } = useAuth();

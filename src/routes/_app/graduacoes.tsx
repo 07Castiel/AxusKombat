@@ -18,7 +18,16 @@ import { Plus, Pencil, Trash2, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { fmtDate, toISODate } from "@/lib/utils";
 
-export const Route = createFileRoute("/_app/graduacoes")({ component: GraduacoesPage });
+export const Route = createFileRoute("/_app/graduacoes")({
+  component: GraduacoesPage,
+  head: () => ({
+    meta: [
+      { title: "Graduações | CT Aquiles" },
+      { name: "description", content: "Faixas, graduação dos alunos e ranking." },
+      { name: "robots", content: "noindex, nofollow" },
+    ],
+  }),
+});
 
 function GraduacoesPage() {
   const { profile } = useAuth();
