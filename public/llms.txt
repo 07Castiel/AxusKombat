@@ -1,0 +1,8 @@
+# CT Aquiles Fight Team
+
+> Sistema SaaS de gestão para academias de artes marciais (Muay Thai e Boxe): alunos, matrículas, pagamentos, horários e graduações.
+
+## Pages
+
+- [Entrar](/login): Acesso ao painel de gestão da academia.
+- [Cadastrar academia](/signup): Criação de conta para novas academias no SaaS.
