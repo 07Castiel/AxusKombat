@@ -56,8 +56,8 @@ function LoginPage() {
             <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Fight Team</p>
           </div>
         </div>
-        <h2 className="text-2xl font-bold mb-1">Entrar</h2>
-        <p className="text-sm text-muted-foreground mb-6">Acesse o painel de gestão</p>
+        <h1 className="text-2xl font-bold mb-1">Entrar — CT Aquiles Fight Team</h1>
+        <p className="text-sm text-muted-foreground mb-6">Acesse o painel de gestão da sua academia</p>
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
             <Label htmlFor="email">E-mail</Label>
