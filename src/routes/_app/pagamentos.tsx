@@ -242,8 +242,8 @@ function PagamentosPage() {
                 <TableCell>{statusBadge(effectiveStatus(p))}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex gap-1 justify-end">
-                    <Button size="icon" variant="ghost" onClick={()=>startEdit(p)} title="Editar"><Pencil className="h-4 w-4"/></Button>
-                    <Button size="icon" variant="ghost" onClick={()=>setDeleting({ id: p.id })} title="Excluir" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button>
+                    <Button size="icon" variant="ghost" onClick={()=>startEdit(p)} title="Editar" aria-label="Editar pagamento"><Pencil className="h-4 w-4"/></Button>
+                    <Button size="icon" variant="ghost" onClick={()=>setDeleting({ id: p.id })} title="Excluir" aria-label="Excluir pagamento" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button>
                   </div>
                 </TableCell>
               </TableRow>

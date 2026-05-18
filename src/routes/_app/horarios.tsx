@@ -218,8 +218,8 @@ function HorariosPage() {
                 <TableCell className="text-right">
                   {isAdmin && (
                     <div className="flex gap-1 justify-end">
-                      <Button size="icon" variant="ghost" onClick={()=>startEdit(h)} title="Editar"><Pencil className="h-4 w-4"/></Button>
-                      <Button size="icon" variant="ghost" onClick={()=>setDeleting({ id: h.id })} title="Excluir" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button>
+                      <Button size="icon" variant="ghost" onClick={()=>startEdit(h)} title="Editar" aria-label="Editar horário"><Pencil className="h-4 w-4"/></Button>
+                      <Button size="icon" variant="ghost" onClick={()=>setDeleting({ id: h.id })} title="Excluir" aria-label="Excluir horário" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button>
                     </div>
                   )}
                 </TableCell>

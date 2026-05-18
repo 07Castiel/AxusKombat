@@ -135,8 +135,8 @@ function FaixasTab({ tenantId }: { tenantId: string | null }) {
                 <TableCell>{g.ordem}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex gap-1 justify-end">
-                    <Button size="icon" variant="ghost" onClick={()=>startEdit(g)}><Pencil className="h-4 w-4"/></Button>
-                    <Button size="icon" variant="ghost" onClick={()=>setDeleting({ id: g.id, nome: g.nome })} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button>
+                    <Button size="icon" variant="ghost" onClick={()=>startEdit(g)} aria-label="Editar graduação"><Pencil className="h-4 w-4"/></Button>
+                    <Button size="icon" variant="ghost" onClick={()=>setDeleting({ id: g.id, nome: g.nome })} aria-label="Excluir graduação" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button>
                   </div>
                 </TableCell>
               </TableRow>
