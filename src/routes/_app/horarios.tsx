@@ -17,7 +17,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/_app/horarios")({ component: HorariosPage });
+export const Route = createFileRoute("/_app/horarios")({
+  component: HorariosPage,
+  head: () => ({
+    meta: [
+      { title: "Horários | CT Aquiles" },
+      { name: "description", content: "Grade de horários de aulas, modalidades e professores." },
+      { name: "robots", content: "noindex, nofollow" },
+    ],
+  }),
+});
 
 const DIAS = ["segunda", "terca", "quarta", "quinta", "sexta", "sabado", "domingo"] as const;
 const LBL: Record<string, string> = { segunda: "Segunda", terca: "Terça", quarta: "Quarta", quinta: "Quinta", sexta: "Sexta", sabado: "Sábado", domingo: "Domingo" };
@@ -90,12 +99,13 @@ function HorariosPage() {
       observacao: form.observacao || null,
     };
 
+    type Dia = "domingo" | "segunda" | "terca" | "quarta" | "quinta" | "sexta" | "sabado";
     if (editingId) {
-      const { error } = await supabase.from("horarios").update({ ...base, dia: form.dias[0] }).eq("id", editingId);
+      const { error } = await supabase.from("horarios").update({ ...base, dia: form.dias[0] as Dia }).eq("id", editingId);
       if (error) { toast.error(error.message); return; }
       toast.success("Horário atualizado");
     } else {
-      const rows = form.dias.map((dia) => ({ ...base, dia }));
+      const rows = form.dias.map((dia) => ({ ...base, dia: dia as Dia }));
       const { error } = await supabase.from("horarios").insert(rows);
       if (error) { toast.error(error.message); return; }
       toast.success(`${rows.length} horário(s) criado(s)`);
@@ -208,8 +218,8 @@ function HorariosPage() {
                 <TableCell className="text-right">
                   {isAdmin && (
                     <div className="flex gap-1 justify-end">
-                      <Button size="icon" variant="ghost" onClick={()=>startEdit(h)} title="Editar"><Pencil className="h-4 w-4"/></Button>
-                      <Button size="icon" variant="ghost" onClick={()=>setDeleting({ id: h.id })} title="Excluir" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button>
+                      <Button size="icon" variant="ghost" onClick={()=>startEdit(h)} title="Editar" aria-label="Editar horário"><Pencil className="h-4 w-4"/></Button>
+                      <Button size="icon" variant="ghost" onClick={()=>setDeleting({ id: h.id })} title="Excluir" aria-label="Excluir horário" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button>
                     </div>
                   )}
                 </TableCell>

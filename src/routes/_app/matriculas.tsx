@@ -18,7 +18,16 @@ import { Plus, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { fmtMoney, fmtDate, addDuracao, toISODate } from "@/lib/utils";
 
-export const Route = createFileRoute("/_app/matriculas")({ component: MatriculasPage });
+export const Route = createFileRoute("/_app/matriculas")({
+  component: MatriculasPage,
+  head: () => ({
+    meta: [
+      { title: "Matrículas | CT Aquiles" },
+      { name: "description", content: "Controle de matrículas dos alunos por plano." },
+      { name: "robots", content: "noindex, nofollow" },
+    ],
+  }),
+});
 
 const EMPTY = {
   aluno_id: "", plano_id: "",

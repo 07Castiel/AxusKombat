@@ -11,7 +11,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2, Lock, User } from "lucide-react";
 
-export const Route = createFileRoute("/_app/configuracoes")({ component: ConfigPage });
+export const Route = createFileRoute("/_app/configuracoes")({
+  component: ConfigPage,
+  head: () => ({
+    meta: [
+      { title: "Configurações | CT Aquiles" },
+      { name: "description", content: "Configurações da academia e da conta administrativa." },
+      { name: "robots", content: "noindex, nofollow" },
+    ],
+  }),
+});
 
 function ConfigPage() {
   const { profile, roles, isAdmin, refresh, user } = useAuth();

@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+Disallow: /admin-master
+Disallow: /alunos
+Disallow: /matriculas
+Disallow: /pagamentos
+Disallow: /planos
+Disallow: /horarios
+Disallow: /graduacoes
+Disallow: /relatorios
+Disallow: /configuracoes
+
+Sitemap: https://ctaquiles.lovable.app/sitemap.xml

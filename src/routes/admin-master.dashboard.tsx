@@ -11,7 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Shield, Building2, Users, LogOut, Search, Eye } from "lucide-react";
 import { fmtDate } from "@/lib/utils";
 
-export const Route = createFileRoute("/admin-master/dashboard")({ component: MasterDashboard });
+export const Route = createFileRoute("/admin-master/dashboard")({
+  head: () => ({ meta: [{ title: "Admin Master · Academias" }, { name: "robots", content: "noindex, nofollow" }] }), component: MasterDashboard });
 
 function MasterDashboard() {
   const navigate = useNavigate();
@@ -87,7 +88,7 @@ function MasterDashboard() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
             <Input
-              placeholder="Buscar por academia, responsável ou e-mail..."
+              placeholder="Buscar por academia, responsável ou e-mail..." aria-label="Buscar academias"
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(0); }}
               className="pl-9"

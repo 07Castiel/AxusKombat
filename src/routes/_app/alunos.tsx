@@ -18,7 +18,16 @@ import { Plus, Search, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { fmtDate } from "@/lib/utils";
 
-export const Route = createFileRoute("/_app/alunos")({ component: AlunosPage });
+export const Route = createFileRoute("/_app/alunos")({
+  component: AlunosPage,
+  head: () => ({
+    meta: [
+      { title: "Alunos | CT Aquiles" },
+      { name: "description", content: "Cadastro e gestão de alunos da academia." },
+      { name: "robots", content: "noindex, nofollow" },
+    ],
+  }),
+});
 
 const EMPTY = {
   nome_completo: "", email: "", telefone: "", data_nascimento: "", cpf: "", endereco: "",
@@ -157,7 +166,7 @@ function AlunosPage() {
       <Card className="p-4 gradient-card border-border mb-4">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
-          <Input placeholder="Buscar por nome ou e-mail..." value={search} onChange={(e)=>setSearch(e.target.value)} className="pl-9"/>
+          <Input placeholder="Buscar por nome ou e-mail..." aria-label="Buscar alunos" value={search} onChange={(e)=>setSearch(e.target.value)} className="pl-9"/>
         </div>
       </Card>
 
@@ -178,9 +187,9 @@ function AlunosPage() {
                 <TableCell className="text-sm text-muted-foreground">{fmtDate(a.data_entrada)}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex gap-1 justify-end">
-                    <Button size="icon" variant="ghost" onClick={()=>startEdit(a)} title="Editar"><Pencil className="h-4 w-4"/></Button>
-                    <Button size="icon" variant="ghost" onClick={()=>toggleStatus(a.id, a.status)} title={a.status === "ativo" ? "Desativar" : "Reativar"}><RotateCcw className="h-4 w-4"/></Button>
-                    <Button size="icon" variant="ghost" onClick={()=>setDeleting({ id: a.id, nome: a.nome_completo })} title="Excluir" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button>
+                    <Button size="icon" variant="ghost" onClick={()=>startEdit(a)} title="Editar" aria-label="Editar aluno"><Pencil className="h-4 w-4"/></Button>
+                    <Button size="icon" variant="ghost" onClick={()=>toggleStatus(a.id, a.status)} title={a.status === "ativo" ? "Desativar" : "Reativar"} aria-label={a.status === "ativo" ? "Desativar aluno" : "Reativar aluno"}><RotateCcw className="h-4 w-4"/></Button>
+                    <Button size="icon" variant="ghost" onClick={()=>setDeleting({ id: a.id, nome: a.nome_completo })} title="Excluir" aria-label="Excluir aluno" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button>
                   </div>
                 </TableCell>
               </TableRow>

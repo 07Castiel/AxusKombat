@@ -18,7 +18,16 @@ import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { fmtMoney, fmtDate, toISODate } from "@/lib/utils";
 
-export const Route = createFileRoute("/_app/pagamentos")({ component: PagamentosPage });
+export const Route = createFileRoute("/_app/pagamentos")({
+  component: PagamentosPage,
+  head: () => ({
+    meta: [
+      { title: "Pagamentos | CT Aquiles" },
+      { name: "description", content: "Mensalidades, status de pagamento e inadimplência." },
+      { name: "robots", content: "noindex, nofollow" },
+    ],
+  }),
+});
 
 const EMPTY = {
   aluno_id: "",
@@ -233,8 +242,8 @@ function PagamentosPage() {
                 <TableCell>{statusBadge(effectiveStatus(p))}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex gap-1 justify-end">
-                    <Button size="icon" variant="ghost" onClick={()=>startEdit(p)} title="Editar"><Pencil className="h-4 w-4"/></Button>
-                    <Button size="icon" variant="ghost" onClick={()=>setDeleting({ id: p.id })} title="Excluir" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button>
+                    <Button size="icon" variant="ghost" onClick={()=>startEdit(p)} title="Editar" aria-label="Editar pagamento"><Pencil className="h-4 w-4"/></Button>
+                    <Button size="icon" variant="ghost" onClick={()=>setDeleting({ id: p.id })} title="Excluir" aria-label="Excluir pagamento" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button>
                   </div>
                 </TableCell>
               </TableRow>

@@ -10,7 +10,19 @@ import { PasswordInput } from "@/components/PasswordInput";
 import { toast } from "sonner";
 import { Swords, Loader2 } from "lucide-react";
 
-export const Route = createFileRoute("/signup")({ component: SignupPage });
+export const Route = createFileRoute("/signup")({
+  component: SignupPage,
+  head: () => ({
+    meta: [
+      { title: "Cadastrar academia | CT Aquiles Fight Team" },
+      { name: "description", content: "Crie sua conta no CT Aquiles Fight Team e gerencie alunos, matrículas, pagamentos e graduações da sua academia." },
+      { property: "og:title", content: "Cadastrar academia | CT Aquiles Fight Team" },
+      { property: "og:description", content: "Crie sua conta e comece a gerenciar sua academia de artes marciais." },
+      { property: "og:url", content: "https://ctaquiles.lovable.app/signup" },
+    ],
+    links: [{ rel: "canonical", href: "https://ctaquiles.lovable.app/signup" }],
+  }),
+});
 
 const schema = z
   .object({

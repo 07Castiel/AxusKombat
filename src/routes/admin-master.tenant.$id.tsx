@@ -10,7 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Shield, ArrowLeft } from "lucide-react";
 import { fmtDate, fmtMoney } from "@/lib/utils";
 
-export const Route = createFileRoute("/admin-master/tenant/$id")({ component: MasterTenantDetail });
+export const Route = createFileRoute("/admin-master/tenant/$id")({
+  head: () => ({ meta: [{ title: "Admin Master · Academia" }, { name: "robots", content: "noindex, nofollow" }] }), component: MasterTenantDetail });
 
 function MasterTenantDetail() {
   const { id } = Route.useParams();

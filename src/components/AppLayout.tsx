@@ -80,7 +80,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               <p className="text-xs font-medium truncate text-sidebar-foreground">{profile?.nome_completo}</p>
               <p className="text-[10px] text-muted-foreground truncate">{isAdmin ? "Admin" : "Professor Kids"}</p>
             </div>
-            <Button size="icon" variant="ghost" onClick={handleSignOut} className="h-8 w-8">
+            <Button size="icon" variant="ghost" onClick={handleSignOut} className="h-8 w-8" aria-label="Sair">
               <LogOut className="h-4 w-4" />
             </Button>
           </div>
@@ -92,7 +92,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       {/* Main */}
       <div className="flex-1 flex flex-col md:ml-64 min-w-0">
         <header className="h-16 border-b border-border bg-card/50 backdrop-blur flex items-center justify-between px-4 md:px-8 sticky top-0 z-20">
-          <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setOpen(true)}>
+          <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setOpen(true)} aria-label="Abrir menu">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
           </Button>
           <div className="hidden md:block text-xs text-muted-foreground uppercase tracking-widest">

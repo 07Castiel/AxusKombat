@@ -8,7 +8,16 @@ import { Users, UserX, AlertCircle, TrendingUp, TrendingDown, Cake } from "lucid
 import { fmtMoney, fmtDate } from "@/lib/utils";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 
-export const Route = createFileRoute("/_app/")({ component: Dashboard });
+export const Route = createFileRoute("/_app/")({
+  component: Dashboard,
+  head: () => ({
+    meta: [
+      { title: "Painel | CT Aquiles" },
+      { name: "description", content: "Visão geral da academia: alunos, faturamento, despesas e aniversariantes." },
+      { name: "robots", content: "noindex, nofollow" },
+    ],
+  }),
+});
 
 function Dashboard() {
   const { profile } = useAuth();

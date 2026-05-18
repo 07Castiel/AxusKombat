@@ -10,7 +10,19 @@ import { PasswordInput } from "@/components/PasswordInput";
 import { toast } from "sonner";
 import { Swords, Loader2 } from "lucide-react";
 
-export const Route = createFileRoute("/login")({ component: LoginPage });
+export const Route = createFileRoute("/login")({
+  component: LoginPage,
+  head: () => ({
+    meta: [
+      { title: "Entrar | CT Aquiles Fight Team" },
+      { name: "description", content: "Acesse o painel de gestão da sua academia de Muay Thai e Boxe no CT Aquiles Fight Team." },
+      { property: "og:title", content: "Entrar | CT Aquiles Fight Team" },
+      { property: "og:description", content: "Acesse o painel de gestão da sua academia de artes marciais." },
+      { property: "og:url", content: "https://ctaquiles.lovable.app/login" },
+    ],
+    links: [{ rel: "canonical", href: "https://ctaquiles.lovable.app/login" }],
+  }),
+});
 
 function LoginPage() {
   const { user, loading: authLoading } = useAuth();
@@ -44,8 +56,8 @@ function LoginPage() {
             <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Fight Team</p>
           </div>
         </div>
-        <h2 className="text-2xl font-bold mb-1">Entrar</h2>
-        <p className="text-sm text-muted-foreground mb-6">Acesse o painel de gestão</p>
+        <h1 className="text-2xl font-bold mb-1">Entrar — CT Aquiles Fight Team</h1>
+        <p className="text-sm text-muted-foreground mb-6">Acesse o painel de gestão da sua academia</p>
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
             <Label htmlFor="email">E-mail</Label>
