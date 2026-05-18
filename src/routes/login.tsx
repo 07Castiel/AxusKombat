@@ -10,7 +10,19 @@ import { PasswordInput } from "@/components/PasswordInput";
 import { toast } from "sonner";
 import { Swords, Loader2 } from "lucide-react";
 
-export const Route = createFileRoute("/login")({ component: LoginPage });
+export const Route = createFileRoute("/login")({
+  component: LoginPage,
+  head: () => ({
+    meta: [
+      { title: "Entrar | CT Aquiles Fight Team" },
+      { name: "description", content: "Acesse o painel de gestão da sua academia de Muay Thai e Boxe no CT Aquiles Fight Team." },
+      { property: "og:title", content: "Entrar | CT Aquiles Fight Team" },
+      { property: "og:description", content: "Acesse o painel de gestão da sua academia de artes marciais." },
+      { property: "og:url", content: "https://ctaquiles.lovable.app/login" },
+    ],
+    links: [{ rel: "canonical", href: "https://ctaquiles.lovable.app/login" }],
+  }),
+});
 
 function LoginPage() {
   const { user, loading: authLoading } = useAuth();
