@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
@@ -25,6 +26,11 @@ import { Route as AppConfiguracoesRouteImport } from './routes/_app/configuracoe
 import { Route as AppAlunosRouteImport } from './routes/_app/alunos'
 import { Route as AdminMasterTenantIdRouteImport } from './routes/admin-master.tenant.$id'
 
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
   path: '/signup',
@@ -104,6 +110,7 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/alunos': typeof AppAlunosRoute
   '/configuracoes': typeof AppConfiguracoesRoute
   '/graduacoes': typeof AppGraduacoesRoute
@@ -119,6 +126,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/alunos': typeof AppAlunosRoute
   '/configuracoes': typeof AppConfiguracoesRoute
   '/graduacoes': typeof AppGraduacoesRoute
@@ -137,6 +145,7 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/_app/alunos': typeof AppAlunosRoute
   '/_app/configuracoes': typeof AppConfiguracoesRoute
   '/_app/graduacoes': typeof AppGraduacoesRoute
@@ -156,6 +165,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/signup'
+    | '/sitemap.xml'
     | '/alunos'
     | '/configuracoes'
     | '/graduacoes'
@@ -171,6 +181,7 @@ export interface FileRouteTypes {
   to:
     | '/login'
     | '/signup'
+    | '/sitemap.xml'
     | '/alunos'
     | '/configuracoes'
     | '/graduacoes'
@@ -188,6 +199,7 @@ export interface FileRouteTypes {
     | '/_app'
     | '/login'
     | '/signup'
+    | '/sitemap.xml'
     | '/_app/alunos'
     | '/_app/configuracoes'
     | '/_app/graduacoes'
@@ -206,6 +218,7 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
   SignupRoute: typeof SignupRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   AdminMasterDashboardRoute: typeof AdminMasterDashboardRoute
   AdminMasterIndexRoute: typeof AdminMasterIndexRoute
   AdminMasterTenantIdRoute: typeof AdminMasterTenantIdRoute
@@ -213,6 +226,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/signup': {
       id: '/signup'
       path: '/signup'
@@ -351,6 +371,7 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
   SignupRoute: SignupRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   AdminMasterDashboardRoute: AdminMasterDashboardRoute,
   AdminMasterIndexRoute: AdminMasterIndexRoute,
   AdminMasterTenantIdRoute: AdminMasterTenantIdRoute,
@@ -358,13 +379,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
