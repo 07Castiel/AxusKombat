@@ -90,12 +90,13 @@ function HorariosPage() {
       observacao: form.observacao || null,
     };
 
+    type Dia = "domingo" | "segunda" | "terca" | "quarta" | "quinta" | "sexta" | "sabado";
     if (editingId) {
-      const { error } = await supabase.from("horarios").update({ ...base, dia: form.dias[0] }).eq("id", editingId);
+      const { error } = await supabase.from("horarios").update({ ...base, dia: form.dias[0] as Dia }).eq("id", editingId);
       if (error) { toast.error(error.message); return; }
       toast.success("Horário atualizado");
     } else {
-      const rows = form.dias.map((dia) => ({ ...base, dia }));
+      const rows = form.dias.map((dia) => ({ ...base, dia: dia as Dia }));
       const { error } = await supabase.from("horarios").insert(rows);
       if (error) { toast.error(error.message); return; }
       toast.success(`${rows.length} horário(s) criado(s)`);
