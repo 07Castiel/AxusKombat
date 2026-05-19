@@ -1,10 +1,11 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
-import { LayoutDashboard, Users, ClipboardList, CreditCard, Wallet, CalendarDays, Award, BarChart3, Settings, LogOut, Swords } from "lucide-react";
+import { LayoutDashboard, Users, ClipboardList, CreditCard, Wallet, CalendarDays, Award, BarChart3, Settings, LogOut, Menu } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 import { useState, type ReactNode } from "react";
+import logo from "@/assets/axus-kombat-logo.png";
 
 const NAV = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard", adminOnly: false },
@@ -33,19 +34,16 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="dark min-h-screen flex w-full bg-background text-foreground">
-      {/* Sidebar */}
-      <aside className={cn(
-        "fixed inset-y-0 left-0 z-40 w-64 bg-sidebar border-r border-sidebar-border flex flex-col transition-transform md:translate-x-0",
-        open ? "translate-x-0" : "-translate-x-full"
-      )}>
-        <div className="h-16 flex items-center gap-3 px-5 border-b border-sidebar-border">
-          <div className="h-9 w-9 rounded-md gradient-primary grid place-items-center shadow-glow">
-            <Swords className="h-5 w-5 text-primary-foreground" />
-          </div>
-          <div>
-            <p className="text-sm font-bold tracking-tight text-sidebar-foreground">CT Aquiles</p>
-            <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Fight Team</p>
-          </div>
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-40 w-64 bg-sidebar flex flex-col transition-transform md:translate-x-0",
+          open ? "translate-x-0" : "-translate-x-full",
+        )}
+        style={{ borderRight: "1px solid rgba(181,0,0,0.15)", boxShadow: "inset -1px 0 0 rgba(181,0,0,0.08)" }}
+      >
+        <div className="px-5 py-5 flex flex-col items-center gap-2 border-b" style={{ borderColor: "rgba(181,0,0,0.2)" }}>
+          <img src={logo} alt="Axus Kombat" className="h-20 w-20 object-contain drop-shadow-[0_0_15px_rgba(181,0,0,0.35)]" />
+          <p className="text-[10px] font-display uppercase tracking-[0.3em] text-metal">Sistema de Gestão</p>
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
@@ -58,48 +56,60 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 to={item.to}
                 onClick={() => setOpen(false)}
                 className={cn(
-                  "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                  active
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground border-l-2 border-primary"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent/60"
+                  "group relative flex items-center gap-3 px-3 py-2.5 rounded text-[12px] font-semibold uppercase tracking-wider transition-all duration-150",
+                  active ? "text-foreground" : "text-sidebar-foreground hover:bg-white/[0.03] hover:text-metal-light",
                 )}
+                style={
+                  active
+                    ? { background: "rgba(181,0,0,0.08)", borderLeft: "3px solid #B50000", boxShadow: "inset 3px 0 15px rgba(181,0,0,0.1)" }
+                    : undefined
+                }
               >
-                <Icon className="h-4 w-4" />
+                <Icon className={cn("h-4 w-4 transition-colors", active ? "text-primary" : "text-[#555] group-hover:text-metal-light")} />
                 {item.label}
               </Link>
             );
           })}
         </nav>
 
-        <div className="p-3 border-t border-sidebar-border">
-          <div className="flex items-center gap-3 px-2 py-2 rounded-md">
-            <div className="h-8 w-8 rounded-full bg-primary/20 text-primary grid place-items-center text-xs font-bold">
-              {profile?.nome_completo?.charAt(0) ?? "U"}
+        <div className="p-3 border-t" style={{ borderColor: "rgba(181,0,0,0.15)" }}>
+          <div className="flex items-center gap-3 px-2 py-2 rounded">
+            <div
+              className="h-9 w-9 rounded-full grid place-items-center text-xs font-bold text-primary"
+              style={{ background: "rgba(181,0,0,0.15)", border: "1px solid rgba(181,0,0,0.35)" }}
+            >
+              {profile?.nome_completo?.charAt(0)?.toUpperCase() ?? "U"}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium truncate text-sidebar-foreground">{profile?.nome_completo}</p>
-              <p className="text-[10px] text-muted-foreground truncate">{isAdmin ? "Admin" : "Professor Kids"}</p>
+              <p className="text-xs font-semibold truncate text-metal-light">{profile?.nome_completo}</p>
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground truncate">{isAdmin ? "Admin" : "Professor"}</p>
             </div>
-            <Button size="icon" variant="ghost" onClick={handleSignOut} className="h-8 w-8" aria-label="Sair">
+            <Button size="icon" variant="ghost" onClick={handleSignOut} className="h-8 w-8 text-metal hover:text-primary" aria-label="Sair">
               <LogOut className="h-4 w-4" />
             </Button>
           </div>
+          <p className="text-[9px] text-center mt-2 uppercase tracking-widest text-muted-foreground">Axus Kombat v1.0</p>
         </div>
       </aside>
 
-      {open && <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setOpen(false)} />}
+      {open && <div className="fixed inset-0 bg-black/80 z-30 md:hidden" onClick={() => setOpen(false)} />}
 
-      {/* Main */}
       <div className="flex-1 flex flex-col md:ml-64 min-w-0">
-        <header className="h-16 border-b border-border bg-card/50 backdrop-blur flex items-center justify-between px-4 md:px-8 sticky top-0 z-20">
-          <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setOpen(true)} aria-label="Abrir menu">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+        <header
+          className="h-14 flex items-center justify-between px-4 md:px-8 sticky top-0 z-20 bg-background"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
+        >
+          <Button variant="ghost" size="icon" className="md:hidden text-metal" onClick={() => setOpen(true)} aria-label="Abrir menu">
+            <Menu className="h-5 w-5" />
           </Button>
-          <div className="hidden md:block text-xs text-muted-foreground uppercase tracking-widest">
-            Sistema de Gestão
+          <div className="hidden md:block text-[10px] font-display uppercase tracking-[0.35em] text-metal">
+            Axus Kombat · Painel de Controle
+          </div>
+          <div className="text-[11px] uppercase tracking-widest text-metal-light font-semibold hidden sm:block">
+            {profile?.nome_completo}
           </div>
         </header>
-        <main className="flex-1 p-4 md:p-8">{children}</main>
+        <main className="flex-1 p-4 md:p-8 noise-bg">{children}</main>
       </div>
 
       <Toaster />
