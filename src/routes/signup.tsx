@@ -5,22 +5,20 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card } from "@/components/ui/card";
 import { PasswordInput } from "@/components/PasswordInput";
 import { toast } from "sonner";
-import { Swords, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import logo from "@/assets/axus-kombat-logo.png";
 
 export const Route = createFileRoute("/signup")({
   component: SignupPage,
   head: () => ({
     meta: [
-      { title: "Cadastrar academia | CT Aquiles Fight Team" },
-      { name: "description", content: "Crie sua conta no CT Aquiles Fight Team e gerencie alunos, matrículas, pagamentos e graduações da sua academia." },
-      { property: "og:title", content: "Cadastrar academia | CT Aquiles Fight Team" },
-      { property: "og:description", content: "Crie sua conta e comece a gerenciar sua academia de artes marciais." },
-      { property: "og:url", content: "https://ctaquiles.lovable.app/signup" },
+      { title: "Cadastrar academia | Axus Kombat" },
+      { name: "description", content: "Crie sua conta no Axus Kombat e gerencie sua academia de artes marciais." },
+      { property: "og:title", content: "Cadastrar academia | Axus Kombat" },
+      { property: "og:description", content: "Crie sua conta e comece a gerenciar sua academia." },
     ],
-    links: [{ rel: "canonical", href: "https://ctaquiles.lovable.app/signup" }],
   }),
 });
 
@@ -49,98 +47,92 @@ function SignupPage() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const parsed = schema.safeParse(form);
-    if (!parsed.success) {
-      toast.error(parsed.error.issues[0].message);
-      return;
-    }
+    if (!parsed.success) { toast.error(parsed.error.issues[0].message); return; }
     setLoading(true);
     const { error } = await supabase.auth.signUp({
-      email: form.email,
-      password: form.password,
+      email: form.email, password: form.password,
       options: {
         emailRedirectTo: `${window.location.origin}/`,
-        data: {
-          nome_completo: form.nome,
-          tenant_nome: form.tenantNome,
-          telefone: form.telefone,
-          cnpj_cpf: form.cnpjCpf,
-        },
+        data: { nome_completo: form.nome, tenant_nome: form.tenantNome, telefone: form.telefone, cnpj_cpf: form.cnpjCpf },
       },
     });
     if (error) {
       setLoading(false);
-      if (/registered|exists/i.test(error.message)) {
-        toast.error("Este e-mail já está cadastrado");
-      } else {
-        toast.error(error.message);
-      }
+      if (/registered|exists/i.test(error.message)) toast.error("Este e-mail já está cadastrado");
+      else toast.error(error.message);
       return;
     }
-    // tenta login automático (auto-confirm está ativo)
-    const { error: signInErr } = await supabase.auth.signInWithPassword({
-      email: form.email,
-      password: form.password,
-    });
+    const { error: signInErr } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
     setLoading(false);
-    if (signInErr) {
-      toast.success("Cadastro criado! Faça login para continuar.");
-      navigate({ to: "/login" });
-      return;
-    }
+    if (signInErr) { toast.success("Cadastro criado! Faça login para continuar."); navigate({ to: "/login" }); return; }
     toast.success("Academia cadastrada com sucesso!");
     navigate({ to: "/" });
   };
 
   return (
-    <div className="dark min-h-screen grid place-items-center bg-background px-4 py-12">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_30%,oklch(0.62_0.22_25/0.15),transparent_50%)]" />
-      <Card className="relative w-full max-w-lg p-8 gradient-card border-border shadow-card">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="h-11 w-11 rounded-lg gradient-primary grid place-items-center shadow-glow">
-            <Swords className="h-6 w-6 text-primary-foreground" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold">Cadastrar Academia</h1>
-            <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Fight Team SaaS</p>
-          </div>
+    <div className="dark min-h-screen relative grid place-items-center bg-background px-4 py-10 overflow-hidden">
+      <div className="absolute inset-0 noise-bg pointer-events-none" />
+      <div
+        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full pointer-events-none"
+        style={{ background: "radial-gradient(circle, rgba(181,0,0,0.15), transparent 60%)", filter: "blur(40px)" }}
+      />
+      <div className="relative w-full max-w-xl flex flex-col items-center">
+        <img src={logo} alt="Axus Kombat" className="w-52 object-contain drop-shadow-[0_0_30px_rgba(181,0,0,0.35)]" />
+        <p className="mt-2 font-display text-[10px] uppercase tracking-[0.4em] text-metal">Cadastrar Academia</p>
+
+        <div
+          className="mt-6 w-full p-8"
+          style={{
+            background: "#0e0e0e",
+            border: "1px solid rgba(181,0,0,0.15)",
+            borderTop: "2px solid #B50000",
+            borderRadius: "6px",
+            boxShadow: "0 0 60px rgba(0,0,0,0.8), 0 0 30px rgba(181,0,0,0.06)",
+          }}
+        >
+          <form onSubmit={onSubmit} className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <Label htmlFor="n" className="uppercase-label text-[11px]">Nome do responsável *</Label>
+              <Input id="n" required value={form.nome} onChange={set("nome")} className="mt-1.5" />
+            </div>
+            <div className="col-span-2">
+              <Label htmlFor="tn" className="uppercase-label text-[11px]">Nome da academia *</Label>
+              <Input id="tn" required value={form.tenantNome} onChange={set("tenantNome")} className="mt-1.5" />
+            </div>
+            <div className="col-span-2">
+              <Label htmlFor="e" className="uppercase-label text-[11px]">E-mail (login) *</Label>
+              <Input id="e" type="email" required value={form.email} onChange={set("email")} className="mt-1.5" />
+            </div>
+            <div>
+              <Label htmlFor="tel" className="uppercase-label text-[11px]">Telefone *</Label>
+              <Input id="tel" required value={form.telefone} onChange={set("telefone")} className="mt-1.5" placeholder="(11) 99999-9999" />
+            </div>
+            <div>
+              <Label htmlFor="cc" className="uppercase-label text-[11px]">CNPJ ou CPF *</Label>
+              <Input id="cc" required value={form.cnpjCpf} onChange={set("cnpjCpf")} className="mt-1.5" />
+            </div>
+            <div>
+              <Label htmlFor="p" className="uppercase-label text-[11px]">Senha (mín. 8) *</Label>
+              <PasswordInput id="p" required minLength={8} value={form.password} onChange={set("password")} className="mt-1.5" />
+            </div>
+            <div>
+              <Label htmlFor="pc" className="uppercase-label text-[11px]">Confirmar senha *</Label>
+              <PasswordInput id="pc" required value={form.confirm} onChange={set("confirm")} className="mt-1.5" />
+            </div>
+            <Button
+              type="submit"
+              disabled={loading}
+              className="col-span-2 h-11 font-display uppercase tracking-[0.2em] text-sm bg-primary hover:bg-[#D40000] text-primary-foreground shadow-glow"
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar conta"}
+            </Button>
+          </form>
+          <p className="text-xs text-center mt-6 text-metal uppercase tracking-widest">
+            Já tem conta?{" "}
+            <Link to="/login" className="text-primary hover:text-[#D40000] font-semibold">Entrar</Link>
+          </p>
         </div>
-        <form onSubmit={onSubmit} className="grid grid-cols-2 gap-4">
-          <div className="col-span-2">
-            <Label htmlFor="n">Nome completo do responsável *</Label>
-            <Input id="n" required value={form.nome} onChange={set("nome")} className="mt-1.5" />
-          </div>
-          <div className="col-span-2">
-            <Label htmlFor="tn">Nome da academia *</Label>
-            <Input id="tn" required value={form.tenantNome} onChange={set("tenantNome")} className="mt-1.5" />
-          </div>
-          <div className="col-span-2">
-            <Label htmlFor="e">E-mail (login) *</Label>
-            <Input id="e" type="email" required value={form.email} onChange={set("email")} className="mt-1.5" />
-          </div>
-          <div>
-            <Label htmlFor="tel">Telefone *</Label>
-            <Input id="tel" required value={form.telefone} onChange={set("telefone")} className="mt-1.5" placeholder="(11) 99999-9999"/>
-          </div>
-          <div>
-            <Label htmlFor="cc">CNPJ ou CPF *</Label>
-            <Input id="cc" required value={form.cnpjCpf} onChange={set("cnpjCpf")} className="mt-1.5"/>
-          </div>
-          <div>
-            <Label htmlFor="p">Senha (mín. 8) *</Label>
-            <PasswordInput id="p" required minLength={8} value={form.password} onChange={set("password")} className="mt-1.5" />
-          </div>
-          <div>
-            <Label htmlFor="pc">Confirmar senha *</Label>
-            <PasswordInput id="pc" required value={form.confirm} onChange={set("confirm")} className="mt-1.5" />
-          </div>
-          <Button type="submit" className="col-span-2 gradient-primary text-primary-foreground shadow-glow" disabled={loading}>
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar conta"}
-          </Button>
-        </form>
-        <p className="text-sm text-center mt-6 text-muted-foreground">
-          Já tem conta? <Link to="/login" className="text-primary hover:underline font-medium">Entrar</Link>
-        </p>
-      </Card>
+      </div>
     </div>
   );
 }
