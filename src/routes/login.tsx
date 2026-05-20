@@ -57,25 +57,25 @@ function LoginPage() {
   };
 
   return (
-    <div className="dark min-h-screen relative grid place-items-center bg-background px-4 py-10 overflow-hidden">
+    <div className="dark relative grid place-items-center bg-background px-4 overflow-hidden" style={{ height: "100vh" }}>
       <div className="absolute inset-0 noise-bg pointer-events-none" />
       <div
-        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full pointer-events-none"
+        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full pointer-events-none"
         style={{ background: "radial-gradient(circle, rgba(181,0,0,0.18), transparent 60%)", filter: "blur(40px)" }}
       />
 
       <div className="relative w-full max-w-md flex flex-col items-center">
-        <img src={logo} alt="Axus Kombat" className="w-72 md:w-80 object-contain drop-shadow-[0_0_40px_rgba(181,0,0,0.4)]" />
-        <p className="mt-2 font-display text-[11px] uppercase tracking-[0.5em] text-metal">Sistema de Gestão</p>
+        <img src={logo} alt="Axus Kombat" className="object-contain drop-shadow-[0_0_40px_rgba(181,0,0,0.4)] max-h-[180px]" />
+        <p className="mt-1 font-display text-[10px] uppercase tracking-[0.5em] text-metal">Sistema de Gestão</p>
 
-        <div className="flex items-center gap-3 my-6 w-full max-w-xs">
+        <div className="flex items-center gap-3 my-3 w-full max-w-xs">
           <span className="h-1 w-1 rounded-full bg-primary" />
           <div className="flex-1 h-px" style={{ background: "rgba(181,0,0,0.25)" }} />
           <span className="h-1 w-1 rounded-full bg-primary" />
         </div>
 
         <div
-          className="w-full p-10 relative"
+          className="w-full p-6 relative"
           style={{
             background: "#0e0e0e",
             border: "1px solid rgba(181,0,0,0.15)",
@@ -84,28 +84,28 @@ function LoginPage() {
             boxShadow: "0 0 60px rgba(0,0,0,0.8), 0 0 30px rgba(181,0,0,0.06)",
           }}
         >
-          <h1 className="font-display text-xl text-metal-light uppercase tracking-widest text-center mb-1">Entrar</h1>
-          <p className="text-xs text-metal text-center mb-6 uppercase tracking-widest">Acesso ao painel</p>
+          <h1 className="font-display text-lg text-metal-light uppercase tracking-widest text-center mb-1">Entrar</h1>
+          <p className="text-[10px] text-metal text-center mb-4 uppercase tracking-widest">Acesso ao painel</p>
 
-          <form onSubmit={onSubmit} className="space-y-4">
+          <form onSubmit={onSubmit} className="space-y-3">
             <div>
               <Label htmlFor="email" className="uppercase-label text-[11px]">E-mail</Label>
-              <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="mt-2 bg-input border-white/10 text-foreground" />
+              <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 bg-input border-white/10 text-foreground" />
             </div>
             <div>
               <Label htmlFor="pwd" className="uppercase-label text-[11px]">Senha</Label>
-              <PasswordInput id="pwd" required value={password} onChange={(e) => setPassword(e.target.value)} className="mt-2 bg-input border-white/10 text-foreground" />
+              <PasswordInput id="pwd" required value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1 bg-input border-white/10 text-foreground" />
             </div>
             <Button
               type="submit"
               disabled={loading}
-              className="w-full font-display uppercase tracking-[0.2em] text-sm h-11 bg-primary hover:bg-[#D40000] text-primary-foreground shadow-glow transition-all"
+              className="w-full font-display uppercase tracking-[0.2em] text-sm h-10 bg-primary hover:bg-[#D40000] text-primary-foreground shadow-glow transition-all"
             >
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Entrar"}
             </Button>
           </form>
 
-          <p className="text-xs text-center mt-6 text-metal uppercase tracking-widest">
+          <p className="text-[11px] text-center mt-4 text-metal uppercase tracking-widest">
             Primeira vez?{" "}
             <Link to="/signup" className="text-primary hover:text-[#D40000] font-semibold transition-colors">Cadastre sua academia</Link>
           </p>
