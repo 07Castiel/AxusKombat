@@ -14,8 +14,14 @@ export const fmtDate = (d: string | Date | null | undefined) => {
   return date.toLocaleDateString("pt-BR");
 };
 
-export const addDuracao = (start: Date, duracao: "mensal" | "trimestral" | "semestral" | "anual") => {
+export type DuracaoPlano = "mensal" | "trimestral" | "semestral" | "anual" | "personalizado";
+
+export const addDuracao = (start: Date, duracao: DuracaoPlano, dias?: number | null) => {
   const d = new Date(start);
+  if (duracao === "personalizado") {
+    d.setDate(d.getDate() + (dias ?? 30));
+    return d;
+  }
   const months = duracao === "mensal" ? 1 : duracao === "trimestral" ? 3 : duracao === "semestral" ? 6 : 12;
   d.setMonth(d.getMonth() + months);
   return d;
