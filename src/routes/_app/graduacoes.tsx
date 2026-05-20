@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Pencil, Trash2, Trophy } from "lucide-react";
+import { Plus, Pencil, Trash2, Trophy, Award } from "lucide-react";
 import { toast } from "sonner";
 import { fmtDate, toISODate } from "@/lib/utils";
 
@@ -22,27 +22,69 @@ export const Route = createFileRoute("/_app/graduacoes")({
   component: GraduacoesPage,
   head: () => ({
     meta: [
-      { title: "Graduações | CT Aquiles" },
-      { name: "description", content: "Faixas, graduação dos alunos e ranking." },
+      { title: "Graduações | Axus Kombat" },
+      { name: "description", content: "Graduações dos alunos por modalidade e ranking." },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
 });
 
+function useModalidades(tenantId: string | null) {
+  return useQuery({
+    queryKey: ["modalidades", tenantId],
+    enabled: !!tenantId,
+    queryFn: async () => (await supabase.from("modalidades").select("*").eq("ativo", true).order("nome")).data ?? [],
+  });
+}
+
 function GraduacoesPage() {
   const { profile } = useAuth();
+  const tenantId = profile?.tenant_id ?? null;
+  const { data: modalidades = [] } = useModalidades(tenantId);
+  const [modalidadeId, setModalidadeId] = useState<string>("");
+
+  const selected = modalidades.find((m: any) => m.id === modalidadeId);
+  const termo = selected?.termo_graduacao || "Graduação";
+
+  if (modalidades.length === 0) {
+    return (
+      <div>
+        <PageHeader title="Graduações" description="Graduação dos alunos e ranking" />
+        <Card className="gradient-card border-border p-12 text-center">
+          <Award className="h-12 w-12 mx-auto text-metal mb-4" />
+          <p className="text-muted-foreground">
+            Cadastre uma modalidade primeiro para gerenciar graduações.
+          </p>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div>
-      <PageHeader title="Graduações" description="Faixas, atribuições e ranking" />
+      <PageHeader title={`Graduações por ${termo}`} description="Gerencie as graduações da sua academia" />
+
+      <div className="mb-4 max-w-sm">
+        <Label className="uppercase-label text-[11px]">Modalidade</Label>
+        <Select value={modalidadeId} onValueChange={setModalidadeId}>
+          <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione uma modalidade"/></SelectTrigger>
+          <SelectContent>
+            {modalidades.map((m: any) => (
+              <SelectItem key={m.id} value={m.id}>{m.nome} ({m.termo_graduacao})</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       <Tabs defaultValue="faixas">
         <TabsList className="mb-4">
-          <TabsTrigger value="faixas">Faixas</TabsTrigger>
+          <TabsTrigger value="faixas">{termo}s</TabsTrigger>
           <TabsTrigger value="atribuir">Atribuir</TabsTrigger>
           <TabsTrigger value="ranking">Ranking</TabsTrigger>
         </TabsList>
-        <TabsContent value="faixas"><FaixasTab tenantId={profile?.tenant_id ?? null}/></TabsContent>
-        <TabsContent value="atribuir"><AtribuirTab tenantId={profile?.tenant_id ?? null}/></TabsContent>
-        <TabsContent value="ranking"><RankingTab tenantId={profile?.tenant_id ?? null}/></TabsContent>
+        <TabsContent value="faixas"><FaixasTab tenantId={tenantId} modalidadeId={modalidadeId} termo={termo}/></TabsContent>
+        <TabsContent value="atribuir"><AtribuirTab tenantId={tenantId} modalidadeId={modalidadeId} termo={termo}/></TabsContent>
+        <TabsContent value="ranking"><RankingTab tenantId={tenantId} modalidadeId={modalidadeId} termo={termo}/></TabsContent>
       </Tabs>
     </div>
   );
@@ -51,7 +93,7 @@ function GraduacoesPage() {
 /* ----- Tab 1: Faixas ----- */
 const EMPTY_FAIXA = { nome: "", cor: "#dc2626", ordem: "0", categoria: "adulto" as "adulto" | "kids" };
 
-function FaixasTab({ tenantId }: { tenantId: string | null }) {
+function FaixasTab({ tenantId, modalidadeId, termo }: { tenantId: string | null; modalidadeId: string; termo: string }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -59,12 +101,19 @@ function FaixasTab({ tenantId }: { tenantId: string | null }) {
   const [deleting, setDeleting] = useState<{ id: string; nome: string } | null>(null);
 
   const { data: graduacoes = [] } = useQuery({
-    queryKey: ["graduacoes", tenantId],
+    queryKey: ["graduacoes", tenantId, modalidadeId],
     enabled: !!tenantId,
-    queryFn: async () => (await supabase.from("graduacoes").select("*").order("ordem", { ascending: false })).data ?? [],
+    queryFn: async () => {
+      let q = supabase.from("graduacoes").select("*").order("ordem", { ascending: false });
+      if (modalidadeId) q = q.eq("modalidade_id", modalidadeId);
+      return (await q).data ?? [];
+    },
   });
 
-  const startCreate = () => { setEditingId(null); setForm(EMPTY_FAIXA); setOpen(true); };
+  const startCreate = () => {
+    if (!modalidadeId) { toast.error("Selecione uma modalidade primeiro"); return; }
+    setEditingId(null); setForm(EMPTY_FAIXA); setOpen(true);
+  };
   const startEdit = (g: any) => {
     setEditingId(g.id);
     setForm({ nome: g.nome, cor: g.cor ?? "#dc2626", ordem: String(g.ordem), categoria: g.categoria });
@@ -73,13 +122,13 @@ function FaixasTab({ tenantId }: { tenantId: string | null }) {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!tenantId) return;
-    const payload = { tenant_id: tenantId, nome: form.nome, cor: form.cor, ordem: Number(form.ordem), categoria: form.categoria };
+    if (!tenantId || !modalidadeId) return;
+    const payload = { tenant_id: tenantId, modalidade_id: modalidadeId, nome: form.nome, cor: form.cor, ordem: Number(form.ordem), categoria: form.categoria };
     const { error } = editingId
       ? await supabase.from("graduacoes").update(payload).eq("id", editingId)
       : await supabase.from("graduacoes").insert(payload);
     if (error) { toast.error(error.message); return; }
-    toast.success(editingId ? "Graduação atualizada" : "Graduação criada");
+    toast.success(editingId ? `${termo} atualizado(a)` : `${termo} criado(a)`);
     setOpen(false);
     qc.invalidateQueries({ queryKey: ["graduacoes"] });
   };
@@ -89,7 +138,7 @@ function FaixasTab({ tenantId }: { tenantId: string | null }) {
     const { error } = await supabase.from("graduacoes").delete().eq("id", deleting.id);
     setDeleting(null);
     if (error) { toast.error(error.message); return; }
-    toast.success("Graduação excluída");
+    toast.success("Excluído");
     qc.invalidateQueries({ queryKey: ["graduacoes"] });
   };
 
@@ -97,26 +146,26 @@ function FaixasTab({ tenantId }: { tenantId: string | null }) {
     <div>
       <div className="flex justify-end mb-3">
         <Button className="gradient-primary text-primary-foreground" onClick={startCreate}>
-          <Plus className="h-4 w-4 mr-2"/>Nova faixa
+          <Plus className="h-4 w-4 mr-2"/>Novo(a) {termo}
         </Button>
       </div>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>{editingId ? "Editar faixa" : "Nova faixa"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingId ? `Editar ${termo}` : `Novo(a) ${termo}`}</DialogTitle></DialogHeader>
           <form onSubmit={submit} className="space-y-3">
-            <div><Label>Nome</Label><Input required value={form.nome} onChange={(e)=>setForm({...form, nome: e.target.value})}/></div>
+            <div><Label>{termo}</Label><Input required value={form.nome} onChange={(e)=>setForm({...form, nome: e.target.value})}/></div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Cor</Label><Input type="color" value={form.cor} onChange={(e)=>setForm({...form, cor: e.target.value})}/></div>
               <div><Label>Ordem (ranking)</Label><Input type="number" value={form.ordem} onChange={(e)=>setForm({...form, ordem: e.target.value})}/></div>
             </div>
             <div><Label>Categoria</Label>
-              <Select value={form.categoria} onValueChange={(v: any)=>setForm({...form, categoria: v})}>
+              <Select value={form.categoria} onValueChange={(v: "adulto"|"kids")=>setForm({...form, categoria: v})}>
                 <SelectTrigger><SelectValue/></SelectTrigger>
                 <SelectContent><SelectItem value="adulto">Adulto</SelectItem><SelectItem value="kids">Kids</SelectItem></SelectContent>
               </Select>
             </div>
             <Button type="submit" className="w-full gradient-primary text-primary-foreground">
-              {editingId ? "Salvar alterações" : "Criar faixa"}
+              {editingId ? "Salvar alterações" : "Criar"}
             </Button>
           </form>
         </DialogContent>
@@ -124,9 +173,9 @@ function FaixasTab({ tenantId }: { tenantId: string | null }) {
 
       <Card className="gradient-card border-border overflow-hidden">
         <Table>
-          <TableHeader><TableRow><TableHead>Cor</TableHead><TableHead>Nome</TableHead><TableHead>Categoria</TableHead><TableHead>Ordem</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>Cor</TableHead><TableHead>{termo}</TableHead><TableHead>Categoria</TableHead><TableHead>Ordem</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
           <TableBody>
-            {graduacoes.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">Nenhuma faixa cadastrada</TableCell></TableRow>}
+            {graduacoes.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">Nenhum(a) {termo.toLowerCase()} cadastrado(a){modalidadeId ? "" : " — selecione uma modalidade"}</TableCell></TableRow>}
             {graduacoes.map((g: any) => (
               <TableRow key={g.id}>
                 <TableCell><span className="inline-block h-6 w-12 rounded" style={{ background: g.cor }}/></TableCell>
@@ -135,8 +184,8 @@ function FaixasTab({ tenantId }: { tenantId: string | null }) {
                 <TableCell>{g.ordem}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex gap-1 justify-end">
-                    <Button size="icon" variant="ghost" onClick={()=>startEdit(g)} aria-label="Editar graduação"><Pencil className="h-4 w-4"/></Button>
-                    <Button size="icon" variant="ghost" onClick={()=>setDeleting({ id: g.id, nome: g.nome })} aria-label="Excluir graduação" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button>
+                    <Button size="icon" variant="ghost" onClick={()=>startEdit(g)} aria-label="Editar"><Pencil className="h-4 w-4"/></Button>
+                    <Button size="icon" variant="ghost" onClick={()=>setDeleting({ id: g.id, nome: g.nome })} aria-label="Excluir" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button>
                   </div>
                 </TableCell>
               </TableRow>
@@ -148,8 +197,8 @@ function FaixasTab({ tenantId }: { tenantId: string | null }) {
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(v) => !v && setDeleting(null)}
-        title="Excluir faixa"
-        description={`Tem certeza que deseja excluir a faixa ${deleting?.nome}?`}
+        title={`Excluir ${termo}`}
+        description={`Tem certeza que deseja excluir "${deleting?.nome}"?`}
         onConfirm={doDelete}
       />
     </div>
@@ -157,7 +206,7 @@ function FaixasTab({ tenantId }: { tenantId: string | null }) {
 }
 
 /* ----- Tab 2: Atribuir ----- */
-function AtribuirTab({ tenantId }: { tenantId: string | null }) {
+function AtribuirTab({ tenantId, modalidadeId, termo }: { tenantId: string | null; modalidadeId: string; termo: string }) {
   const qc = useQueryClient();
   const [aluno_id, setAlunoId] = useState("");
   const [graduacao_id, setGradId] = useState("");
@@ -166,12 +215,14 @@ function AtribuirTab({ tenantId }: { tenantId: string | null }) {
   const [saving, setSaving] = useState(false);
 
   const { data: dd } = useQuery({
-    queryKey: ["atribuir-data", tenantId],
+    queryKey: ["atribuir-data", tenantId, modalidadeId],
     enabled: !!tenantId,
     queryFn: async () => {
+      let gq = supabase.from("graduacoes").select("*").order("ordem");
+      if (modalidadeId) gq = gq.eq("modalidade_id", modalidadeId);
       const [a, g, h] = await Promise.all([
         supabase.from("alunos").select("id, nome_completo, graduacao_atual_id, categoria").order("nome_completo"),
-        supabase.from("graduacoes").select("*").order("ordem"),
+        gq,
         supabase.from("historico_graduacoes").select("*, graduacoes:graduacao_nova_id(nome, cor)").order("data", { ascending: false }).limit(20),
       ]);
       return { alunos: a.data ?? [], graduacoes: g.data ?? [], historico: h.data ?? [] };
@@ -180,7 +231,7 @@ function AtribuirTab({ tenantId }: { tenantId: string | null }) {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!tenantId || !aluno_id || !graduacao_id) { toast.error("Selecione aluno e graduação"); return; }
+    if (!tenantId || !aluno_id || !graduacao_id) { toast.error(`Selecione aluno e ${termo.toLowerCase()}`); return; }
     setSaving(true);
     const aluno = dd?.alunos.find((a: any) => a.id === aluno_id);
     const { error: e1 } = await supabase.from("historico_graduacoes").insert({
@@ -192,7 +243,7 @@ function AtribuirTab({ tenantId }: { tenantId: string | null }) {
     const { error: e2 } = await supabase.from("alunos").update({ graduacao_atual_id: graduacao_id }).eq("id", aluno_id);
     setSaving(false);
     if (e2) { toast.error(e2.message); return; }
-    toast.success("Graduação atribuída ao aluno");
+    toast.success(`${termo} atribuído(a) ao aluno`);
     setAlunoId(""); setGradId(""); setObs(""); setData(toISODate(new Date()));
     qc.invalidateQueries({ queryKey: ["atribuir-data"] });
     qc.invalidateQueries({ queryKey: ["ranking"] });
@@ -201,7 +252,7 @@ function AtribuirTab({ tenantId }: { tenantId: string | null }) {
   return (
     <div className="grid lg:grid-cols-2 gap-6">
       <Card className="p-6 gradient-card border-border">
-        <h3 className="font-semibold mb-4">Atribuir graduação</h3>
+        <h3 className="font-semibold mb-4">Atribuir {termo}</h3>
         <form onSubmit={submit} className="space-y-3">
           <div><Label>Aluno</Label>
             <Select value={aluno_id} onValueChange={setAlunoId}>
@@ -209,16 +260,16 @@ function AtribuirTab({ tenantId }: { tenantId: string | null }) {
               <SelectContent>{dd?.alunos.map((a: any)=>(<SelectItem key={a.id} value={a.id}>{a.nome_completo}</SelectItem>))}</SelectContent>
             </Select>
           </div>
-          <div><Label>Graduação</Label>
+          <div><Label>{termo}</Label>
             <Select value={graduacao_id} onValueChange={setGradId}>
-              <SelectTrigger><SelectValue placeholder="Selecione a faixa"/></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={`Selecione o(a) ${termo.toLowerCase()}`}/></SelectTrigger>
               <SelectContent>{dd?.graduacoes.map((g: any)=>(<SelectItem key={g.id} value={g.id}>{g.nome} ({g.categoria})</SelectItem>))}</SelectContent>
             </Select>
           </div>
-          <div><Label>Data da graduação</Label><Input type="date" value={data} onChange={(e)=>setData(e.target.value)}/></div>
+          <div><Label>Data</Label><Input type="date" value={data} onChange={(e)=>setData(e.target.value)}/></div>
           <div><Label>Observações</Label><Textarea value={observacoes} onChange={(e)=>setObs(e.target.value)}/></div>
           <Button type="submit" className="w-full gradient-primary text-primary-foreground" disabled={saving}>
-            Salvar graduação
+            Salvar
           </Button>
         </form>
       </Card>
@@ -246,14 +297,16 @@ function AtribuirTab({ tenantId }: { tenantId: string | null }) {
 }
 
 /* ----- Tab 3: Ranking ----- */
-function RankingTab({ tenantId }: { tenantId: string | null }) {
+function RankingTab({ tenantId, modalidadeId, termo }: { tenantId: string | null; modalidadeId: string; termo: string }) {
   const { data } = useQuery({
-    queryKey: ["ranking", tenantId],
+    queryKey: ["ranking", tenantId, modalidadeId],
     enabled: !!tenantId,
     queryFn: async () => {
+      let gq = supabase.from("graduacoes").select("*");
+      if (modalidadeId) gq = gq.eq("modalidade_id", modalidadeId);
       const [a, g, h] = await Promise.all([
         supabase.from("alunos").select("id, nome_completo, graduacao_atual_id, categoria").eq("status", "ativo"),
-        supabase.from("graduacoes").select("*"),
+        gq,
         supabase.from("historico_graduacoes").select("aluno_id, data").order("data", { ascending: false }),
       ]);
       return { alunos: a.data ?? [], graduacoes: g.data ?? [], historico: h.data ?? [] };
@@ -270,15 +323,11 @@ function RankingTab({ tenantId }: { tenantId: string | null }) {
     return data.alunos
       .map((a: any) => {
         const g: any = a.graduacao_atual_id ? gradMap.get(a.graduacao_atual_id) : null;
-        return {
-          ...a,
-          graduacao: g,
-          ordem: g?.ordem ?? -1,
-          ultima_data: ultimaData.get(a.id) ?? null,
-        };
+        return { ...a, graduacao: g, ordem: g?.ordem ?? -1, ultima_data: ultimaData.get(a.id) ?? null };
       })
+      .filter((r: any) => !modalidadeId || r.graduacao)
       .sort((x: any, y: any) => y.ordem - x.ordem);
-  }, [data]);
+  }, [data, modalidadeId]);
 
   const trophy = (pos: number) => {
     if (pos === 0) return <Trophy className="h-5 w-5" style={{ color: "#FFD700" }}/>;
@@ -290,7 +339,7 @@ function RankingTab({ tenantId }: { tenantId: string | null }) {
   return (
     <Card className="gradient-card border-border overflow-hidden">
       <Table>
-        <TableHeader><TableRow><TableHead className="w-16">#</TableHead><TableHead>Aluno</TableHead><TableHead>Graduação</TableHead><TableHead>Categoria</TableHead><TableHead>Última graduação</TableHead></TableRow></TableHeader>
+        <TableHeader><TableRow><TableHead className="w-16">#</TableHead><TableHead>Aluno</TableHead><TableHead>{termo}</TableHead><TableHead>Categoria</TableHead><TableHead>Última {termo.toLowerCase()}</TableHead></TableRow></TableHeader>
         <TableBody>
           {ranking.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">Nenhum aluno no ranking</TableCell></TableRow>}
           {ranking.map((r: any, i: number) => (
@@ -303,7 +352,7 @@ function RankingTab({ tenantId }: { tenantId: string | null }) {
                     <span className="inline-block h-4 w-8 rounded" style={{ background: r.graduacao.cor }}/>
                     <span>{r.graduacao.nome}</span>
                   </div>
-                ) : <span className="text-xs text-muted-foreground">Sem graduação</span>}
+                ) : <span className="text-xs text-muted-foreground">—</span>}
               </TableCell>
               <TableCell className="capitalize">{r.categoria}</TableCell>
               <TableCell className="text-sm text-muted-foreground">{r.ultima_data ? fmtDate(r.ultima_data) : "—"}</TableCell>

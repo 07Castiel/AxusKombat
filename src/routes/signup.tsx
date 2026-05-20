@@ -28,7 +28,6 @@ const schema = z
     tenantNome: z.string().trim().min(2, "Informe o nome da academia").max(120),
     email: z.string().trim().email("E-mail inválido").max(255),
     telefone: z.string().trim().min(8, "Telefone inválido").max(20),
-    cnpjCpf: z.string().trim().min(11, "CPF/CNPJ inválido").max(20),
     password: z.string().min(8, "Senha deve ter ao menos 8 caracteres").max(72),
     confirm: z.string(),
   })
@@ -37,7 +36,7 @@ const schema = z
 function SignupPage() {
   const navigate = useNavigate();
   const [form, setForm] = useState({
-    nome: "", tenantNome: "", email: "", telefone: "", cnpjCpf: "", password: "", confirm: "",
+    nome: "", tenantNome: "", email: "", telefone: "", password: "", confirm: "",
   });
   const [loading, setLoading] = useState(false);
 
@@ -53,7 +52,7 @@ function SignupPage() {
       email: form.email, password: form.password,
       options: {
         emailRedirectTo: `${window.location.origin}/`,
-        data: { nome_completo: form.nome, tenant_nome: form.tenantNome, telefone: form.telefone, cnpj_cpf: form.cnpjCpf },
+        data: { nome_completo: form.nome, tenant_nome: form.tenantNome, telefone: form.telefone },
       },
     });
     if (error) {
@@ -70,18 +69,18 @@ function SignupPage() {
   };
 
   return (
-    <div className="dark min-h-screen relative grid place-items-center bg-background px-4 py-10 overflow-hidden">
+    <div className="dark min-h-screen relative grid place-items-center bg-background px-4 py-6 overflow-hidden">
       <div className="absolute inset-0 noise-bg pointer-events-none" />
       <div
         className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full pointer-events-none"
         style={{ background: "radial-gradient(circle, rgba(181,0,0,0.15), transparent 60%)", filter: "blur(40px)" }}
       />
       <div className="relative w-full max-w-xl flex flex-col items-center">
-        <img src={logo} alt="Axus Kombat" className="w-52 object-contain drop-shadow-[0_0_30px_rgba(181,0,0,0.35)]" />
-        <p className="mt-2 font-display text-[10px] uppercase tracking-[0.4em] text-metal">Cadastrar Academia</p>
+        <img src={logo} alt="Axus Kombat" className="w-40 object-contain drop-shadow-[0_0_30px_rgba(181,0,0,0.35)]" />
+        <p className="mt-1 font-display text-[10px] uppercase tracking-[0.4em] text-metal">Cadastrar Academia</p>
 
         <div
-          className="mt-6 w-full p-8"
+          className="mt-4 w-full p-6"
           style={{
             background: "#0e0e0e",
             border: "1px solid rgba(181,0,0,0.15)",
@@ -90,34 +89,30 @@ function SignupPage() {
             boxShadow: "0 0 60px rgba(0,0,0,0.8), 0 0 30px rgba(181,0,0,0.06)",
           }}
         >
-          <form onSubmit={onSubmit} className="grid grid-cols-2 gap-4">
+          <form onSubmit={onSubmit} className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
               <Label htmlFor="n" className="uppercase-label text-[11px]">Nome do responsável *</Label>
-              <Input id="n" required value={form.nome} onChange={set("nome")} className="mt-1.5" />
+              <Input id="n" required value={form.nome} onChange={set("nome")} className="mt-1" />
             </div>
             <div className="col-span-2">
               <Label htmlFor="tn" className="uppercase-label text-[11px]">Nome da academia *</Label>
-              <Input id="tn" required value={form.tenantNome} onChange={set("tenantNome")} className="mt-1.5" />
+              <Input id="tn" required value={form.tenantNome} onChange={set("tenantNome")} className="mt-1" />
             </div>
             <div className="col-span-2">
               <Label htmlFor="e" className="uppercase-label text-[11px]">E-mail (login) *</Label>
-              <Input id="e" type="email" required value={form.email} onChange={set("email")} className="mt-1.5" />
+              <Input id="e" type="email" required value={form.email} onChange={set("email")} className="mt-1" />
             </div>
-            <div>
+            <div className="col-span-2">
               <Label htmlFor="tel" className="uppercase-label text-[11px]">Telefone *</Label>
-              <Input id="tel" required value={form.telefone} onChange={set("telefone")} className="mt-1.5" placeholder="(11) 99999-9999" />
-            </div>
-            <div>
-              <Label htmlFor="cc" className="uppercase-label text-[11px]">CNPJ ou CPF *</Label>
-              <Input id="cc" required value={form.cnpjCpf} onChange={set("cnpjCpf")} className="mt-1.5" />
+              <Input id="tel" required value={form.telefone} onChange={set("telefone")} className="mt-1" placeholder="(11) 99999-9999" />
             </div>
             <div>
               <Label htmlFor="p" className="uppercase-label text-[11px]">Senha (mín. 8) *</Label>
-              <PasswordInput id="p" required minLength={8} value={form.password} onChange={set("password")} className="mt-1.5" />
+              <PasswordInput id="p" required minLength={8} value={form.password} onChange={set("password")} className="mt-1" />
             </div>
             <div>
               <Label htmlFor="pc" className="uppercase-label text-[11px]">Confirmar senha *</Label>
-              <PasswordInput id="pc" required value={form.confirm} onChange={set("confirm")} className="mt-1.5" />
+              <PasswordInput id="pc" required value={form.confirm} onChange={set("confirm")} className="mt-1" />
             </div>
             <Button
               type="submit"
@@ -127,7 +122,7 @@ function SignupPage() {
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar conta"}
             </Button>
           </form>
-          <p className="text-xs text-center mt-6 text-metal uppercase tracking-widest">
+          <p className="text-xs text-center mt-4 text-metal uppercase tracking-widest">
             Já tem conta?{" "}
             <Link to="/login" className="text-primary hover:text-[#D40000] font-semibold">Entrar</Link>
           </p>

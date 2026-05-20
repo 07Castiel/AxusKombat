@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/horarios")({
@@ -179,7 +179,20 @@ function HorariosPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Grade visual */}
+      {(data?.horarios ?? []).length === 0 ? (
+        <Card className="gradient-card border-border p-12 text-center">
+          <CalendarDays className="h-12 w-12 mx-auto text-metal mb-4" />
+          <p className="text-muted-foreground mb-4">Nenhum horário cadastrado ainda.</p>
+          {isAdmin && (
+            <Button className="gradient-primary text-primary-foreground" onClick={startCreate} disabled={!data?.modalidades.length}>
+              <Plus className="h-4 w-4 mr-2"/>Criar horário
+            </Button>
+          )}
+          {!data?.modalidades.length && (
+            <p className="text-xs text-muted-foreground mt-3">Cadastre uma modalidade primeiro.</p>
+          )}
+        </Card>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-3 mb-6">
         {DIAS.map((dia) => {
           const aulas = (data?.horarios ?? []).filter((h: any) => h.dia === dia);
@@ -200,6 +213,7 @@ function HorariosPage() {
           );
         })}
       </div>
+      )}
 
       {/* Tabela completa */}
       <Card className="gradient-card border-border overflow-hidden">

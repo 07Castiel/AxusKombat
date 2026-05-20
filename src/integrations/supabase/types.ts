@@ -398,25 +398,31 @@ export type Database = {
         Row: {
           ativo: boolean
           created_at: string
+          descricao: string | null
           id: string
           nome: string
           tenant_id: string
+          termo_graduacao: string
           updated_at: string
         }
         Insert: {
           ativo?: boolean
           created_at?: string
+          descricao?: string | null
           id?: string
           nome: string
           tenant_id: string
+          termo_graduacao?: string
           updated_at?: string
         }
         Update: {
           ativo?: boolean
           created_at?: string
+          descricao?: string | null
           id?: string
           nome?: string
           tenant_id?: string
+          termo_graduacao?: string
           updated_at?: string
         }
         Relationships: [
@@ -578,6 +584,7 @@ export type Database = {
           categoria: Database["public"]["Enums"]["categoria_aluno"]
           created_at: string
           descricao: string | null
+          dias_personalizado: number | null
           duracao: Database["public"]["Enums"]["duracao_plano"]
           frequencia_semanal: number | null
           id: string
@@ -592,6 +599,7 @@ export type Database = {
           categoria?: Database["public"]["Enums"]["categoria_aluno"]
           created_at?: string
           descricao?: string | null
+          dias_personalizado?: number | null
           duracao?: Database["public"]["Enums"]["duracao_plano"]
           frequencia_semanal?: number | null
           id?: string
@@ -606,6 +614,7 @@ export type Database = {
           categoria?: Database["public"]["Enums"]["categoria_aluno"]
           created_at?: string
           descricao?: string | null
+          dias_personalizado?: number | null
           duracao?: Database["public"]["Enums"]["duracao_plano"]
           frequencia_semanal?: number | null
           id?: string
@@ -767,7 +776,12 @@ export type Database = {
         | "sexta"
         | "sabado"
         | "domingo"
-      duracao_plano: "mensal" | "trimestral" | "semestral" | "anual"
+      duracao_plano:
+        | "mensal"
+        | "trimestral"
+        | "semestral"
+        | "anual"
+        | "personalizado"
       metodo_pagamento: "pix" | "dinheiro" | "cartao" | "boleto"
       status_aluno: "ativo" | "inativo" | "pendente"
       status_matricula: "ativa" | "vencida" | "cancelada" | "pendente"
@@ -911,7 +925,13 @@ export const Constants = {
         "sabado",
         "domingo",
       ],
-      duracao_plano: ["mensal", "trimestral", "semestral", "anual"],
+      duracao_plano: [
+        "mensal",
+        "trimestral",
+        "semestral",
+        "anual",
+        "personalizado",
+      ],
       metodo_pagamento: ["pix", "dinheiro", "cartao", "boleto"],
       status_aluno: ["ativo", "inativo", "pendente"],
       status_matricula: ["ativa", "vencida", "cancelada", "pendente"],

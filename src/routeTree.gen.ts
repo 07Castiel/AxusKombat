@@ -19,6 +19,7 @@ import { Route as AdminMasterDashboardRouteImport } from './routes/admin-master.
 import { Route as AppRelatoriosRouteImport } from './routes/_app/relatorios'
 import { Route as AppPlanosRouteImport } from './routes/_app/planos'
 import { Route as AppPagamentosRouteImport } from './routes/_app/pagamentos'
+import { Route as AppModalidadesRouteImport } from './routes/_app/modalidades'
 import { Route as AppMatriculasRouteImport } from './routes/_app/matriculas'
 import { Route as AppHorariosRouteImport } from './routes/_app/horarios'
 import { Route as AppGraduacoesRouteImport } from './routes/_app/graduacoes'
@@ -75,6 +76,11 @@ const AppPagamentosRoute = AppPagamentosRouteImport.update({
   path: '/pagamentos',
   getParentRoute: () => AppRoute,
 } as any)
+const AppModalidadesRoute = AppModalidadesRouteImport.update({
+  id: '/modalidades',
+  path: '/modalidades',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppMatriculasRoute = AppMatriculasRouteImport.update({
   id: '/matriculas',
   path: '/matriculas',
@@ -116,6 +122,7 @@ export interface FileRoutesByFullPath {
   '/graduacoes': typeof AppGraduacoesRoute
   '/horarios': typeof AppHorariosRoute
   '/matriculas': typeof AppMatriculasRoute
+  '/modalidades': typeof AppModalidadesRoute
   '/pagamentos': typeof AppPagamentosRoute
   '/planos': typeof AppPlanosRoute
   '/relatorios': typeof AppRelatoriosRoute
@@ -132,6 +139,7 @@ export interface FileRoutesByTo {
   '/graduacoes': typeof AppGraduacoesRoute
   '/horarios': typeof AppHorariosRoute
   '/matriculas': typeof AppMatriculasRoute
+  '/modalidades': typeof AppModalidadesRoute
   '/pagamentos': typeof AppPagamentosRoute
   '/planos': typeof AppPlanosRoute
   '/relatorios': typeof AppRelatoriosRoute
@@ -151,6 +159,7 @@ export interface FileRoutesById {
   '/_app/graduacoes': typeof AppGraduacoesRoute
   '/_app/horarios': typeof AppHorariosRoute
   '/_app/matriculas': typeof AppMatriculasRoute
+  '/_app/modalidades': typeof AppModalidadesRoute
   '/_app/pagamentos': typeof AppPagamentosRoute
   '/_app/planos': typeof AppPlanosRoute
   '/_app/relatorios': typeof AppRelatoriosRoute
@@ -171,6 +180,7 @@ export interface FileRouteTypes {
     | '/graduacoes'
     | '/horarios'
     | '/matriculas'
+    | '/modalidades'
     | '/pagamentos'
     | '/planos'
     | '/relatorios'
@@ -187,6 +197,7 @@ export interface FileRouteTypes {
     | '/graduacoes'
     | '/horarios'
     | '/matriculas'
+    | '/modalidades'
     | '/pagamentos'
     | '/planos'
     | '/relatorios'
@@ -205,6 +216,7 @@ export interface FileRouteTypes {
     | '/_app/graduacoes'
     | '/_app/horarios'
     | '/_app/matriculas'
+    | '/_app/modalidades'
     | '/_app/pagamentos'
     | '/_app/planos'
     | '/_app/relatorios'
@@ -296,6 +308,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppPagamentosRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/modalidades': {
+      id: '/_app/modalidades'
+      path: '/modalidades'
+      fullPath: '/modalidades'
+      preLoaderRoute: typeof AppModalidadesRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/matriculas': {
       id: '/_app/matriculas'
       path: '/matriculas'
@@ -347,6 +366,7 @@ interface AppRouteChildren {
   AppGraduacoesRoute: typeof AppGraduacoesRoute
   AppHorariosRoute: typeof AppHorariosRoute
   AppMatriculasRoute: typeof AppMatriculasRoute
+  AppModalidadesRoute: typeof AppModalidadesRoute
   AppPagamentosRoute: typeof AppPagamentosRoute
   AppPlanosRoute: typeof AppPlanosRoute
   AppRelatoriosRoute: typeof AppRelatoriosRoute
@@ -359,6 +379,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppGraduacoesRoute: AppGraduacoesRoute,
   AppHorariosRoute: AppHorariosRoute,
   AppMatriculasRoute: AppMatriculasRoute,
+  AppModalidadesRoute: AppModalidadesRoute,
   AppPagamentosRoute: AppPagamentosRoute,
   AppPlanosRoute: AppPlanosRoute,
   AppRelatoriosRoute: AppRelatoriosRoute,

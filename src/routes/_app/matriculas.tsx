@@ -84,7 +84,7 @@ function MatriculasPage() {
       : Number(plano.valor) - desconto;
     const venc = form.data_vencimento
       ? form.data_vencimento
-      : toISODate(addDuracao(new Date(form.data_inicio), plano.duracao));
+      : toISODate(addDuracao(new Date(form.data_inicio), plano.duracao, plano.dias_personalizado));
 
     const payload = {
       tenant_id: profile.tenant_id,
