@@ -16,7 +16,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Search, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { translateError } from "@/lib/errors";
+import { translateError, firstZodMessage } from "@/lib/errors";
+import { alunoSchema } from "@/lib/validators";
 import { fmtDate } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/alunos")({
