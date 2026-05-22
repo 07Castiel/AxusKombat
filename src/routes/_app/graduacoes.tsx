@@ -16,7 +16,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Pencil, Trash2, Trophy, Award } from "lucide-react";
 import { toast } from "sonner";
-import { translateError } from "@/lib/errors";
+import { translateError, firstZodMessage } from "@/lib/errors";
+import { graduacaoSchema } from "@/lib/validators";
 import { fmtDate, toISODate } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/graduacoes")({
@@ -124,6 +125,10 @@ function FaixasTab({ tenantId, modalidadeId, termo }: { tenantId: string | null;
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tenantId || !modalidadeId) return;
+    const parsed = graduacaoSchema.safeParse({
+      nome: form.nome, modalidade_id: modalidadeId, categoria: form.categoria, cor: form.cor, ordem: form.ordem,
+    });
+    if (!parsed.success) { toast.error(firstZodMessage(parsed.error)); return; }
     const payload = { tenant_id: tenantId, modalidade_id: modalidadeId, nome: form.nome, cor: form.cor, ordem: Number(form.ordem), categoria: form.categoria };
     const { error } = editingId
       ? await supabase.from("graduacoes").update(payload).eq("id", editingId)

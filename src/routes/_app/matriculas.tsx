@@ -16,7 +16,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { translateError } from "@/lib/errors";
+import { translateError, firstZodMessage } from "@/lib/errors";
+import { matriculaSchema } from "@/lib/validators";
 import { fmtMoney, fmtDate, addDuracao, toISODate } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/matriculas")({
@@ -75,9 +76,16 @@ function MatriculasPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile?.tenant_id) return;
+    const parsed = matriculaSchema.safeParse({
+      aluno_id: form.aluno_id,
+      plano_id: form.plano_id,
+      data_inicio: form.data_inicio,
+      desconto: form.desconto || 0,
+      observacoes: form.observacoes,
+    });
+    if (!parsed.success) { toast.error(firstZodMessage(parsed.error)); return; }
     const plano = data?.planos.find((p: any) => p.id === form.plano_id);
-    if (!plano) { toast.error("Selecione um plano"); return; }
-    if (!form.aluno_id) { toast.error("Selecione um aluno"); return; }
+    if (!plano) { toast.error("Plano selecionado não foi encontrado."); return; }
 
     const desconto = Number(form.desconto) || 0;
     const valorFinal = form.valor_final
@@ -101,7 +109,7 @@ function MatriculasPage() {
       toast.success("Matrícula atualizada");
     } else {
       const { data: mat, error } = await supabase.from("matriculas").insert(payload).select().single();
-      if (error || !mat) { toast.error(error?.message ?? "Erro"); return; }
+      if (error || !mat) { toast.error(translateError(error ?? "Erro ao criar matrícula.")); return; }
       await supabase.from("pagamentos").insert({
         tenant_id: profile.tenant_id, matricula_id: mat.id, aluno_id: form.aluno_id,
         valor: valorFinal, data_vencimento: venc, status: "pendente", metodo: "pix",

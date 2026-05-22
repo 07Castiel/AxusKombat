@@ -16,7 +16,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { translateError } from "@/lib/errors";
+import { translateError, firstZodMessage } from "@/lib/errors";
+import { pagamentoSchema } from "@/lib/validators";
 import { fmtMoney, fmtDate, toISODate } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/pagamentos")({
@@ -89,8 +90,15 @@ function PagamentosPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile?.tenant_id) return;
-    if (!form.aluno_id) { toast.error("Selecione um aluno"); return; }
-    if (!form.valor) { toast.error("Informe o valor"); return; }
+    const parsed = pagamentoSchema.safeParse({
+      aluno_id: form.aluno_id,
+      valor: form.valor,
+      metodo: form.metodo,
+      data_vencimento: form.data_vencimento,
+      data_pagamento: form.data_pagamento,
+      observacoes: form.observacoes,
+    });
+    if (!parsed.success) { toast.error(firstZodMessage(parsed.error)); return; }
 
     const payload = {
       tenant_id: profile.tenant_id,

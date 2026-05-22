@@ -15,7 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Pencil, Trash2, Swords } from "lucide-react";
 import { toast } from "sonner";
-import { translateError } from "@/lib/errors";
+import { translateError, firstZodMessage } from "@/lib/errors";
+import { modalidadeSchema } from "@/lib/validators";
 
 export const Route = createFileRoute("/_app/modalidades")({
   component: ModalidadesPage,
@@ -59,6 +60,10 @@ function ModalidadesPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile?.tenant_id) return;
+    const parsed = modalidadeSchema.safeParse({
+      nome: form.nome, termo_graduacao: form.termo_graduacao, descricao: form.descricao,
+    });
+    if (!parsed.success) { toast.error(firstZodMessage(parsed.error)); return; }
     const payload = {
       tenant_id: profile.tenant_id,
       nome: form.nome,

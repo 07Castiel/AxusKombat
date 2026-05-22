@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/PasswordInput";
 import { toast } from "sonner";
-import { translateError } from "@/lib/errors";
+import { translateError, firstZodMessage } from "@/lib/errors";
+import { loginSchema } from "@/lib/validators";
 import { Loader2 } from "lucide-react";
 import logo from "@/assets/axus-kombat-logo.png";
 
@@ -39,6 +40,8 @@ function LoginPage() {
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const parsed = loginSchema.safeParse({ email, password });
+    if (!parsed.success) { toast.error(firstZodMessage(parsed.error)); return; }
     setLoading(true);
     try {
       const { token } = await tryMasterLogin({ data: { email, password } });
