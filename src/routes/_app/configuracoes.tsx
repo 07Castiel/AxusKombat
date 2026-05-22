@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/PasswordInput";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { translateError } from "@/lib/errors";
+import { translateError, firstZodMessage } from "@/lib/errors";
+import { passwordChangeSchema } from "@/lib/validators";
 import { Loader2, Lock, User } from "lucide-react";
 
 export const Route = createFileRoute("/_app/configuracoes")({

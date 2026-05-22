@@ -72,8 +72,8 @@ function AlunosPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile?.tenant_id) return;
-    const isMenor = form.data_nascimento && new Date(form.data_nascimento) > new Date(Date.now() - 18*365*24*3600*1000);
-    if (isMenor && !form.responsavel_nome) { toast.error("Responsável obrigatório para menores"); return; }
+    const parsed = alunoSchema.safeParse(form);
+    if (!parsed.success) { toast.error(firstZodMessage(parsed.error)); return; }
     const payload = {
       tenant_id: profile.tenant_id,
       nome_completo: form.nome_completo,
