@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Search, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { translateError } from "@/lib/errors";
 import { fmtDate } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/alunos")({
@@ -93,7 +94,7 @@ function AlunosPage() {
     const { error } = editingId
       ? await supabase.from("alunos").update(payload).eq("id", editingId)
       : await supabase.from("alunos").insert(payload);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(translateError(error)); return; }
     toast.success(editingId ? "Aluno atualizado" : "Aluno cadastrado");
     setOpen(false);
     qc.invalidateQueries({ queryKey: ["alunos"] });
@@ -102,7 +103,7 @@ function AlunosPage() {
   const toggleStatus = async (id: string, current: string) => {
     const next = current === "ativo" ? "inativo" : "ativo";
     const { error } = await supabase.from("alunos").update({ status: next }).eq("id", id);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(translateError(error)); return; }
     toast.success(next === "ativo" ? "Aluno reativado" : "Aluno desativado");
     qc.invalidateQueries({ queryKey: ["alunos"] });
   };
@@ -111,7 +112,7 @@ function AlunosPage() {
     if (!deleting) return;
     const { error } = await supabase.from("alunos").delete().eq("id", deleting.id);
     setDeleting(null);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(translateError(error)); return; }
     toast.success("Aluno excluído");
     qc.invalidateQueries({ queryKey: ["alunos"] });
   };

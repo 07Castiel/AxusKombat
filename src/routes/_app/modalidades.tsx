@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Pencil, Trash2, Swords } from "lucide-react";
 import { toast } from "sonner";
+import { translateError } from "@/lib/errors";
 
 export const Route = createFileRoute("/_app/modalidades")({
   component: ModalidadesPage,
@@ -68,7 +69,7 @@ function ModalidadesPage() {
     const { error } = editingId
       ? await supabase.from("modalidades").update(payload).eq("id", editingId)
       : await supabase.from("modalidades").insert(payload);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(translateError(error)); return; }
     toast.success(editingId ? "Modalidade atualizada" : "Modalidade criada");
     setOpen(false);
     qc.invalidateQueries({ queryKey: ["modalidades"] });
@@ -86,7 +87,7 @@ function ModalidadesPage() {
     if (!deleting) return;
     const { error } = await supabase.from("modalidades").delete().eq("id", deleting.id);
     setDeleting(null);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(translateError(error)); return; }
     toast.success("Modalidade excluída");
     qc.invalidateQueries({ queryKey: ["modalidades"] });
   };

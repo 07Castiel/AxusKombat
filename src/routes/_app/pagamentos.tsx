@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { translateError } from "@/lib/errors";
 import { fmtMoney, fmtDate, toISODate } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/pagamentos")({
@@ -106,7 +107,7 @@ function PagamentosPage() {
     const { error } = editingId
       ? await supabase.from("pagamentos").update(payload).eq("id", editingId)
       : await supabase.from("pagamentos").insert(payload);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(translateError(error)); return; }
     toast.success(editingId ? "Pagamento atualizado" : "Pagamento registrado");
     setOpen(false);
     qc.invalidateQueries();
@@ -116,7 +117,7 @@ function PagamentosPage() {
     if (!deleting) return;
     const { error } = await supabase.from("pagamentos").delete().eq("id", deleting.id);
     setDeleting(null);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(translateError(error)); return; }
     toast.success("Pagamento excluído");
     qc.invalidateQueries({ queryKey: ["pagamentos"] });
   };

@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/PasswordInput";
 import { toast } from "sonner";
+import { translateError } from "@/lib/errors";
 import { Loader2 } from "lucide-react";
 import logo from "@/assets/axus-kombat-logo.png";
 
@@ -51,7 +52,7 @@ function LoginPage() {
     }
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(translateError(error)); return; }
     toast.success("Bem-vindo de volta, guerreiro");
     navigate({ to: "/" });
   };

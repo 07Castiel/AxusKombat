@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/PasswordInput";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { translateError } from "@/lib/errors";
 import { Loader2, Lock, User } from "lucide-react";
 
 export const Route = createFileRoute("/_app/configuracoes")({
@@ -35,7 +36,7 @@ function ConfigPage() {
     setSavingProfile(true);
     const { error } = await supabase.from("profiles").update({ nome_completo: nome }).eq("id", profile.id);
     setSavingProfile(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(translateError(error)); return; }
     toast.success("Perfil atualizado");
     await refresh();
   };
@@ -58,7 +59,7 @@ function ConfigPage() {
     }
     const { error } = await supabase.auth.updateUser({ password: pwd.nova });
     setSavingPwd(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(translateError(error)); return; }
     toast.success("Senha atualizada com sucesso");
     setPwd({ atual: "", nova: "", confirma: "" });
   };

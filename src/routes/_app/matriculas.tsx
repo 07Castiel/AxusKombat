@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { translateError } from "@/lib/errors";
 import { fmtMoney, fmtDate, addDuracao, toISODate } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/matriculas")({
@@ -96,7 +97,7 @@ function MatriculasPage() {
 
     if (editingId) {
       const { error } = await supabase.from("matriculas").update(payload).eq("id", editingId);
-      if (error) { toast.error(error.message); return; }
+      if (error) { toast.error(translateError(error)); return; }
       toast.success("Matrícula atualizada");
     } else {
       const { data: mat, error } = await supabase.from("matriculas").insert(payload).select().single();
@@ -113,7 +114,7 @@ function MatriculasPage() {
 
   const updateStatus = async (id: string, status: "ativa" | "cancelada") => {
     const { error } = await supabase.from("matriculas").update({ status }).eq("id", id);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(translateError(error)); return; }
     toast.success(status === "ativa" ? "Matrícula reativada" : "Matrícula cancelada");
     qc.invalidateQueries({ queryKey: ["matriculas"] });
   };
@@ -122,7 +123,7 @@ function MatriculasPage() {
     if (!deleting) return;
     const { error } = await supabase.from("matriculas").delete().eq("id", deleting.id);
     setDeleting(null);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(translateError(error)); return; }
     toast.success("Matrícula excluída");
     qc.invalidateQueries({ queryKey: ["matriculas"] });
   };

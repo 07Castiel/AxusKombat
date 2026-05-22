@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Pencil, Trash2, Wallet } from "lucide-react";
 import { toast } from "sonner";
+import { translateError } from "@/lib/errors";
 import { fmtMoney } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/planos")({
@@ -96,7 +97,7 @@ function PlanosPage() {
     const { error } = editingId
       ? await supabase.from("planos").update(payload).eq("id", editingId)
       : await supabase.from("planos").insert(payload);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(translateError(error)); return; }
     toast.success(editingId ? "Plano atualizado" : "Plano criado");
     setOpen(false);
     qc.invalidateQueries({ queryKey: ["planos"] });
@@ -104,7 +105,7 @@ function PlanosPage() {
 
   const toggleAtivo = async (id: string, ativo: boolean) => {
     const { error } = await supabase.from("planos").update({ ativo: !ativo }).eq("id", id);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(translateError(error)); return; }
     toast.success(!ativo ? "Plano ativado" : "Plano desativado");
     qc.invalidateQueries({ queryKey: ["planos"] });
   };
@@ -122,7 +123,7 @@ function PlanosPage() {
     if (!deleting) return;
     const { error } = await supabase.from("planos").delete().eq("id", deleting.id);
     setDeleting(null);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(translateError(error)); return; }
     toast.success("Plano excluído");
     qc.invalidateQueries({ queryKey: ["planos"] });
   };
