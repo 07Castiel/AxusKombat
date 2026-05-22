@@ -44,8 +44,8 @@ function ConfigPage() {
 
   const changePwd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (pwd.nova.length < 8) { toast.error("A nova senha deve ter ao menos 8 caracteres"); return; }
-    if (pwd.nova !== pwd.confirma) { toast.error("As senhas não coincidem"); return; }
+    const parsed = passwordChangeSchema.safeParse(pwd);
+    if (!parsed.success) { toast.error(firstZodMessage(parsed.error)); return; }
     if (!user?.email) return;
 
     setSavingPwd(true);
