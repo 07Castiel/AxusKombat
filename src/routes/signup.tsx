@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/PasswordInput";
 import { toast } from "sonner";
+import { translateError } from "@/lib/errors";
 import { Loader2 } from "lucide-react";
 import logo from "@/assets/axus-kombat-logo.png";
 
@@ -46,7 +47,7 @@ function SignupPage() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const parsed = schema.safeParse(form);
-    if (!parsed.success) { toast.error(parsed.error.issues[0].message); return; }
+    if (!parsed.success) { toast.error(translateError(parsed.error)); return; }
     setLoading(true);
     const { error } = await supabase.auth.signUp({
       email: form.email, password: form.password,
@@ -58,7 +59,7 @@ function SignupPage() {
     if (error) {
       setLoading(false);
       if (/registered|exists/i.test(error.message)) toast.error("Este e-mail já está cadastrado");
-      else toast.error(error.message);
+      else toast.error(translateError(error));
       return;
     }
     const { error: signInErr } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });

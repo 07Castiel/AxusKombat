@@ -15,6 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Pencil, Trash2, Wallet } from "lucide-react";
 import { toast } from "sonner";
+import { translateError, firstZodMessage } from "@/lib/errors";
+import { planoSchema } from "@/lib/validators";
 import { fmtMoney } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/planos")({
@@ -77,10 +79,16 @@ function PlanosPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile?.tenant_id) return;
-    if (form.duracao === "personalizado" && !form.dias_personalizado) {
-      toast.error("Informe o número de dias do plano personalizado");
-      return;
-    }
+    const parsed = planoSchema.safeParse({
+      nome: form.nome,
+      valor: form.valor,
+      duracao: form.duracao,
+      dias_personalizado: form.duracao === "personalizado" ? form.dias_personalizado : undefined,
+      categoria: form.categoria,
+      modalidades: form.modalidades.split(",").map((s) => s.trim()).filter(Boolean),
+      descricao: form.descricao,
+    });
+    if (!parsed.success) { toast.error(firstZodMessage(parsed.error)); return; }
     const payload = {
       tenant_id: profile.tenant_id,
       nome: form.nome,
@@ -96,7 +104,7 @@ function PlanosPage() {
     const { error } = editingId
       ? await supabase.from("planos").update(payload).eq("id", editingId)
       : await supabase.from("planos").insert(payload);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(translateError(error)); return; }
     toast.success(editingId ? "Plano atualizado" : "Plano criado");
     setOpen(false);
     qc.invalidateQueries({ queryKey: ["planos"] });
@@ -104,7 +112,7 @@ function PlanosPage() {
 
   const toggleAtivo = async (id: string, ativo: boolean) => {
     const { error } = await supabase.from("planos").update({ ativo: !ativo }).eq("id", id);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(translateError(error)); return; }
     toast.success(!ativo ? "Plano ativado" : "Plano desativado");
     qc.invalidateQueries({ queryKey: ["planos"] });
   };
@@ -122,7 +130,7 @@ function PlanosPage() {
     if (!deleting) return;
     const { error } = await supabase.from("planos").delete().eq("id", deleting.id);
     setDeleting(null);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(translateError(error)); return; }
     toast.success("Plano excluído");
     qc.invalidateQueries({ queryKey: ["planos"] });
   };

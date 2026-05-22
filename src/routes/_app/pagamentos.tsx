@@ -16,6 +16,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { translateError, firstZodMessage } from "@/lib/errors";
+import { pagamentoSchema } from "@/lib/validators";
 import { fmtMoney, fmtDate, toISODate } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/pagamentos")({
@@ -88,8 +90,15 @@ function PagamentosPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile?.tenant_id) return;
-    if (!form.aluno_id) { toast.error("Selecione um aluno"); return; }
-    if (!form.valor) { toast.error("Informe o valor"); return; }
+    const parsed = pagamentoSchema.safeParse({
+      aluno_id: form.aluno_id,
+      valor: form.valor,
+      metodo: form.metodo,
+      data_vencimento: form.data_vencimento,
+      data_pagamento: form.data_pagamento,
+      observacoes: form.observacoes,
+    });
+    if (!parsed.success) { toast.error(firstZodMessage(parsed.error)); return; }
 
     const payload = {
       tenant_id: profile.tenant_id,
@@ -106,7 +115,7 @@ function PagamentosPage() {
     const { error } = editingId
       ? await supabase.from("pagamentos").update(payload).eq("id", editingId)
       : await supabase.from("pagamentos").insert(payload);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(translateError(error)); return; }
     toast.success(editingId ? "Pagamento atualizado" : "Pagamento registrado");
     setOpen(false);
     qc.invalidateQueries();
@@ -116,7 +125,7 @@ function PagamentosPage() {
     if (!deleting) return;
     const { error } = await supabase.from("pagamentos").delete().eq("id", deleting.id);
     setDeleting(null);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(translateError(error)); return; }
     toast.success("Pagamento excluído");
     qc.invalidateQueries({ queryKey: ["pagamentos"] });
   };

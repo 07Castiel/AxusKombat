@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/PasswordInput";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { translateError, firstZodMessage } from "@/lib/errors";
+import { passwordChangeSchema } from "@/lib/validators";
 import { Loader2, Lock, User } from "lucide-react";
 
 export const Route = createFileRoute("/_app/configuracoes")({
@@ -35,15 +37,15 @@ function ConfigPage() {
     setSavingProfile(true);
     const { error } = await supabase.from("profiles").update({ nome_completo: nome }).eq("id", profile.id);
     setSavingProfile(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(translateError(error)); return; }
     toast.success("Perfil atualizado");
     await refresh();
   };
 
   const changePwd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (pwd.nova.length < 8) { toast.error("A nova senha deve ter ao menos 8 caracteres"); return; }
-    if (pwd.nova !== pwd.confirma) { toast.error("As senhas não coincidem"); return; }
+    const parsed = passwordChangeSchema.safeParse(pwd);
+    if (!parsed.success) { toast.error(firstZodMessage(parsed.error)); return; }
     if (!user?.email) return;
 
     setSavingPwd(true);
@@ -58,7 +60,7 @@ function ConfigPage() {
     }
     const { error } = await supabase.auth.updateUser({ password: pwd.nova });
     setSavingPwd(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(translateError(error)); return; }
     toast.success("Senha atualizada com sucesso");
     setPwd({ atual: "", nova: "", confirma: "" });
   };

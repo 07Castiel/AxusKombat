@@ -16,6 +16,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Pencil, Trash2, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
+import { translateError, firstZodMessage } from "@/lib/errors";
+import { horarioSchema } from "@/lib/validators";
 
 export const Route = createFileRoute("/_app/horarios")({
   component: HorariosPage,
@@ -85,8 +87,22 @@ function HorariosPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile?.tenant_id) return;
-    if (form.dias.length === 0) { toast.error("Selecione ao menos um dia da semana"); return; }
-    if (!form.modalidade_id) { toast.error("Selecione a modalidade"); return; }
+    if (form.dias.length === 0) { toast.error("Selecione ao menos um dia da semana."); return; }
+    const parsed = horarioSchema.safeParse({
+      modalidade_id: form.modalidade_id,
+      dia: form.dias[0],
+      hora: form.hora,
+      hora_fim: form.hora_fim,
+      categoria: form.categoria,
+      professor: form.professor,
+      capacidade_maxima: form.capacidade_maxima || undefined,
+      observacao: form.observacao,
+    });
+    if (!parsed.success) { toast.error(firstZodMessage(parsed.error)); return; }
+    if (form.hora_fim && form.hora_fim <= form.hora) {
+      toast.error("O horário de término deve ser depois do horário de início.");
+      return;
+    }
 
     const base = {
       tenant_id: profile.tenant_id,
@@ -102,12 +118,12 @@ function HorariosPage() {
     type Dia = "domingo" | "segunda" | "terca" | "quarta" | "quinta" | "sexta" | "sabado";
     if (editingId) {
       const { error } = await supabase.from("horarios").update({ ...base, dia: form.dias[0] as Dia }).eq("id", editingId);
-      if (error) { toast.error(error.message); return; }
+      if (error) { toast.error(translateError(error)); return; }
       toast.success("Horário atualizado");
     } else {
       const rows = form.dias.map((dia) => ({ ...base, dia: dia as Dia }));
       const { error } = await supabase.from("horarios").insert(rows);
-      if (error) { toast.error(error.message); return; }
+      if (error) { toast.error(translateError(error)); return; }
       toast.success(`${rows.length} horário(s) criado(s)`);
     }
     setOpen(false);
@@ -118,7 +134,7 @@ function HorariosPage() {
     if (!deleting) return;
     const { error } = await supabase.from("horarios").delete().eq("id", deleting.id);
     setDeleting(null);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(translateError(error)); return; }
     toast.success("Horário excluído");
     qc.invalidateQueries({ queryKey: ["horarios-full"] });
   };

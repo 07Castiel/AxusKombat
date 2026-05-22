@@ -16,6 +16,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Pencil, Trash2, Trophy, Award } from "lucide-react";
 import { toast } from "sonner";
+import { translateError, firstZodMessage } from "@/lib/errors";
+import { graduacaoSchema } from "@/lib/validators";
 import { fmtDate, toISODate } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/graduacoes")({
@@ -123,11 +125,15 @@ function FaixasTab({ tenantId, modalidadeId, termo }: { tenantId: string | null;
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tenantId || !modalidadeId) return;
+    const parsed = graduacaoSchema.safeParse({
+      nome: form.nome, modalidade_id: modalidadeId, categoria: form.categoria, cor: form.cor, ordem: form.ordem,
+    });
+    if (!parsed.success) { toast.error(firstZodMessage(parsed.error)); return; }
     const payload = { tenant_id: tenantId, modalidade_id: modalidadeId, nome: form.nome, cor: form.cor, ordem: Number(form.ordem), categoria: form.categoria };
     const { error } = editingId
       ? await supabase.from("graduacoes").update(payload).eq("id", editingId)
       : await supabase.from("graduacoes").insert(payload);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(translateError(error)); return; }
     toast.success(editingId ? `${termo} atualizado(a)` : `${termo} criado(a)`);
     setOpen(false);
     qc.invalidateQueries({ queryKey: ["graduacoes"] });
@@ -137,7 +143,7 @@ function FaixasTab({ tenantId, modalidadeId, termo }: { tenantId: string | null;
     if (!deleting) return;
     const { error } = await supabase.from("graduacoes").delete().eq("id", deleting.id);
     setDeleting(null);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(translateError(error)); return; }
     toast.success("Excluído");
     qc.invalidateQueries({ queryKey: ["graduacoes"] });
   };
@@ -239,10 +245,10 @@ function AtribuirTab({ tenantId, modalidadeId, termo }: { tenantId: string | nul
       graduacao_anterior_id: aluno?.graduacao_atual_id ?? null,
       data, observacoes: observacoes || null,
     });
-    if (e1) { setSaving(false); toast.error(e1.message); return; }
+    if (e1) { setSaving(false); toast.error(translateError(e1)); return; }
     const { error: e2 } = await supabase.from("alunos").update({ graduacao_atual_id: graduacao_id }).eq("id", aluno_id);
     setSaving(false);
-    if (e2) { toast.error(e2.message); return; }
+    if (e2) { toast.error(translateError(e2)); return; }
     toast.success(`${termo} atribuído(a) ao aluno`);
     setAlunoId(""); setGradId(""); setObs(""); setData(toISODate(new Date()));
     qc.invalidateQueries({ queryKey: ["atribuir-data"] });
