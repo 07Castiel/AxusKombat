@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/PasswordInput";
 import { toast } from "sonner";
 import { translateError, firstZodMessage } from "@/lib/errors";
-import { loginSchema } from "@/lib/validators";
+import { loginSchema, emailSchema } from "@/lib/validators";
 import { Loader2 } from "lucide-react";
 import logo from "@/assets/axus-kombat-logo.png";
 
@@ -21,7 +21,7 @@ export const Route = createFileRoute("/login")({
       { title: "Entrar | Axus Kombat" },
       { name: "description", content: "Acesse o painel de gestão da sua academia no Axus Kombat." },
       { property: "og:title", content: "Entrar | Axus Kombat" },
-      { property: "og:description", content: "Acesse o painel de gestão da sua academia de artes marciais." },
+      { property: "og:description", content: "Gestão completa para academias de artes marciais." },
     ],
   }),
 });
@@ -56,64 +56,126 @@ function LoginPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) { toast.error(translateError(error)); return; }
-    toast.success("Bem-vindo de volta, guerreiro");
+    toast.success("Bem-vindo de volta");
     navigate({ to: "/" });
   };
 
+  const onForgot = async () => {
+    const parsed = emailSchema.safeParse(email);
+    if (!parsed.success) { toast.error("Informe seu e-mail no campo acima para recuperar a senha."); return; }
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/login`,
+    });
+    if (error) { toast.error(translateError(error)); return; }
+    toast.success("Enviamos um e-mail com instruções para redefinir sua senha.");
+  };
+
   return (
-    <div className="dark relative grid place-items-center bg-background px-4 overflow-hidden" style={{ height: "100vh" }}>
-      <div className="absolute inset-0 noise-bg pointer-events-none" />
+    <div className="dark min-h-screen flex items-center justify-center px-4 py-8" style={{ background: "#121212" }}>
+      {/* sutil halo central */}
       <div
-        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full pointer-events-none"
-        style={{ background: "radial-gradient(circle, rgba(181,0,0,0.18), transparent 60%)", filter: "blur(40px)" }}
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(ellipse at 50% 30%, rgba(181,0,0,0.06), transparent 60%)",
+        }}
       />
 
-      <div className="relative w-full max-w-md flex flex-col items-center">
-        <img src={logo} alt="Axus Kombat" className="object-contain drop-shadow-[0_0_40px_rgba(181,0,0,0.4)] max-h-[180px]" />
-        <p className="mt-1 font-display text-[10px] uppercase tracking-[0.5em] text-metal">Sistema de Gestão</p>
-
-        <div className="flex items-center gap-3 my-3 w-full max-w-xs">
-          <span className="h-1 w-1 rounded-full bg-primary" />
-          <div className="flex-1 h-px" style={{ background: "rgba(181,0,0,0.25)" }} />
-          <span className="h-1 w-1 rounded-full bg-primary" />
-        </div>
-
+      <div className="relative w-full max-w-[420px]">
         <div
-          className="w-full p-6 relative"
+          className="rounded-xl p-8 sm:p-10"
           style={{
-            background: "#0e0e0e",
-            border: "1px solid rgba(181,0,0,0.15)",
-            borderTop: "2px solid #B50000",
-            borderRadius: "6px",
-            boxShadow: "0 0 60px rgba(0,0,0,0.8), 0 0 30px rgba(181,0,0,0.06)",
+            background: "#171717",
+            border: "1px solid rgba(255,255,255,0.06)",
+            boxShadow: "0 20px 50px -20px rgba(0,0,0,0.7), 0 1px 0 rgba(255,255,255,0.03) inset",
           }}
         >
-          <h1 className="font-display text-lg text-metal-light uppercase tracking-widest text-center mb-1">Entrar</h1>
-          <p className="text-[10px] text-metal text-center mb-4 uppercase tracking-widest">Acesso ao painel</p>
+          <div className="flex flex-col items-center text-center mb-7">
+            <img
+              src={logo}
+              alt="Axus Kombat"
+              className="h-14 w-14 object-contain mb-4 opacity-95"
+            />
+            <h1 className="font-display text-2xl text-foreground tracking-wide">Axus Kombat</h1>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              Gestão completa para academias de artes marciais
+            </p>
+          </div>
 
-          <form onSubmit={onSubmit} className="space-y-3">
-            <div>
-              <Label htmlFor="email" className="uppercase-label text-[11px]">E-mail</Label>
-              <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 bg-input border-white/10 text-foreground" />
+          <form onSubmit={onSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="email" className="text-xs normal-case tracking-normal text-metal-light font-medium" style={{ letterSpacing: "0.01em", textTransform: "none" }}>
+                E-mail
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                required
+                autoComplete="email"
+                placeholder="voce@academia.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="h-11 rounded-lg bg-[#1f1f1f] border-white/[0.07] text-foreground placeholder:text-[#5a5a5a] focus-visible:border-primary/70 transition-colors"
+              />
             </div>
-            <div>
-              <Label htmlFor="pwd" className="uppercase-label text-[11px]">Senha</Label>
-              <PasswordInput id="pwd" required value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1 bg-input border-white/10 text-foreground" />
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="pwd" className="text-xs normal-case tracking-normal text-metal-light font-medium" style={{ letterSpacing: "0.01em", textTransform: "none" }}>
+                  Senha
+                </Label>
+                <button
+                  type="button"
+                  onClick={onForgot}
+                  className="text-xs text-muted-foreground hover:text-metal-light transition-colors"
+                >
+                  Esqueceu a senha?
+                </button>
+              </div>
+              <PasswordInput
+                id="pwd"
+                required
+                autoComplete="current-password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="h-11 rounded-lg bg-[#1f1f1f] border-white/[0.07] text-foreground placeholder:text-[#5a5a5a] focus-visible:border-primary/70 transition-colors"
+              />
             </div>
+
             <Button
               type="submit"
               disabled={loading}
-              className="w-full font-display uppercase tracking-[0.2em] text-sm h-10 bg-primary hover:bg-[#D40000] text-primary-foreground shadow-glow transition-all"
+              className="w-full h-11 rounded-lg text-sm font-semibold tracking-normal transition-all"
+              style={{
+                background: "#A30000",
+                color: "#fff",
+                boxShadow: "0 1px 0 rgba(255,255,255,0.05) inset, 0 6px 20px -8px rgba(163,0,0,0.6)",
+                textTransform: "none",
+                letterSpacing: "0",
+                fontFamily: "Rajdhani, system-ui, sans-serif",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "#B50000")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "#A30000")}
             >
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Entrar"}
             </Button>
           </form>
 
-          <p className="text-[11px] text-center mt-4 text-metal uppercase tracking-widest">
-            Primeira vez?{" "}
-            <Link to="/signup" className="text-primary hover:text-[#D40000] font-semibold transition-colors">Cadastre sua academia</Link>
-          </p>
+          <div className="mt-6 pt-5 border-t border-white/[0.05] text-center">
+            <p className="text-sm text-muted-foreground">
+              Não tem conta?{" "}
+              <Link to="/signup" className="text-metal-light hover:text-foreground font-medium transition-colors">
+                Criar academia
+              </Link>
+            </p>
+          </div>
         </div>
+
+        <p className="mt-6 text-center text-[11px] text-[#5a5a5a]">
+          Axus Kombat © {new Date().getFullYear()} · Sistema de gestão
+        </p>
       </div>
     </div>
   );
