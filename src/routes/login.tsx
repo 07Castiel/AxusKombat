@@ -1,9 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { masterLogin } from "@/lib/master.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,7 +27,7 @@ export const Route = createFileRoute("/login")({
 function LoginPage() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const tryMasterLogin = useServerFn(masterLogin);
+  
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -43,16 +41,6 @@ function LoginPage() {
     const parsed = loginSchema.safeParse({ email, password });
     if (!parsed.success) { toast.error(firstZodMessage(parsed.error)); return; }
     setLoading(true);
-    try {
-      const { token } = await tryMasterLogin({ data: { email, password } });
-      sessionStorage.setItem("master_token", token);
-      setLoading(false);
-      toast.success("Acesso de Admin Mestre autorizado");
-      navigate({ to: "/admin-master/dashboard" });
-      return;
-    } catch {
-      /* not master */
-    }
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) { toast.error(translateError(error)); return; }
