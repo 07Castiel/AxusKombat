@@ -58,8 +58,14 @@ function SignupPage() {
     });
     if (error) {
       setLoading(false);
-      if (/registered|exists/i.test(error.message)) toast.error("Este e-mail já está cadastrado");
-      else toast.error(translateError(error));
+      const msg = (error.message || "").toLowerCase();
+      if (/registered|already.*exists|user.*exists/.test(msg)) {
+        toast.error("Este e-mail já está cadastrado. Faça login ou recupere sua senha.");
+      } else if (/weak|pwned|compromised/.test(msg) || (error as any).code === "weak_password") {
+        toast.error("Esta senha é muito comum e foi encontrada em vazamentos. Escolha uma senha mais forte (mistura de letras, números e símbolos).", { duration: 7000 });
+      } else {
+        toast.error(translateError(error));
+      }
       return;
     }
     const { error: signInErr } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
