@@ -26,6 +26,10 @@ const AUTH_MAP: Record<string, string> = {
   "for security purposes, you can only request this after": "Aguarde alguns segundos antes de tentar novamente.",
   "captcha verification process failed": "Falha na verificação. Tente novamente.",
   "anonymous sign-ins are disabled": "Login anônimo desabilitado.",
+  "password is known to be weak": "Esta senha é muito comum e foi encontrada em vazamentos. Escolha uma senha mais forte (combine letras maiúsculas, minúsculas, números e símbolos).",
+  "weak_password": "Esta senha é muito comum e foi encontrada em vazamentos. Escolha uma senha mais forte.",
+  "pwned": "Esta senha já vazou em outros sites. Use uma senha única e mais forte.",
+  "database error saving new user": "Erro ao criar a conta. Tente novamente ou entre em contato com o suporte.",
 };
 
 const PG_CODE_MAP: Record<string, string> = {
