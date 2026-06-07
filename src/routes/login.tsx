@@ -43,16 +43,6 @@ function LoginPage() {
     const parsed = loginSchema.safeParse({ email, password });
     if (!parsed.success) { toast.error(firstZodMessage(parsed.error)); return; }
     setLoading(true);
-    try {
-      const { token } = await tryMasterLogin({ data: { email, password } });
-      sessionStorage.setItem("master_token", token);
-      setLoading(false);
-      toast.success("Acesso de Admin Mestre autorizado");
-      navigate({ to: "/admin-master/dashboard" });
-      return;
-    } catch {
-      /* not master */
-    }
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) { toast.error(translateError(error)); return; }
