@@ -116,8 +116,8 @@ function SignupPage() {
               <Input id="tel" required value={form.telefone} onChange={set("telefone")} className="mt-1" placeholder="(11) 99999-9999" />
             </div>
             <div>
-              <Label htmlFor="p" className="uppercase-label text-[11px]">Senha (mín. 8) *</Label>
-              <PasswordInput id="p" required minLength={8} value={form.password} onChange={set("password")} className="mt-1" />
+              <Label htmlFor="p" className="uppercase-label text-[11px]">Senha (mín. 6) *</Label>
+              <PasswordInput id="p" required minLength={6} value={form.password} onChange={set("password")} className="mt-1" />
             </div>
             <div>
               <Label htmlFor="pc" className="uppercase-label text-[11px]">Confirmar senha *</Label>
