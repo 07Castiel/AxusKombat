@@ -3,7 +3,7 @@ import { LayoutDashboard, Users, ClipboardList, CreditCard, Wallet, CalendarDays
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Toaster } from "@/components/ui/sonner";
+// Toaster mounted globally in __root.tsx
 import { useState, type ReactNode } from "react";
 import logo from "@/assets/axus-kombat-logo.png";
 
