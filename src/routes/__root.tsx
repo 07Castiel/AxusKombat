@@ -1,6 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Outlet, createRootRouteWithContext, HeadContent, Scripts } from "@tanstack/react-router";
+import { Outlet, createRootRouteWithContext, HeadContent, Scripts, Link } from "@tanstack/react-router";
 import { AuthProvider } from "@/hooks/use-auth";
+import { Toaster } from "@/components/ui/sonner";
+import { translateError } from "@/lib/errors";
 import appCss from "../styles.css?url";
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
@@ -28,6 +30,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   }),
   shellComponent: RootShell,
   component: RootComponent,
+  errorComponent: RootErrorBoundary,
+  notFoundComponent: NotFound,
 });
 
 function RootShell({ children }: { children: React.ReactNode }) {
@@ -45,7 +49,44 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <Outlet />
+        <Toaster />
       </AuthProvider>
     </QueryClientProvider>
+  );
+}
+
+function RootErrorBoundary({ error, reset }: { error: Error; reset: () => void }) {
+  const msg = translateError(error);
+  if (typeof console !== "undefined") console.error("[AppError]", error);
+  return (
+    <div className="dark min-h-screen flex items-center justify-center px-4 bg-background">
+      <div className="max-w-md w-full text-center space-y-4 p-6 border border-border rounded-md bg-card">
+        <h1 className="font-display text-xl text-foreground">Algo deu errado</h1>
+        <p className="text-sm text-muted-foreground">{msg}</p>
+        <div className="flex gap-2 justify-center">
+          <button
+            onClick={() => { reset(); if (typeof window !== "undefined") window.location.reload(); }}
+            className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium"
+          >
+            Tentar novamente
+          </button>
+          <Link to="/" className="px-4 py-2 rounded-md border border-border text-sm">Ir para o início</Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NotFound() {
+  return (
+    <div className="dark min-h-screen flex items-center justify-center px-4 bg-background">
+      <div className="max-w-md w-full text-center space-y-4 p-6">
+        <h1 className="font-display text-3xl text-foreground">404</h1>
+        <p className="text-sm text-muted-foreground">A página que você procura não foi encontrada.</p>
+        <Link to="/" className="inline-block px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium">
+          Voltar ao início
+        </Link>
+      </div>
+    </div>
   );
 }
