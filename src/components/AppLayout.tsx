@@ -1,5 +1,5 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
-import { LayoutDashboard, Users, ClipboardList, CreditCard, Wallet, CalendarDays, Award, BarChart3, Settings, LogOut, Menu, Swords } from "lucide-react";
+import { LayoutDashboard, Users, CreditCard, Wallet, CalendarDays, Award, BarChart3, Settings, LogOut, Menu, Swords } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import logo from "@/assets/axus-kombat-logo.png";
 const NAV = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard", adminOnly: false },
   { to: "/alunos", icon: Users, label: "Alunos", adminOnly: false },
-  { to: "/matriculas", icon: ClipboardList, label: "Matrículas", adminOnly: false },
+  
   { to: "/pagamentos", icon: CreditCard, label: "Pagamentos", adminOnly: true },
   { to: "/planos", icon: Wallet, label: "Planos", adminOnly: true },
   { to: "/modalidades", icon: Swords, label: "Modalidades", adminOnly: true },
