@@ -17,7 +17,7 @@ const AUTH_MAP: Record<string, string> = {
   "user not found": "Usuário não encontrado.",
   "email rate limit exceeded": "Muitas tentativas. Aguarde alguns minutos e tente novamente.",
   "password should be at least 6 characters": "A senha deve ter pelo menos 6 caracteres.",
-  "password should be at least 8 characters": "A senha deve ter pelo menos 8 caracteres.",
+  "password should be at least 8 characters": "A senha deve ter pelo menos 6 caracteres.",
   "new password should be different from the old password": "A nova senha precisa ser diferente da atual.",
   "auth session missing!": "Sessão expirada. Faça login novamente.",
   "jwt expired": "Sessão expirada. Faça login novamente.",
@@ -26,9 +26,6 @@ const AUTH_MAP: Record<string, string> = {
   "for security purposes, you can only request this after": "Aguarde alguns segundos antes de tentar novamente.",
   "captcha verification process failed": "Falha na verificação. Tente novamente.",
   "anonymous sign-ins are disabled": "Login anônimo desabilitado.",
-  "password is known to be weak": "Esta senha é muito comum e foi encontrada em vazamentos. Escolha uma senha mais forte (combine letras maiúsculas, minúsculas, números e símbolos).",
-  "weak_password": "Esta senha é muito comum e foi encontrada em vazamentos. Escolha uma senha mais forte.",
-  "pwned": "Esta senha já vazou em outros sites. Use uma senha única e mais forte.",
   "database error saving new user": "Erro ao criar a conta. Tente novamente ou entre em contato com o suporte.",
 };
 
