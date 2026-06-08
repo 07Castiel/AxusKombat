@@ -112,8 +112,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </header>
         <main className="flex-1 p-4 md:p-8 noise-bg">{children}</main>
       </div>
-
-      <Toaster />
     </div>
   );
 }
