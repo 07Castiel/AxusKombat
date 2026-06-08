@@ -29,7 +29,7 @@ const schema = z
     tenantNome: z.string().trim().min(2, "Informe o nome da academia").max(120),
     email: z.string().trim().email("E-mail inválido").max(255),
     telefone: z.string().trim().min(8, "Telefone inválido").max(20),
-    password: z.string().min(8, "Senha deve ter ao menos 8 caracteres").max(72),
+    password: z.string().min(6, "Senha deve ter ao menos 6 caracteres").max(72),
     confirm: z.string(),
   })
   .refine((d) => d.password === d.confirm, { message: "Senhas não coincidem", path: ["confirm"] });
@@ -49,30 +49,32 @@ function SignupPage() {
     const parsed = schema.safeParse(form);
     if (!parsed.success) { toast.error(translateError(parsed.error)); return; }
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email: form.email, password: form.password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/`,
-        data: { nome_completo: form.nome, tenant_nome: form.tenantNome, telefone: form.telefone },
-      },
-    });
-    if (error) {
-      setLoading(false);
-      const msg = (error.message || "").toLowerCase();
-      if (/registered|already.*exists|user.*exists/.test(msg)) {
-        toast.error("Este e-mail já está cadastrado. Faça login ou recupere sua senha.");
-      } else if (/weak|pwned|compromised/.test(msg) || (error as any).code === "weak_password") {
-        toast.error("Esta senha é muito comum e foi encontrada em vazamentos. Escolha uma senha mais forte (mistura de letras, números e símbolos).", { duration: 7000 });
-      } else {
-        toast.error(translateError(error));
+    try {
+      const { error } = await supabase.auth.signUp({
+        email: form.email, password: form.password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+          data: { nome_completo: form.nome, tenant_nome: form.tenantNome, telefone: form.telefone },
+        },
+      });
+      if (error) {
+        const msg = (error.message || "").toLowerCase();
+        if (/registered|already.*exists|user.*exists/.test(msg)) {
+          toast.error("Este e-mail já está cadastrado. Faça login ou recupere sua senha.");
+        } else {
+          toast.error(translateError(error));
+        }
+        return;
       }
-      return;
+      const { error: signInErr } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
+      if (signInErr) { toast.success("Cadastro criado! Faça login para continuar."); navigate({ to: "/login" }); return; }
+      toast.success("Academia cadastrada com sucesso!");
+      navigate({ to: "/" });
+    } catch (err) {
+      toast.error(translateError(err));
+    } finally {
+      setLoading(false);
     }
-    const { error: signInErr } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
-    setLoading(false);
-    if (signInErr) { toast.success("Cadastro criado! Faça login para continuar."); navigate({ to: "/login" }); return; }
-    toast.success("Academia cadastrada com sucesso!");
-    navigate({ to: "/" });
   };
 
   return (
