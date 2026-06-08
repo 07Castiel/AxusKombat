@@ -3,7 +3,7 @@ import { LayoutDashboard, Users, ClipboardList, CreditCard, Wallet, CalendarDays
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Toaster } from "@/components/ui/sonner";
+// Toaster mounted globally in __root.tsx
 import { useState, type ReactNode } from "react";
 import logo from "@/assets/axus-kombat-logo.png";
 
@@ -112,8 +112,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </header>
         <main className="flex-1 p-4 md:p-8 noise-bg">{children}</main>
       </div>
-
-      <Toaster />
     </div>
   );
 }
