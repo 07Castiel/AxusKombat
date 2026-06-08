@@ -20,7 +20,6 @@ import { Route as AppRelatoriosRouteImport } from './routes/_app/relatorios'
 import { Route as AppPlanosRouteImport } from './routes/_app/planos'
 import { Route as AppPagamentosRouteImport } from './routes/_app/pagamentos'
 import { Route as AppModalidadesRouteImport } from './routes/_app/modalidades'
-import { Route as AppMatriculasRouteImport } from './routes/_app/matriculas'
 import { Route as AppHorariosRouteImport } from './routes/_app/horarios'
 import { Route as AppGraduacoesRouteImport } from './routes/_app/graduacoes'
 import { Route as AppConfiguracoesRouteImport } from './routes/_app/configuracoes'
@@ -81,11 +80,6 @@ const AppModalidadesRoute = AppModalidadesRouteImport.update({
   path: '/modalidades',
   getParentRoute: () => AppRoute,
 } as any)
-const AppMatriculasRoute = AppMatriculasRouteImport.update({
-  id: '/matriculas',
-  path: '/matriculas',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppHorariosRoute = AppHorariosRouteImport.update({
   id: '/horarios',
   path: '/horarios',
@@ -121,7 +115,6 @@ export interface FileRoutesByFullPath {
   '/configuracoes': typeof AppConfiguracoesRoute
   '/graduacoes': typeof AppGraduacoesRoute
   '/horarios': typeof AppHorariosRoute
-  '/matriculas': typeof AppMatriculasRoute
   '/modalidades': typeof AppModalidadesRoute
   '/pagamentos': typeof AppPagamentosRoute
   '/planos': typeof AppPlanosRoute
@@ -138,7 +131,6 @@ export interface FileRoutesByTo {
   '/configuracoes': typeof AppConfiguracoesRoute
   '/graduacoes': typeof AppGraduacoesRoute
   '/horarios': typeof AppHorariosRoute
-  '/matriculas': typeof AppMatriculasRoute
   '/modalidades': typeof AppModalidadesRoute
   '/pagamentos': typeof AppPagamentosRoute
   '/planos': typeof AppPlanosRoute
@@ -158,7 +150,6 @@ export interface FileRoutesById {
   '/_app/configuracoes': typeof AppConfiguracoesRoute
   '/_app/graduacoes': typeof AppGraduacoesRoute
   '/_app/horarios': typeof AppHorariosRoute
-  '/_app/matriculas': typeof AppMatriculasRoute
   '/_app/modalidades': typeof AppModalidadesRoute
   '/_app/pagamentos': typeof AppPagamentosRoute
   '/_app/planos': typeof AppPlanosRoute
@@ -179,7 +170,6 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/graduacoes'
     | '/horarios'
-    | '/matriculas'
     | '/modalidades'
     | '/pagamentos'
     | '/planos'
@@ -196,7 +186,6 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/graduacoes'
     | '/horarios'
-    | '/matriculas'
     | '/modalidades'
     | '/pagamentos'
     | '/planos'
@@ -215,7 +204,6 @@ export interface FileRouteTypes {
     | '/_app/configuracoes'
     | '/_app/graduacoes'
     | '/_app/horarios'
-    | '/_app/matriculas'
     | '/_app/modalidades'
     | '/_app/pagamentos'
     | '/_app/planos'
@@ -315,13 +303,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppModalidadesRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/matriculas': {
-      id: '/_app/matriculas'
-      path: '/matriculas'
-      fullPath: '/matriculas'
-      preLoaderRoute: typeof AppMatriculasRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/horarios': {
       id: '/_app/horarios'
       path: '/horarios'
@@ -365,7 +346,6 @@ interface AppRouteChildren {
   AppConfiguracoesRoute: typeof AppConfiguracoesRoute
   AppGraduacoesRoute: typeof AppGraduacoesRoute
   AppHorariosRoute: typeof AppHorariosRoute
-  AppMatriculasRoute: typeof AppMatriculasRoute
   AppModalidadesRoute: typeof AppModalidadesRoute
   AppPagamentosRoute: typeof AppPagamentosRoute
   AppPlanosRoute: typeof AppPlanosRoute
@@ -378,7 +358,6 @@ const AppRouteChildren: AppRouteChildren = {
   AppConfiguracoesRoute: AppConfiguracoesRoute,
   AppGraduacoesRoute: AppGraduacoesRoute,
   AppHorariosRoute: AppHorariosRoute,
-  AppMatriculasRoute: AppMatriculasRoute,
   AppModalidadesRoute: AppModalidadesRoute,
   AppPagamentosRoute: AppPagamentosRoute,
   AppPlanosRoute: AppPlanosRoute,
@@ -400,3 +379,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
