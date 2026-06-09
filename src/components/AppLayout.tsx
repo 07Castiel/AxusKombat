@@ -17,6 +17,7 @@ const NAV = [
   { to: "/horarios", icon: CalendarDays, label: "Horários", adminOnly: false },
   { to: "/graduacoes", icon: Award, label: "Graduações", adminOnly: false },
   { to: "/relatorios", icon: BarChart3, label: "Relatórios", adminOnly: true },
+  { to: "/equipe", icon: UserCog, label: "Equipe", adminOnly: true },
   { to: "/configuracoes", icon: Settings, label: "Configurações", adminOnly: true },
 ] as const;
 
