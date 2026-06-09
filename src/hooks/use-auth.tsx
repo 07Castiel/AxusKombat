@@ -20,6 +20,8 @@ interface AuthCtx {
   loading: boolean;
   isAdmin: boolean;
   isProfessorKids: boolean;
+  isProfessorAdulto: boolean;
+  isProfessor: boolean;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
 }
