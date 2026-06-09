@@ -214,21 +214,51 @@ export const masterDeleteTenant = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     assertToken(data.token);
-    const tables = ["alunos", "matriculas", "pagamentos", "horarios", "graduacoes", "modalidades", "planos", "profiles"] as const;
-    const counts: Record<string, number> = {};
-    for (const tbl of tables) {
-      const { count, error } = await supabaseAdmin
-        .from(tbl)
-        .select("id", { count: "exact", head: true })
-        .eq("tenant_id", data.tenantId);
-      if (error) throw new Error(error.message);
-      if (count && count > 0) counts[tbl] = count;
+    const tenantId = data.tenantId;
+
+    // Tables to wipe BEFORE profiles/user_roles/tenants, ordered by dependency.
+    // historico_graduacoes & notificacoes may reference alunos; delete first.
+    const dependentTables = [
+      "historico_graduacoes",
+      "notificacoes",
+      "pagamentos",
+      "matriculas",
+      "despesas",
+      "graduacoes",
+      "horarios",
+      "alunos",
+      "modalidades",
+      "planos",
+    ] as const;
+
+    for (const tbl of dependentTables) {
+      const { error } = await supabaseAdmin.from(tbl).delete().eq("tenant_id", tenantId);
+      if (error) throw new Error(`Falha ao remover ${tbl}: ${error.message}`);
     }
-    if (Object.keys(counts).length > 0) {
-      const detalhes = Object.entries(counts).map(([k, v]) => `${v} ${k}`).join(", ");
-      throw new Error(`Não é possível excluir: academia possui registros vinculados (${detalhes}). Desative em vez de excluir.`);
+
+    // Collect users of this tenant before removing profiles/roles.
+    const { data: profs, error: pErr } = await supabaseAdmin
+      .from("profiles").select("id").eq("tenant_id", tenantId);
+    if (pErr) throw new Error(pErr.message);
+    const userIds = (profs ?? []).map((p) => p.id);
+
+    const { error: urErr } = await supabaseAdmin
+      .from("user_roles").delete().eq("tenant_id", tenantId);
+    if (urErr) throw new Error(urErr.message);
+
+    const { error: profDelErr } = await supabaseAdmin
+      .from("profiles").delete().eq("tenant_id", tenantId);
+    if (profDelErr) throw new Error(profDelErr.message);
+
+    // Remove auth users so they can no longer log in.
+    for (const uid of userIds) {
+      const { error } = await supabaseAdmin.auth.admin.deleteUser(uid);
+      if (error && !/not[_ ]?found/i.test(error.message)) {
+        throw new Error(`Falha ao remover usuário ${uid}: ${error.message}`);
+      }
     }
-    const { error } = await supabaseAdmin.from("tenants").delete().eq("id", data.tenantId);
-    if (error) throw new Error(error.message);
-    return { ok: true };
+
+    const { error: tErr } = await supabaseAdmin.from("tenants").delete().eq("id", tenantId);
+    if (tErr) throw new Error(tErr.message);
+    return { ok: true, removedUsers: userIds.length };
   });
