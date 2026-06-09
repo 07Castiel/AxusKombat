@@ -75,7 +75,7 @@ export const testWhatsappConnection = createServerFn({ method: "POST" })
       last_test_result: result.ok ? "sucesso" : (result.error ?? "falha"),
       connection_status: result.ok ? "conectado" : "erro",
     }).eq("tenant_id", tenantId);
-    return result;
+    return { ok: result.ok, error: result.error, providerMessageId: result.providerMessageId };
   });
 
 export const listNotifications = createServerFn({ method: "POST" })
