@@ -145,7 +145,7 @@ export const resendNotification = createServerFn({ method: "POST" })
       enviada_em: result.ok ? new Date().toISOString() : notif.enviada_em,
       erro: result.ok ? null : (result.error ?? "Erro desconhecido"),
     }).eq("id", notif.id);
-    return result;
+    return { ok: result.ok, error: result.error, providerMessageId: result.providerMessageId };
   });
 
 export const runNotificationsNow = createServerFn({ method: "POST" })
