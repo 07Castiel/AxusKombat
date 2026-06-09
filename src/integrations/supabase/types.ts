@@ -769,7 +769,7 @@ export type Database = {
       is_professor_kids: { Args: never; Returns: boolean }
     }
     Enums: {
-      app_role: "admin" | "professor_kids"
+      app_role: "admin" | "professor_kids" | "professor_adulto"
       categoria_aluno: "adulto" | "kids"
       dia_semana:
         | "segunda"
@@ -917,7 +917,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "professor_kids"],
+      app_role: ["admin", "professor_kids", "professor_adulto"],
       categoria_aluno: ["adulto", "kids"],
       dia_semana: [
         "segunda",
