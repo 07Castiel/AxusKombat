@@ -363,7 +363,7 @@ function MasterDashboard() {
         open={confirm?.kind === "delete"}
         onOpenChange={(o) => { if (!o) setConfirm(null); }}
         title="Excluir academia?"
-        description={`Esta ação é permanente. Academias com registros vinculados (alunos, matrículas, etc.) não podem ser excluídas — desative em vez de excluir. "${confirm?.nome ?? ""}"`}
+        description={`Esta ação é PERMANENTE e remove "${confirm?.nome ?? ""}" e TODOS os dados vinculados: alunos, matrículas, pagamentos, horários, graduações, modalidades, planos, despesas, notificações e contas de acesso (admin e funcionários). Não há como desfazer.`}
         confirmLabel="Excluir"
         onConfirm={() => {
           if (confirm) deleteMut.mutate(confirm.id);
