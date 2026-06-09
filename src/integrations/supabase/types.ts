@@ -680,6 +680,7 @@ export type Database = {
           ativo: boolean
           cnpj_cpf: string | null
           created_at: string
+          endereco: string | null
           id: string
           logo_url: string | null
           nome: string
@@ -693,6 +694,7 @@ export type Database = {
           ativo?: boolean
           cnpj_cpf?: string | null
           created_at?: string
+          endereco?: string | null
           id?: string
           logo_url?: string | null
           nome: string
@@ -706,6 +708,7 @@ export type Database = {
           ativo?: boolean
           cnpj_cpf?: string | null
           created_at?: string
+          endereco?: string | null
           id?: string
           logo_url?: string | null
           nome?: string
