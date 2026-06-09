@@ -766,6 +766,7 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      is_professor_adulto: { Args: never; Returns: boolean }
       is_professor_kids: { Args: never; Returns: boolean }
     }
     Enums: {
