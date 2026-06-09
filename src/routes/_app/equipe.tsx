@@ -65,7 +65,7 @@ function EquipePage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ["staff"],
-    queryFn: () => list({ data: {} as any }),
+    queryFn: () => list(),
     enabled: isAdmin,
   });
 
