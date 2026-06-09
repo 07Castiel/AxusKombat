@@ -352,7 +352,7 @@ function MasterDashboard() {
         onOpenChange={(o) => { if (!o) setConfirm(null); }}
         title={confirm?.ativo ? "Ativar academia?" : "Desativar academia?"}
         description={`Confirme a alteração de status para "${confirm?.nome ?? ""}".`}
-        confirmText={confirm?.ativo ? "Ativar" : "Desativar"}
+        confirmLabel={confirm?.ativo ? "Ativar" : "Desativar"}
         onConfirm={() => {
           if (confirm) toggleMut.mutate({ id: confirm.id, ativo: !!confirm.ativo });
           setConfirm(null);
@@ -364,8 +364,7 @@ function MasterDashboard() {
         onOpenChange={(o) => { if (!o) setConfirm(null); }}
         title="Excluir academia?"
         description={`Esta ação é permanente. Academias com registros vinculados (alunos, matrículas, etc.) não podem ser excluídas — desative em vez de excluir. "${confirm?.nome ?? ""}"`}
-        confirmText="Excluir"
-        destructive
+        confirmLabel="Excluir"
         onConfirm={() => {
           if (confirm) deleteMut.mutate(confirm.id);
           setConfirm(null);
