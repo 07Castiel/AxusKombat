@@ -636,31 +636,37 @@ export type Database = {
       }
       profiles: {
         Row: {
+          ativo: boolean
           avatar_url: string | null
           created_at: string
           email: string
           id: string
           nome_completo: string
+          permissions: Json
           telefone: string | null
           tenant_id: string
           updated_at: string
         }
         Insert: {
+          ativo?: boolean
           avatar_url?: string | null
           created_at?: string
           email: string
           id: string
           nome_completo: string
+          permissions?: Json
           telefone?: string | null
           tenant_id: string
           updated_at?: string
         }
         Update: {
+          ativo?: boolean
           avatar_url?: string | null
           created_at?: string
           email?: string
           id?: string
           nome_completo?: string
+          permissions?: Json
           telefone?: string | null
           tenant_id?: string
           updated_at?: string
@@ -770,7 +776,12 @@ export type Database = {
       is_professor_kids: { Args: never; Returns: boolean }
     }
     Enums: {
-      app_role: "admin" | "professor_kids" | "professor_adulto"
+      app_role:
+        | "admin"
+        | "professor_kids"
+        | "professor_adulto"
+        | "recepcao"
+        | "financeiro"
       categoria_aluno: "adulto" | "kids"
       dia_semana:
         | "segunda"
@@ -918,7 +929,13 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "professor_kids", "professor_adulto"],
+      app_role: [
+        "admin",
+        "professor_kids",
+        "professor_adulto",
+        "recepcao",
+        "financeiro",
+      ],
       categoria_aluno: ["adulto", "kids"],
       dia_semana: [
         "segunda",
