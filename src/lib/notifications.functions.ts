@@ -151,16 +151,13 @@ export const resendNotification = createServerFn({ method: "POST" })
 export const runNotificationsNow = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    // Only admin can trigger manually; reuses the cron logic via internal call.
     await getTenantAdmin(context as any);
-    const url = `${process.env.SUPABASE_URL?.replace(".supabase.co", "")}` /* placeholder */;
-    // Instead of network roundtrip, replicate logic by calling the same module.
     const handler = await import("@/routes/api/public/hooks/notify-matriculas");
-    // The route module exports `Route`. To avoid HTTP, build a fake Request:
     const req = new Request("https://internal/api/public/hooks/notify-matriculas", {
       method: "POST",
       headers: { apikey: process.env.SUPABASE_PUBLISHABLE_KEY ?? "" },
     });
     const res = await (handler.Route as any).options.server.handlers.POST({ request: req });
-    return await res.json();
+    const json = await res.json();
+    return json as { ok: boolean; summary?: { sent: number; failed: number; skipped: number; scanned: number } };
   });
