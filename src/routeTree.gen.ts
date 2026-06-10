@@ -22,6 +22,7 @@ import { Route as AppNotificacoesRouteImport } from './routes/_app/notificacoes'
 import { Route as AppModalidadesRouteImport } from './routes/_app/modalidades'
 import { Route as AppHorariosRouteImport } from './routes/_app/horarios'
 import { Route as AppGraduacoesRouteImport } from './routes/_app/graduacoes'
+import { Route as AppFinanceiroRouteImport } from './routes/_app/financeiro'
 import { Route as AppEquipeRouteImport } from './routes/_app/equipe'
 import { Route as AppConfiguracoesRouteImport } from './routes/_app/configuracoes'
 import { Route as AppAlunosRouteImport } from './routes/_app/alunos'
@@ -92,6 +93,11 @@ const AppGraduacoesRoute = AppGraduacoesRouteImport.update({
   path: '/graduacoes',
   getParentRoute: () => AppRoute,
 } as any)
+const AppFinanceiroRoute = AppFinanceiroRouteImport.update({
+  id: '/financeiro',
+  path: '/financeiro',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppEquipeRoute = AppEquipeRouteImport.update({
   id: '/equipe',
   path: '/equipe',
@@ -127,6 +133,7 @@ export interface FileRoutesByFullPath {
   '/alunos': typeof AppAlunosRoute
   '/configuracoes': typeof AppConfiguracoesRoute
   '/equipe': typeof AppEquipeRoute
+  '/financeiro': typeof AppFinanceiroRoute
   '/graduacoes': typeof AppGraduacoesRoute
   '/horarios': typeof AppHorariosRoute
   '/modalidades': typeof AppModalidadesRoute
@@ -145,6 +152,7 @@ export interface FileRoutesByTo {
   '/alunos': typeof AppAlunosRoute
   '/configuracoes': typeof AppConfiguracoesRoute
   '/equipe': typeof AppEquipeRoute
+  '/financeiro': typeof AppFinanceiroRoute
   '/graduacoes': typeof AppGraduacoesRoute
   '/horarios': typeof AppHorariosRoute
   '/modalidades': typeof AppModalidadesRoute
@@ -166,6 +174,7 @@ export interface FileRoutesById {
   '/_app/alunos': typeof AppAlunosRoute
   '/_app/configuracoes': typeof AppConfiguracoesRoute
   '/_app/equipe': typeof AppEquipeRoute
+  '/_app/financeiro': typeof AppFinanceiroRoute
   '/_app/graduacoes': typeof AppGraduacoesRoute
   '/_app/horarios': typeof AppHorariosRoute
   '/_app/modalidades': typeof AppModalidadesRoute
@@ -188,6 +197,7 @@ export interface FileRouteTypes {
     | '/alunos'
     | '/configuracoes'
     | '/equipe'
+    | '/financeiro'
     | '/graduacoes'
     | '/horarios'
     | '/modalidades'
@@ -206,6 +216,7 @@ export interface FileRouteTypes {
     | '/alunos'
     | '/configuracoes'
     | '/equipe'
+    | '/financeiro'
     | '/graduacoes'
     | '/horarios'
     | '/modalidades'
@@ -226,6 +237,7 @@ export interface FileRouteTypes {
     | '/_app/alunos'
     | '/_app/configuracoes'
     | '/_app/equipe'
+    | '/_app/financeiro'
     | '/_app/graduacoes'
     | '/_app/horarios'
     | '/_app/modalidades'
@@ -343,6 +355,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppGraduacoesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/financeiro': {
+      id: '/_app/financeiro'
+      path: '/financeiro'
+      fullPath: '/financeiro'
+      preLoaderRoute: typeof AppFinanceiroRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/equipe': {
       id: '/_app/equipe'
       path: '/equipe'
@@ -385,6 +404,7 @@ interface AppRouteChildren {
   AppAlunosRoute: typeof AppAlunosRoute
   AppConfiguracoesRoute: typeof AppConfiguracoesRoute
   AppEquipeRoute: typeof AppEquipeRoute
+  AppFinanceiroRoute: typeof AppFinanceiroRoute
   AppGraduacoesRoute: typeof AppGraduacoesRoute
   AppHorariosRoute: typeof AppHorariosRoute
   AppModalidadesRoute: typeof AppModalidadesRoute
@@ -398,6 +418,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAlunosRoute: AppAlunosRoute,
   AppConfiguracoesRoute: AppConfiguracoesRoute,
   AppEquipeRoute: AppEquipeRoute,
+  AppFinanceiroRoute: AppFinanceiroRoute,
   AppGraduacoesRoute: AppGraduacoesRoute,
   AppHorariosRoute: AppHorariosRoute,
   AppModalidadesRoute: AppModalidadesRoute,
@@ -422,3 +443,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

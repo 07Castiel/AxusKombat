@@ -10,8 +10,7 @@ import logo from "@/assets/axus-kombat-logo.png";
 const NAV = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard", adminOnly: false },
   { to: "/alunos", icon: Users, label: "Alunos", adminOnly: false },
-  
-  { to: "/pagamentos", icon: CreditCard, label: "Pagamentos", adminOnly: true },
+  { to: "/financeiro", icon: CreditCard, label: "Financeiro", adminOnly: true },
   { to: "/planos", icon: Wallet, label: "Planos", adminOnly: true },
   { to: "/modalidades", icon: Swords, label: "Modalidades", adminOnly: true },
   { to: "/horarios", icon: CalendarDays, label: "Horários", adminOnly: false },
