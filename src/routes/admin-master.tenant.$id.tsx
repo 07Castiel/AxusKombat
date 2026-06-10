@@ -80,8 +80,8 @@ function MasterTenantDetail() {
         <Tabs defaultValue="alunos">
           <TabsList>
             <TabsTrigger value="alunos">Alunos ({data?.alunos.length ?? 0})</TabsTrigger>
-            <TabsTrigger value="matriculas">Matrículas ({data?.matriculas.length ?? 0})</TabsTrigger>
-            <TabsTrigger value="pagamentos">Pagamentos ({data?.pagamentos.length ?? 0})</TabsTrigger>
+            <TabsTrigger value="contratos">Contratos ({data?.contratos.length ?? 0})</TabsTrigger>
+            <TabsTrigger value="mensalidades">Mensalidades ({data?.mensalidades.length ?? 0})</TabsTrigger>
             <TabsTrigger value="horarios">Horários ({data?.horarios.length ?? 0})</TabsTrigger>
             <TabsTrigger value="graduacoes">Graduações ({data?.graduacoes.length ?? 0})</TabsTrigger>
           </TabsList>
@@ -104,19 +104,19 @@ function MasterTenantDetail() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="matriculas">
+          <TabsContent value="contratos">
             <Card className="gradient-card border-border overflow-hidden">
               <Table>
-                <TableHeader><TableRow><TableHead>Aluno</TableHead><TableHead>Plano</TableHead><TableHead>Início</TableHead><TableHead>Vencimento</TableHead><TableHead>Valor</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>Aluno</TableHead><TableHead>Plano</TableHead><TableHead>Mensalidade</TableHead><TableHead>Dia venc.</TableHead><TableHead>Início</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {data?.matriculas.map((m: any) => (
-                    <TableRow key={m.id}>
-                      <TableCell>{m.alunos?.nome_completo}</TableCell>
-                      <TableCell>{m.planos?.nome}</TableCell>
-                      <TableCell>{fmtDate(m.data_inicio)}</TableCell>
-                      <TableCell>{fmtDate(m.data_vencimento)}</TableCell>
-                      <TableCell>{fmtMoney(Number(m.valor_final))}</TableCell>
-                      <TableCell className="capitalize">{m.status}</TableCell>
+                  {data?.contratos.map((c: any) => (
+                    <TableRow key={c.id}>
+                      <TableCell>{c.alunos?.nome_completo}</TableCell>
+                      <TableCell>{c.planos?.nome ?? "—"}</TableCell>
+                      <TableCell>{fmtMoney(Number(c.valor_mensalidade))}</TableCell>
+                      <TableCell>{c.dia_vencimento}</TableCell>
+                      <TableCell>{fmtDate(c.data_inicio)}</TableCell>
+                      <TableCell className="capitalize">{c.status}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -124,18 +124,19 @@ function MasterTenantDetail() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="pagamentos">
+          <TabsContent value="mensalidades">
             <Card className="gradient-card border-border overflow-hidden">
               <Table>
-                <TableHeader><TableRow><TableHead>Aluno</TableHead><TableHead>Valor</TableHead><TableHead>Vencimento</TableHead><TableHead>Pago em</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>Aluno</TableHead><TableHead>Competência</TableHead><TableHead>Vencimento</TableHead><TableHead>Valor</TableHead><TableHead>Pago em</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {data?.pagamentos.map((p: any) => (
-                    <TableRow key={p.id}>
-                      <TableCell>{p.alunos?.nome_completo}</TableCell>
-                      <TableCell>{fmtMoney(Number(p.valor))}</TableCell>
-                      <TableCell>{fmtDate(p.data_vencimento)}</TableCell>
-                      <TableCell>{fmtDate(p.data_pagamento)}</TableCell>
-                      <TableCell className="capitalize">{p.status}</TableCell>
+                  {data?.mensalidades.map((m: any) => (
+                    <TableRow key={m.id}>
+                      <TableCell>{m.alunos?.nome_completo}</TableCell>
+                      <TableCell>{fmtDate(m.competencia)}</TableCell>
+                      <TableCell>{fmtDate(m.data_vencimento)}</TableCell>
+                      <TableCell>{fmtMoney(Number(m.valor_final ?? m.valor))}</TableCell>
+                      <TableCell>{fmtDate(m.data_pagamento)}</TableCell>
+                      <TableCell className="capitalize">{m.status}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

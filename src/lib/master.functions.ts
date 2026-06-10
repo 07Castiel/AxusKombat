@@ -94,19 +94,19 @@ export const masterGetTenant = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     assertToken(data.token);
-    const [tenant, alunos, matriculas, pagamentos, horarios, graduacoes] = await Promise.all([
+    const [tenant, alunos, contratos, mensalidades, horarios, graduacoes] = await Promise.all([
       supabaseAdmin.from("tenants").select("*").eq("id", data.tenantId).maybeSingle(),
       supabaseAdmin.from("alunos").select("*").eq("tenant_id", data.tenantId),
-      supabaseAdmin.from("matriculas").select("*, alunos(nome_completo), planos(nome)").eq("tenant_id", data.tenantId),
-      supabaseAdmin.from("pagamentos").select("*, alunos(nome_completo)").eq("tenant_id", data.tenantId),
+      supabaseAdmin.from("contratos").select("*, alunos(nome_completo), planos(nome)").eq("tenant_id", data.tenantId),
+      supabaseAdmin.from("mensalidades").select("*, alunos(nome_completo)").eq("tenant_id", data.tenantId).order("data_vencimento", { ascending: false }).limit(200),
       supabaseAdmin.from("horarios").select("*, modalidades(nome)").eq("tenant_id", data.tenantId),
       supabaseAdmin.from("graduacoes").select("*").eq("tenant_id", data.tenantId),
     ]);
     return {
       tenant: tenant.data,
       alunos: alunos.data ?? [],
-      matriculas: matriculas.data ?? [],
-      pagamentos: pagamentos.data ?? [],
+      contratos: contratos.data ?? [],
+      mensalidades: mensalidades.data ?? [],
       horarios: horarios.data ?? [],
       graduacoes: graduacoes.data ?? [],
     };
@@ -221,14 +221,15 @@ export const masterDeleteTenant = createServerFn({ method: "POST" })
     const dependentTables = [
       "historico_graduacoes",
       "notificacoes",
-      "pagamentos",
-      "matriculas",
+      "mensalidades",
+      "contratos",
       "despesas",
       "graduacoes",
       "horarios",
       "alunos",
       "modalidades",
       "planos",
+      "whatsapp_config",
     ] as const;
 
     for (const tbl of dependentTables) {

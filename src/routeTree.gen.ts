@@ -26,6 +26,7 @@ import { Route as AppEquipeRouteImport } from './routes/_app/equipe'
 import { Route as AppConfiguracoesRouteImport } from './routes/_app/configuracoes'
 import { Route as AppAlunosRouteImport } from './routes/_app/alunos'
 import { Route as AdminMasterTenantIdRouteImport } from './routes/admin-master.tenant.$id'
+import { Route as ApiPublicHooksNotifyMensalidadesRouteImport } from './routes/api/public/hooks/notify-mensalidades'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
@@ -111,6 +112,12 @@ const AdminMasterTenantIdRoute = AdminMasterTenantIdRouteImport.update({
   path: '/admin-master/tenant/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicHooksNotifyMensalidadesRoute =
+  ApiPublicHooksNotifyMensalidadesRouteImport.update({
+    id: '/api/public/hooks/notify-mensalidades',
+    path: '/api/public/hooks/notify-mensalidades',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -129,6 +136,7 @@ export interface FileRoutesByFullPath {
   '/admin-master/dashboard': typeof AdminMasterDashboardRoute
   '/admin-master/': typeof AdminMasterIndexRoute
   '/admin-master/tenant/$id': typeof AdminMasterTenantIdRoute
+  '/api/public/hooks/notify-mensalidades': typeof ApiPublicHooksNotifyMensalidadesRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -147,6 +155,7 @@ export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
   '/admin-master': typeof AdminMasterIndexRoute
   '/admin-master/tenant/$id': typeof AdminMasterTenantIdRoute
+  '/api/public/hooks/notify-mensalidades': typeof ApiPublicHooksNotifyMensalidadesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -167,6 +176,7 @@ export interface FileRoutesById {
   '/_app/': typeof AppIndexRoute
   '/admin-master/': typeof AdminMasterIndexRoute
   '/admin-master/tenant/$id': typeof AdminMasterTenantIdRoute
+  '/api/public/hooks/notify-mensalidades': typeof ApiPublicHooksNotifyMensalidadesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -187,6 +197,7 @@ export interface FileRouteTypes {
     | '/admin-master/dashboard'
     | '/admin-master/'
     | '/admin-master/tenant/$id'
+    | '/api/public/hooks/notify-mensalidades'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -205,6 +216,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin-master'
     | '/admin-master/tenant/$id'
+    | '/api/public/hooks/notify-mensalidades'
   id:
     | '__root__'
     | '/_app'
@@ -224,6 +236,7 @@ export interface FileRouteTypes {
     | '/_app/'
     | '/admin-master/'
     | '/admin-master/tenant/$id'
+    | '/api/public/hooks/notify-mensalidades'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -234,6 +247,7 @@ export interface RootRouteChildren {
   AdminMasterDashboardRoute: typeof AdminMasterDashboardRoute
   AdminMasterIndexRoute: typeof AdminMasterIndexRoute
   AdminMasterTenantIdRoute: typeof AdminMasterTenantIdRoute
+  ApiPublicHooksNotifyMensalidadesRoute: typeof ApiPublicHooksNotifyMensalidadesRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -357,6 +371,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminMasterTenantIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/notify-mensalidades': {
+      id: '/api/public/hooks/notify-mensalidades'
+      path: '/api/public/hooks/notify-mensalidades'
+      fullPath: '/api/public/hooks/notify-mensalidades'
+      preLoaderRoute: typeof ApiPublicHooksNotifyMensalidadesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -396,17 +417,8 @@ const rootRouteChildren: RootRouteChildren = {
   AdminMasterDashboardRoute: AdminMasterDashboardRoute,
   AdminMasterIndexRoute: AdminMasterIndexRoute,
   AdminMasterTenantIdRoute: AdminMasterTenantIdRoute,
+  ApiPublicHooksNotifyMensalidadesRoute: ApiPublicHooksNotifyMensalidadesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
