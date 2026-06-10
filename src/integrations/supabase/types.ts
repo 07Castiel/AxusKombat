@@ -107,6 +107,73 @@ export type Database = {
           },
         ]
       }
+      contratos: {
+        Row: {
+          aluno_id: string
+          created_at: string
+          data_fim: string | null
+          data_inicio: string
+          dia_vencimento: number
+          id: string
+          observacoes: string | null
+          plano_id: string | null
+          status: Database["public"]["Enums"]["status_contrato"]
+          tenant_id: string
+          updated_at: string
+          valor_mensalidade: number
+        }
+        Insert: {
+          aluno_id: string
+          created_at?: string
+          data_fim?: string | null
+          data_inicio?: string
+          dia_vencimento: number
+          id?: string
+          observacoes?: string | null
+          plano_id?: string | null
+          status?: Database["public"]["Enums"]["status_contrato"]
+          tenant_id: string
+          updated_at?: string
+          valor_mensalidade: number
+        }
+        Update: {
+          aluno_id?: string
+          created_at?: string
+          data_fim?: string | null
+          data_inicio?: string
+          dia_vencimento?: number
+          id?: string
+          observacoes?: string | null
+          plano_id?: string | null
+          status?: Database["public"]["Enums"]["status_contrato"]
+          tenant_id?: string
+          updated_at?: string
+          valor_mensalidade?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contratos_aluno_id_fkey"
+            columns: ["aluno_id"]
+            isOneToOne: false
+            referencedRelation: "alunos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contratos_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "planos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contratos_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       despesas: {
         Row: {
           categoria: string | null
@@ -327,66 +394,81 @@ export type Database = {
           },
         ]
       }
-      matriculas: {
+      mensalidades: {
         Row: {
           aluno_id: string
+          competencia: string
+          contrato_id: string
           created_at: string
-          data_inicio: string
+          data_pagamento: string | null
           data_vencimento: string
           desconto: number
+          forma_pagamento:
+            | Database["public"]["Enums"]["metodo_pagamento"]
+            | null
           id: string
-          observacoes: string | null
-          plano_id: string
-          status: Database["public"]["Enums"]["status_matricula"]
+          observacoes_pagamento: string | null
+          status: Database["public"]["Enums"]["status_mensalidade"]
           tenant_id: string
           updated_at: string
-          valor_final: number
+          valor: number
+          valor_final: number | null
         }
         Insert: {
           aluno_id: string
+          competencia: string
+          contrato_id: string
           created_at?: string
-          data_inicio?: string
+          data_pagamento?: string | null
           data_vencimento: string
           desconto?: number
+          forma_pagamento?:
+            | Database["public"]["Enums"]["metodo_pagamento"]
+            | null
           id?: string
-          observacoes?: string | null
-          plano_id: string
-          status?: Database["public"]["Enums"]["status_matricula"]
+          observacoes_pagamento?: string | null
+          status?: Database["public"]["Enums"]["status_mensalidade"]
           tenant_id: string
           updated_at?: string
-          valor_final: number
+          valor: number
+          valor_final?: number | null
         }
         Update: {
           aluno_id?: string
+          competencia?: string
+          contrato_id?: string
           created_at?: string
-          data_inicio?: string
+          data_pagamento?: string | null
           data_vencimento?: string
           desconto?: number
+          forma_pagamento?:
+            | Database["public"]["Enums"]["metodo_pagamento"]
+            | null
           id?: string
-          observacoes?: string | null
-          plano_id?: string
-          status?: Database["public"]["Enums"]["status_matricula"]
+          observacoes_pagamento?: string | null
+          status?: Database["public"]["Enums"]["status_mensalidade"]
           tenant_id?: string
           updated_at?: string
-          valor_final?: number
+          valor?: number
+          valor_final?: number | null
         }
         Relationships: [
           {
-            foreignKeyName: "matriculas_aluno_id_fkey"
+            foreignKeyName: "mensalidades_aluno_id_fkey"
             columns: ["aluno_id"]
             isOneToOne: false
             referencedRelation: "alunos"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "matriculas_plano_id_fkey"
-            columns: ["plano_id"]
+            foreignKeyName: "mensalidades_contrato_id_fkey"
+            columns: ["contrato_id"]
             isOneToOne: false
-            referencedRelation: "planos"
+            referencedRelation: "contratos"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "matriculas_tenant_id_fkey"
+            foreignKeyName: "mensalidades_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -445,8 +527,8 @@ export type Database = {
           enviada_em: string | null
           erro: string | null
           id: string
-          matricula_id: string | null
           mensagem: string
+          mensalidade_id: string | null
           status: Database["public"]["Enums"]["status_notificacao"]
           tenant_id: string
           tipo: string
@@ -461,8 +543,8 @@ export type Database = {
           enviada_em?: string | null
           erro?: string | null
           id?: string
-          matricula_id?: string | null
           mensagem: string
+          mensalidade_id?: string | null
           status?: Database["public"]["Enums"]["status_notificacao"]
           tenant_id: string
           tipo: string
@@ -477,8 +559,8 @@ export type Database = {
           enviada_em?: string | null
           erro?: string | null
           id?: string
-          matricula_id?: string | null
           mensagem?: string
+          mensalidade_id?: string | null
           status?: Database["public"]["Enums"]["status_notificacao"]
           tenant_id?: string
           tipo?: string
@@ -493,84 +575,14 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "notificacoes_matricula_id_fkey"
-            columns: ["matricula_id"]
+            foreignKeyName: "notificacoes_mensalidade_id_fkey"
+            columns: ["mensalidade_id"]
             isOneToOne: false
-            referencedRelation: "matriculas"
+            referencedRelation: "mensalidades"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "notificacoes_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      pagamentos: {
-        Row: {
-          aluno_id: string
-          created_at: string
-          data_pagamento: string | null
-          data_vencimento: string
-          id: string
-          matricula_id: string | null
-          mercado_pago_id: string | null
-          metodo: Database["public"]["Enums"]["metodo_pagamento"]
-          observacoes: string | null
-          status: Database["public"]["Enums"]["status_pagamento"]
-          tenant_id: string
-          updated_at: string
-          valor: number
-        }
-        Insert: {
-          aluno_id: string
-          created_at?: string
-          data_pagamento?: string | null
-          data_vencimento: string
-          id?: string
-          matricula_id?: string | null
-          mercado_pago_id?: string | null
-          metodo?: Database["public"]["Enums"]["metodo_pagamento"]
-          observacoes?: string | null
-          status?: Database["public"]["Enums"]["status_pagamento"]
-          tenant_id: string
-          updated_at?: string
-          valor: number
-        }
-        Update: {
-          aluno_id?: string
-          created_at?: string
-          data_pagamento?: string | null
-          data_vencimento?: string
-          id?: string
-          matricula_id?: string | null
-          mercado_pago_id?: string | null
-          metodo?: Database["public"]["Enums"]["metodo_pagamento"]
-          observacoes?: string | null
-          status?: Database["public"]["Enums"]["status_pagamento"]
-          tenant_id?: string
-          updated_at?: string
-          valor?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pagamentos_aluno_id_fkey"
-            columns: ["aluno_id"]
-            isOneToOne: false
-            referencedRelation: "alunos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pagamentos_matricula_id_fkey"
-            columns: ["matricula_id"]
-            isOneToOne: false
-            referencedRelation: "matriculas"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pagamentos_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -825,6 +837,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      gerar_mensalidades_contrato: {
+        Args: { p_contrato_id: string }
+        Returns: number
+      }
       get_current_tenant: { Args: never; Returns: string }
       has_role: {
         Args: {
@@ -836,6 +852,7 @@ export type Database = {
       is_admin: { Args: never; Returns: boolean }
       is_professor_adulto: { Args: never; Returns: boolean }
       is_professor_kids: { Args: never; Returns: boolean }
+      processar_mensalidades_diario: { Args: never; Returns: Json }
     }
     Enums: {
       app_role:
@@ -861,9 +878,9 @@ export type Database = {
         | "personalizado"
       metodo_pagamento: "pix" | "dinheiro" | "cartao" | "boleto"
       status_aluno: "ativo" | "inativo" | "pendente"
-      status_matricula: "ativa" | "vencida" | "cancelada" | "pendente"
+      status_contrato: "ativo" | "pausado" | "cancelado"
+      status_mensalidade: "pendente" | "pago" | "vencido" | "cancelado"
       status_notificacao: "agendada" | "enviada" | "falhou" | "cancelada"
-      status_pagamento: "pago" | "pendente" | "atrasado" | "cancelado"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1017,9 +1034,9 @@ export const Constants = {
       ],
       metodo_pagamento: ["pix", "dinheiro", "cartao", "boleto"],
       status_aluno: ["ativo", "inativo", "pendente"],
-      status_matricula: ["ativa", "vencida", "cancelada", "pendente"],
+      status_contrato: ["ativo", "pausado", "cancelado"],
+      status_mensalidade: ["pendente", "pago", "vencido", "cancelado"],
       status_notificacao: ["agendada", "enviada", "falhou", "cancelada"],
-      status_pagamento: ["pago", "pendente", "atrasado", "cancelado"],
     },
   },
 } as const
