@@ -97,7 +97,7 @@ export const listNotifications = createServerFn({ method: "POST" })
       .from("notificacoes")
       .select(`
         id, tipo, canal, destinatario, mensagem, status, enviada_em, erro, created_at,
-        matricula_id, aluno:alunos ( id, nome_completo )
+        mensalidade_id, aluno:alunos ( id, nome_completo )
       `)
       .eq("tenant_id", tenantId)
       .order("created_at", { ascending: false })
@@ -125,12 +125,13 @@ export const resendNotification = createServerFn({ method: "POST" })
     if (error || !notif) throw new Error("Notificação não encontrada");
     if (notif.tenant_id !== tenantId) throw new Error("Não autorizado");
 
-    // Stop if matricula is no longer pending
-    if (notif.matricula_id) {
-      const { data: mat } = await supabaseAdmin
-        .from("matriculas").select("status").eq("id", notif.matricula_id).maybeSingle();
-      if (mat && mat.status !== "pendente") {
-        throw new Error(`Matrícula está como '${mat.status}' — não é possível reenviar aviso de cobrança.`);
+    // Stop if mensalidade is no longer pending
+    const mensalidadeId = (notif as any).mensalidade_id as string | null;
+    if (mensalidadeId) {
+      const { data: m } = await supabaseAdmin
+        .from("mensalidades").select("status").eq("id", mensalidadeId).maybeSingle();
+      if (m && (m as any).status !== "pendente") {
+        throw new Error(`Mensalidade está como '${(m as any).status}' — não é possível reenviar aviso de cobrança.`);
       }
     }
 
@@ -152,8 +153,8 @@ export const runNotificationsNow = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await getTenantAdmin(context as any);
-    const handler = await import("@/routes/api/public/hooks/notify-matriculas");
-    const req = new Request("https://internal/api/public/hooks/notify-matriculas", {
+    const handler = await import("@/routes/api/public/hooks/notify-mensalidades");
+    const req = new Request("https://internal/api/public/hooks/notify-mensalidades", {
       method: "POST",
       headers: { apikey: process.env.SUPABASE_PUBLISHABLE_KEY ?? "" },
     });

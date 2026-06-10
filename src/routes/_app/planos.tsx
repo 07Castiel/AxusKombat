@@ -119,10 +119,10 @@ function PlanosPage() {
 
   const askDelete = async (p: any) => {
     const { count } = await supabase
-      .from("matriculas")
+      .from("contratos")
       .select("*", { count: "exact", head: true })
       .eq("plano_id", p.id)
-      .eq("status", "ativa");
+      .eq("status", "ativo");
     setDeleting({ id: p.id, nome: p.nome, vinculadas: count ?? 0 });
   };
 

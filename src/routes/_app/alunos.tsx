@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -19,7 +20,8 @@ import { Plus, Search, Pencil, RotateCcw, Trash2, User, Heart, ClipboardList, Ba
 import { toast } from "sonner";
 import { translateError, firstZodMessage } from "@/lib/errors";
 import { alunoSchema } from "@/lib/validators";
-import { fmtDate, fmtMoney, addDuracao, toISODate } from "@/lib/utils";
+import { fmtDate, fmtMoney, toISODate } from "@/lib/utils";
+import { upsertContratoAtivo, cancelarContrato } from "@/lib/contratos.functions";
 
 export const Route = createFileRoute("/_app/alunos")({
   component: AlunosPage,
@@ -39,19 +41,23 @@ const EMPTY = {
   responsavel_nome: "", responsavel_telefone: "", contato_emergencia: "",
   observacoes: "", observacoes_medicas: "",
   peso: "", altura: "",
-  // matrícula integrada
-  matricular: true,
-  matricula_id: "" as string,
-  plano_id: "",
+  // contrato/plano
+  ativarPlano: true,
+  contrato_id: "" as string,
+  plano_id: "" as string,
+  valor_mensalidade: "",
+  dia_vencimento: "10",
   data_inicio: toISODate(new Date()),
-  desconto: "0",
-  valor_final: "",
+  status_contrato: "ativo" as "ativo" | "pausado" | "cancelado",
 };
 type FormState = typeof EMPTY;
 
 function AlunosPage() {
   const { profile } = useAuth();
   const qc = useQueryClient();
+  const upsertContratoFn = useServerFn(upsertContratoAtivo);
+  const cancelarContratoFn = useServerFn(cancelarContrato);
+
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -69,26 +75,24 @@ function AlunosPage() {
     },
   });
 
-  // matrículas ativas → mapa por aluno_id
-  const { data: matriculasAtivas = [] } = useQuery({
-    queryKey: ["matriculas-ativas", profile?.tenant_id],
+  const { data: contratosAtivos = [] } = useQuery({
+    queryKey: ["contratos-ativos", profile?.tenant_id],
     enabled: !!profile?.tenant_id,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("matriculas")
-        .select("*, planos(nome, valor, duracao, dias_personalizado)")
-        .eq("status", "ativa")
-        .order("created_at", { ascending: false });
+        .from("contratos")
+        .select("*, planos(nome)")
+        .eq("status", "ativo");
       if (error) throw error;
       return data ?? [];
     },
   });
 
-  const matriculaByAluno = useMemo(() => {
+  const contratoByAluno = useMemo(() => {
     const map = new Map<string, any>();
-    for (const m of matriculasAtivas) if (!map.has(m.aluno_id)) map.set(m.aluno_id, m);
+    for (const c of contratosAtivos) if (!map.has(c.aluno_id)) map.set(c.aluno_id, c);
     return map;
-  }, [matriculasAtivas]);
+  }, [contratosAtivos]);
 
   const { data: planos = [] } = useQuery({
     queryKey: ["planos-ativos", profile?.tenant_id],
@@ -100,27 +104,11 @@ function AlunosPage() {
     },
   });
 
-  const planoSelecionado = useMemo(
-    () => planos.find((p: any) => p.id === form.plano_id),
-    [planos, form.plano_id],
-  );
-
-  const valorCalculado = useMemo(() => {
-    if (!planoSelecionado) return null;
-    const desc = Number(form.desconto) || 0;
-    return Math.max(0, Number(planoSelecionado.valor) - desc);
-  }, [planoSelecionado, form.desconto]);
-
-  const vencimentoCalculado = useMemo(() => {
-    if (!planoSelecionado || !form.data_inicio) return null;
-    return toISODate(addDuracao(new Date(form.data_inicio), planoSelecionado.duracao, planoSelecionado.dias_personalizado));
-  }, [planoSelecionado, form.data_inicio]);
-
   const startCreate = () => { setEditingId(null); setForm(EMPTY); setOpen(true); };
 
   const startEdit = (a: any) => {
     setEditingId(a.id);
-    const mat = matriculaByAluno.get(a.id);
+    const c = contratoByAluno.get(a.id);
     setForm({
       ...EMPTY,
       nome_completo: a.nome_completo ?? "", email: a.email ?? "", telefone: a.telefone ?? "",
@@ -130,14 +118,24 @@ function AlunosPage() {
       contato_emergencia: a.contato_emergencia ?? "",
       observacoes: a.observacoes ?? "", observacoes_medicas: a.observacoes_medicas ?? "",
       peso: a.peso?.toString() ?? "", altura: a.altura?.toString() ?? "",
-      matricular: !!mat,
-      matricula_id: mat?.id ?? "",
-      plano_id: mat?.plano_id ?? "",
-      data_inicio: mat?.data_inicio ?? toISODate(new Date()),
-      desconto: mat?.desconto != null ? String(mat.desconto) : "0",
-      valor_final: mat?.valor_final != null ? String(mat.valor_final) : "",
+      ativarPlano: !!c,
+      contrato_id: c?.id ?? "",
+      plano_id: c?.plano_id ?? "",
+      valor_mensalidade: c?.valor_mensalidade != null ? String(c.valor_mensalidade) : "",
+      dia_vencimento: c?.dia_vencimento != null ? String(c.dia_vencimento) : "10",
+      data_inicio: c?.data_inicio ?? toISODate(new Date()),
+      status_contrato: (c?.status as any) ?? "ativo",
     });
     setOpen(true);
+  };
+
+  const onPlanoChange = (planoId: string) => {
+    const plano = planos.find((p: any) => p.id === planoId);
+    setForm((f) => ({
+      ...f,
+      plano_id: planoId,
+      valor_mensalidade: plano && !f.valor_mensalidade ? String(plano.valor) : f.valor_mensalidade,
+    }));
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -146,9 +144,14 @@ function AlunosPage() {
     const parsed = alunoSchema.safeParse(form);
     if (!parsed.success) { toast.error(firstZodMessage(parsed.error)); return; }
 
-    if (form.matricular && !form.plano_id) {
-      toast.error("Selecione um plano ou desmarque a matrícula.");
-      return;
+    if (form.ativarPlano) {
+      const dia = Number(form.dia_vencimento);
+      if (!form.valor_mensalidade || isNaN(Number(form.valor_mensalidade))) {
+        toast.error("Informe o valor da mensalidade."); return;
+      }
+      if (isNaN(dia) || dia < 1 || dia > 28) {
+        toast.error("Dia de vencimento deve estar entre 1 e 28."); return;
+      }
     }
 
     setSaving(true);
@@ -181,57 +184,25 @@ function AlunosPage() {
         alunoId = novo.id;
       }
 
-      // matrícula
-      if (form.matricular && planoSelecionado && vencimentoCalculado && alunoId) {
-        const desconto = Number(form.desconto) || 0;
-        const valorFinal = form.valor_final
-          ? Number(form.valor_final)
-          : (valorCalculado ?? Number(planoSelecionado.valor));
-
-        if (form.matricula_id) {
-          // edita matrícula existente
-          const { error: matErr } = await supabase.from("matriculas").update({
-            plano_id: planoSelecionado.id,
-            data_inicio: form.data_inicio,
-            data_vencimento: vencimentoCalculado,
-            desconto,
-            valor_final: valorFinal,
-            status: "ativa",
-          }).eq("id", form.matricula_id);
-          if (matErr) { toast.error(translateError(matErr)); return; }
-        } else {
-          // cria nova matrícula + 1º pagamento pendente
-          const { data: mat, error: matErr } = await supabase.from("matriculas").insert({
-            tenant_id: profile.tenant_id,
+      // Contrato
+      if (form.ativarPlano && alunoId) {
+        try {
+          await upsertContratoFn({ data: {
             aluno_id: alunoId,
-            plano_id: planoSelecionado.id,
+            plano_id: form.plano_id || null,
+            valor_mensalidade: Number(form.valor_mensalidade),
+            dia_vencimento: Number(form.dia_vencimento),
             data_inicio: form.data_inicio,
-            data_vencimento: vencimentoCalculado,
-            desconto,
-            valor_final: valorFinal,
-          }).select().single();
-          if (matErr || !mat) { toast.error(translateError(matErr ?? "Matrícula falhou.")); return; }
-          const { error: payErr } = await supabase.from("pagamentos").insert({
-            tenant_id: profile.tenant_id,
-            matricula_id: mat.id,
-            aluno_id: alunoId,
-            valor: valorFinal,
-            data_vencimento: vencimentoCalculado,
-            status: "pendente",
-            metodo: "pix",
-          });
-          if (payErr) toast.error(translateError(payErr));
-        }
-      } else if (!form.matricular && form.matricula_id) {
-        // usuário desmarcou: cancela matrícula ativa
-        const { error: cancelErr } = await supabase
-          .from("matriculas")
-          .update({ status: "cancelada" })
-          .eq("id", form.matricula_id);
-        if (cancelErr) { toast.error(translateError(cancelErr)); return; }
+            status: form.status_contrato,
+          }});
+        } catch (err: any) { toast.error(translateError(err)); return; }
+      } else if (!form.ativarPlano && form.contrato_id) {
+        try {
+          await cancelarContratoFn({ data: { contrato_id: form.contrato_id } });
+        } catch (err: any) { toast.error(translateError(err)); return; }
       }
 
-      toast.success(editingId ? "Aluno atualizado" : (form.matricular ? "Aluno cadastrado e matriculado" : "Aluno cadastrado"));
+      toast.success(editingId ? "Aluno atualizado" : (form.ativarPlano ? "Aluno cadastrado com mensalidade" : "Aluno cadastrado"));
       setOpen(false);
       qc.invalidateQueries();
     } finally {
@@ -278,7 +249,7 @@ function AlunosPage() {
           <DialogHeader>
             <DialogTitle>{editingId ? "Editar aluno" : "Novo aluno"}</DialogTitle>
             <DialogDescription>
-              Cadastro do aluno e matrícula em um único fluxo.
+              Cadastro do aluno e plano de mensalidade em um único fluxo.
             </DialogDescription>
           </DialogHeader>
 
@@ -322,73 +293,77 @@ function AlunosPage() {
               </div>
             </section>
 
-            {/* Bloco 3 — Matrícula (criação E edição) */}
+            {/* Bloco 3 — Plano de mensalidade */}
             <section className="rounded-lg border border-border/60 bg-card/40 p-4">
               <header className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <ClipboardList className="h-4 w-4 text-primary" />
                   <h3 className="font-display text-sm uppercase tracking-widest text-metal-light">
-                    Matrícula {form.matricula_id ? "ativa" : ""}
+                    Plano de mensalidade {form.contrato_id ? "(ativo)" : ""}
                   </h3>
                 </div>
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                   <Checkbox
-                    checked={form.matricular}
-                    onCheckedChange={(v)=>setForm({...form, matricular: !!v})}
+                    checked={form.ativarPlano}
+                    onCheckedChange={(v)=>setForm({...form, ativarPlano: !!v})}
                   />
                   <span className="text-metal-light">
-                    {form.matricula_id ? "Manter matrícula ativa" : "Matricular agora"}
+                    {form.contrato_id ? "Manter plano ativo" : "Ativar plano agora"}
                   </span>
                 </label>
               </header>
 
-              {form.matricular && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="md:col-span-2">
-                    <Label>Plano *</Label>
-                    <Select value={form.plano_id} onValueChange={(v)=>setForm({...form, plano_id: v})}>
-                      <SelectTrigger><SelectValue placeholder={planos.length ? "Selecione um plano" : "Nenhum plano cadastrado"} /></SelectTrigger>
-                      <SelectContent>
-                        {planos.map((p: any)=>(
-                          <SelectItem key={p.id} value={p.id}>
-                            {p.nome} — {fmtMoney(Number(p.valor))} ({p.duracao})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+              {form.ativarPlano && (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="md:col-span-2">
+                      <Label>Plano de referência (opcional)</Label>
+                      <Select value={form.plano_id || "none"} onValueChange={(v)=>onPlanoChange(v === "none" ? "" : v)}>
+                        <SelectTrigger><SelectValue placeholder="Sem plano vinculado" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Sem plano vinculado</SelectItem>
+                          {planos.map((p: any)=>(
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.nome} — {fmtMoney(Number(p.valor))}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Valor da mensalidade (R$) *</Label>
+                      <Input type="number" step="0.01" required={form.ativarPlano} value={form.valor_mensalidade}
+                        onChange={(e)=>setForm({...form, valor_mensalidade: e.target.value})}/>
+                    </div>
+                    <div>
+                      <Label>Dia do vencimento (1–28) *</Label>
+                      <Input type="number" min={1} max={28} required={form.ativarPlano} value={form.dia_vencimento}
+                        onChange={(e)=>setForm({...form, dia_vencimento: e.target.value})}/>
+                    </div>
+                    <div>
+                      <Label>Data de início *</Label>
+                      <Input type="date" required={form.ativarPlano} value={form.data_inicio}
+                        onChange={(e)=>setForm({...form, data_inicio: e.target.value})}/>
+                    </div>
+                    <div>
+                      <Label>Status</Label>
+                      <Select value={form.status_contrato} onValueChange={(v: any)=>setForm({...form, status_contrato: v})}>
+                        <SelectTrigger><SelectValue/></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ativo">Ativo</SelectItem>
+                          <SelectItem value="pausado">Pausado</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                  <div>
-                    <Label>Data início</Label>
-                    <Input type="date" value={form.data_inicio} onChange={(e)=>setForm({...form, data_inicio: e.target.value})}/>
-                  </div>
-                  <div>
-                    <Label>Vencimento (auto)</Label>
-                    <Input value={vencimentoCalculado ? fmtDate(vencimentoCalculado) : "—"} disabled />
-                  </div>
-                  <div>
-                    <Label>Desconto (R$)</Label>
-                    <Input type="number" step="0.01" value={form.desconto} onChange={(e)=>setForm({...form, desconto: e.target.value})}/>
-                  </div>
-                  <div>
-                    <Label>Valor final</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      placeholder={valorCalculado != null ? String(valorCalculado.toFixed(2)) : "Selecione um plano"}
-                      value={form.valor_final}
-                      onChange={(e)=>setForm({...form, valor_final: e.target.value})}
-                    />
-                    {planoSelecionado && (
-                      <p className="text-[11px] text-muted-foreground mt-1">
-                        Calculado: {fmtMoney(valorCalculado ?? 0)} — deixe em branco para usar o automático.
-                      </p>
-                    )}
-                  </div>
-                </div>
+                  <p className="text-[11px] text-muted-foreground mt-2">
+                    As mensalidades são geradas automaticamente para os próximos 3 meses.
+                  </p>
+                </>
               )}
-              {!form.matricular && form.matricula_id && (
+              {!form.ativarPlano && form.contrato_id && (
                 <p className="text-xs text-destructive flex items-center gap-2">
-                  <Ban className="h-3.5 w-3.5"/> Ao salvar, a matrícula ativa será cancelada.
+                  <Ban className="h-3.5 w-3.5"/> Ao salvar, o plano ativo será cancelado e mensalidades futuras canceladas.
                 </p>
               )}
             </section>
@@ -396,7 +371,7 @@ function AlunosPage() {
             <div className="flex gap-2 justify-end">
               <Button type="button" variant="ghost" onClick={()=>setOpen(false)}>Cancelar</Button>
               <Button type="submit" disabled={saving} className="gradient-primary text-primary-foreground min-w-[180px]">
-                {saving ? "Salvando..." : editingId ? "Salvar alterações" : (form.matricular ? "Cadastrar e matricular" : "Cadastrar aluno")}
+                {saving ? "Salvando..." : editingId ? "Salvar alterações" : (form.ativarPlano ? "Cadastrar e ativar plano" : "Cadastrar aluno")}
               </Button>
             </div>
           </form>
@@ -415,8 +390,8 @@ function AlunosPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Nome</TableHead>
-              <TableHead>Plano atual</TableHead>
-              <TableHead>Vencimento</TableHead>
+              <TableHead>Mensalidade</TableHead>
+              <TableHead>Dia venc.</TableHead>
               <TableHead>Categoria</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Entrada</TableHead>
@@ -426,7 +401,7 @@ function AlunosPage() {
           <TableBody>
             {filtered.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Nenhum aluno encontrado</TableCell></TableRow>}
             {filtered.map((a: any) => {
-              const mat = matriculaByAluno.get(a.id);
+              const c = contratoByAluno.get(a.id);
               return (
                 <TableRow key={a.id}>
                   <TableCell className="font-medium">
@@ -434,13 +409,13 @@ function AlunosPage() {
                     {a.telefone && <div className="text-xs text-muted-foreground">{a.telefone}</div>}
                   </TableCell>
                   <TableCell className="text-sm">
-                    {mat ? (
-                      <span>{mat.planos?.nome ?? "—"} <span className="text-muted-foreground">· {fmtMoney(Number(mat.valor_final))}</span></span>
+                    {c ? (
+                      <span>{fmtMoney(Number(c.valor_mensalidade))} {c.planos?.nome && <span className="text-muted-foreground">· {c.planos.nome}</span>}</span>
                     ) : (
-                      <span className="text-muted-foreground italic">Sem matrícula</span>
+                      <span className="text-muted-foreground italic">Sem plano</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{mat ? fmtDate(mat.data_vencimento) : "—"}</TableCell>
+                  <TableCell className="text-sm">{c ? `Dia ${c.dia_vencimento}` : "—"}</TableCell>
                   <TableCell><StatusBadge status={a.categoria}/></TableCell>
                   <TableCell><StatusBadge status={a.status}/></TableCell>
                   <TableCell className="text-sm text-muted-foreground">{fmtDate(a.data_entrada)}</TableCell>

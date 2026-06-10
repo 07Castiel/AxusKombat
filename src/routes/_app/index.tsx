@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { PageHeader } from "@/components/PageHeader";
 import { Card } from "@/components/ui/card";
-import { Users, UserX, AlertCircle, TrendingUp, TrendingDown, Cake } from "lucide-react";
+import { Users, UserX, AlertCircle, TrendingUp, TrendingDown, Cake, Calendar, Clock } from "lucide-react";
 import { fmtMoney, fmtDate } from "@/lib/utils";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 
@@ -12,8 +12,8 @@ export const Route = createFileRoute("/_app/")({
   component: Dashboard,
   head: () => ({
     meta: [
-      { title: "Painel | CT Aquiles" },
-      { name: "description", content: "Visão geral da academia: alunos, faturamento, despesas e aniversariantes." },
+      { title: "Painel | Axus Kombat" },
+      { name: "description", content: "Visão geral da academia: alunos, financeiro e inadimplência." },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
@@ -26,40 +26,60 @@ function Dashboard() {
     queryKey: ["dashboard", profile?.tenant_id],
     enabled: !!profile?.tenant_id,
     queryFn: async () => {
-      const [alunos, pagamentos, despesas] = await Promise.all([
+      const [alunos, mensalidades, despesas] = await Promise.all([
         supabase.from("alunos").select("id, nome_completo, status, data_nascimento, foto_url"),
-        supabase.from("pagamentos").select("id, valor, status, data_pagamento, data_vencimento, aluno_id"),
+        supabase.from("mensalidades").select("id, valor, valor_final, status, data_pagamento, data_vencimento, competencia, aluno_id, alunos(nome_completo)"),
         supabase.from("despesas").select("id, valor, data"),
       ]);
       return {
         alunos: alunos.data ?? [],
-        pagamentos: pagamentos.data ?? [],
+        mensalidades: mensalidades.data ?? [],
         despesas: despesas.data ?? [],
       };
     },
   });
 
   const alunos = data?.alunos ?? [];
-  const pagamentos = data?.pagamentos ?? [];
+  const mensalidades = (data?.mensalidades ?? []) as any[];
   const despesas = data?.despesas ?? [];
 
   const ativos = alunos.filter((a) => a.status === "ativo").length;
   const inativos = alunos.filter((a) => a.status === "inativo").length;
-  const hoje = new Date().toISOString().slice(0, 10);
-  const inadimplentes = new Set(pagamentos.filter((p) => p.status === "atrasado" || (p.status === "pendente" && p.data_vencimento < hoje)).map((p) => p.aluno_id)).size;
-
+  const today = new Date().toISOString().slice(0, 10);
+  const in7 = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
   const mesAtual = new Date().toISOString().slice(0, 7);
-  const faturamento = pagamentos.filter((p) => p.status === "pago" && p.data_pagamento?.startsWith(mesAtual)).reduce((s, p) => s + Number(p.valor), 0);
-  const despesasMes = despesas.filter((d) => d.data?.startsWith(mesAtual)).reduce((s, d) => s + Number(d.valor), 0);
-  const lucro = faturamento - despesasMes;
 
-  // últimos 6 meses
+  const alunosInadimplentes = new Set(
+    mensalidades.filter((m) => m.status === "vencido").map((m) => m.aluno_id)
+  );
+
+  const receitaRecebida = mensalidades
+    .filter((m) => m.status === "pago" && m.data_pagamento?.startsWith(mesAtual))
+    .reduce((s, m) => s + Number(m.valor_final ?? m.valor), 0);
+  const receitaPrevista = mensalidades
+    .filter((m) => m.competencia?.startsWith(mesAtual) && m.status !== "cancelado")
+    .reduce((s, m) => s + Number(m.valor_final ?? m.valor), 0);
+  const totalVencidas = mensalidades.filter((m) => m.status === "vencido").reduce((s, m) => s + Number(m.valor_final ?? m.valor), 0);
+  const qtdVencidas = mensalidades.filter((m) => m.status === "vencido").length;
+  const qtdPendentes = mensalidades.filter((m) => m.status === "pendente").length;
+
+  const despesasMes = despesas.filter((d) => d.data?.startsWith(mesAtual)).reduce((s, d) => s + Number(d.valor), 0);
+  const lucro = receitaRecebida - despesasMes;
+
+  // últimos 6 meses de receita recebida
   const chart = Array.from({ length: 6 }).map((_, i) => {
     const d = new Date(); d.setMonth(d.getMonth() - (5 - i));
     const ym = d.toISOString().slice(0, 7);
-    const rec = pagamentos.filter((p) => p.status === "pago" && p.data_pagamento?.startsWith(ym)).reduce((s, p) => s + Number(p.valor), 0);
+    const rec = mensalidades
+      .filter((m) => m.status === "pago" && m.data_pagamento?.startsWith(ym))
+      .reduce((s, m) => s + Number(m.valor_final ?? m.valor), 0);
     return { mes: d.toLocaleDateString("pt-BR", { month: "short" }), Receita: rec };
   });
+
+  const proximosVencimentos = mensalidades
+    .filter((m) => m.status === "pendente" && m.data_vencimento >= today && m.data_vencimento <= in7)
+    .sort((a, b) => a.data_vencimento.localeCompare(b.data_vencimento))
+    .slice(0, 8);
 
   const aniversariantes = alunos.filter((a) => {
     if (!a.data_nascimento) return false;
@@ -68,29 +88,33 @@ function Dashboard() {
     return dn.getMonth() === h.getMonth();
   });
 
-  const pagamentosRecentes = [...pagamentos].sort((a, b) => (b.data_pagamento ?? "").localeCompare(a.data_pagamento ?? "")).slice(0, 5);
-
   return (
     <div>
-      <PageHeader title={`Bem-vindo, ${profile?.nome_completo?.split(" ")[0] ?? ""}`} description={profile?.nome_completo ? `${profile.nome_completo} · Visão geral da sua academia` : "Visão geral da sua academia"} />
+      <PageHeader title={`Bem-vindo, ${profile?.nome_completo?.split(" ")[0] ?? ""}`} description="Visão geral financeira e operacional" />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <Stat icon={Users} label="Alunos Ativos" value={ativos} accent="text-success" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+        <Stat icon={Users} label="Alunos ativos" value={ativos} accent="text-success" />
         <Stat icon={UserX} label="Inativos" value={inativos} accent="text-muted-foreground" />
-        <Stat icon={AlertCircle} label="Inadimplentes" value={inadimplentes} accent="text-destructive" />
-        <Stat icon={TrendingUp} label="Faturamento (mês)" value={fmtMoney(faturamento)} accent="text-primary" />
+        <Stat icon={AlertCircle} label="Inadimplentes" value={alunosInadimplentes.size} accent="text-destructive" />
+        <Stat icon={Users} label="Total alunos" value={alunos.length} accent="text-foreground" />
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+        <Stat icon={TrendingUp} label="Receita recebida (mês)" value={fmtMoney(receitaRecebida)} accent="text-success" />
+        <Stat icon={Calendar} label="Receita prevista (mês)" value={fmtMoney(receitaPrevista)} accent="text-primary" />
+        <Stat icon={AlertCircle} label="Vencidas" value={`${qtdVencidas} · ${fmtMoney(totalVencidas)}`} accent="text-destructive" />
+        <Stat icon={Clock} label="Pendentes" value={qtdPendentes} accent="text-warning" />
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         <Stat icon={TrendingDown} label="Despesas (mês)" value={fmtMoney(despesasMes)} accent="text-warning" />
         <Stat icon={TrendingUp} label="Lucro (mês)" value={fmtMoney(lucro)} accent={lucro >= 0 ? "text-success" : "text-destructive"} />
         <Stat icon={Cake} label="Aniversariantes" value={aniversariantes.length} accent="text-primary" />
-        <Stat icon={Users} label="Total alunos" value={alunos.length} accent="text-foreground" />
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2 p-6 gradient-card border-border">
-          <h3 className="font-semibold mb-4">Receita — últimos 6 meses</h3>
+          <h3 className="font-semibold mb-4">Receita recebida — últimos 6 meses</h3>
           <div className="h-64">
             <ResponsiveContainer>
               <BarChart data={chart}>
@@ -105,16 +129,16 @@ function Dashboard() {
         </Card>
 
         <Card className="p-6 gradient-card border-border">
-          <h3 className="font-semibold mb-4">Pagamentos recentes</h3>
+          <h3 className="font-semibold mb-4">Próximos vencimentos (7 dias)</h3>
           <div className="space-y-3">
-            {pagamentosRecentes.length === 0 && <p className="text-sm text-muted-foreground">Nenhum pagamento ainda.</p>}
-            {pagamentosRecentes.map((p) => (
-              <div key={p.id} className="flex justify-between text-sm border-b border-border pb-2 last:border-0">
+            {proximosVencimentos.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma mensalidade vencendo nos próximos 7 dias.</p>}
+            {proximosVencimentos.map((m) => (
+              <div key={m.id} className="flex justify-between text-sm border-b border-border pb-2 last:border-0">
                 <div>
-                  <p className="font-medium">{fmtMoney(Number(p.valor))}</p>
-                  <p className="text-xs text-muted-foreground">{fmtDate(p.data_pagamento ?? p.data_vencimento)}</p>
+                  <p className="font-medium truncate max-w-[180px]">{m.alunos?.nome_completo ?? "—"}</p>
+                  <p className="text-xs text-muted-foreground">{fmtDate(m.data_vencimento)}</p>
                 </div>
-                <span className={`text-xs uppercase font-semibold ${p.status === "pago" ? "text-success" : p.status === "atrasado" ? "text-destructive" : "text-warning"}`}>{p.status}</span>
+                <span className="text-xs font-semibold text-warning">{fmtMoney(Number(m.valor_final ?? m.valor))}</span>
               </div>
             ))}
           </div>
@@ -147,7 +171,7 @@ function Stat({ icon: Icon, label, value, accent }: { icon: React.ElementType; l
       <div className="flex items-start justify-between">
         <div>
           <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
-          <p className={`text-2xl font-bold mt-1 ${accent}`}>{value}</p>
+          <p className={`text-xl font-bold mt-1 ${accent}`}>{value}</p>
         </div>
         <Icon className={`h-5 w-5 ${accent}`} />
       </div>
