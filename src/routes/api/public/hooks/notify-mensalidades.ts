@@ -1,13 +1,14 @@
 /**
- * Cron-only endpoint: scans matrículas pendentes que vencem em 7, 3 ou 0 dias
- * e dispara avisos via WhatsApp. Idempotente (índice único por matricula+tipo).
+ * Cron-only endpoint: marca vencidas, garante mensalidades futuras geradas, e dispara
+ * avisos via WhatsApp para mensalidades pendentes em D-7, D-3 e D-0.
+ * Idempotente (índice único por mensalidade+tipo).
  *
  * Chamado por pg_cron uma vez ao dia. Header `apikey` deve ser igual ao
  * publishable/anon key do projeto.
  */
 import { createFileRoute } from "@tanstack/react-router";
 
-export const Route = createFileRoute("/api/public/hooks/notify-matriculas")({
+export const Route = createFileRoute("/api/public/hooks/notify-mensalidades")({
   server: {
     handlers: {
       POST: async ({ request }) => {
@@ -23,11 +24,15 @@ export const Route = createFileRoute("/api/public/hooks/notify-matriculas")({
         const { sendWhatsapp, renderTemplate, templateFor, NOTIFICATION_TYPES } =
           await import("@/lib/whatsapp.server");
 
-        // Compute target dates in São Paulo timezone (matrícula.data_vencimento é date)
+        // 1) Processa: marca vencidas + gera rolling 3 meses
+        const { data: proc, error: procErr } = await supabaseAdmin.rpc("processar_mensalidades_diario" as any);
+        if (procErr) console.error("[cron] processar diario", procErr);
+
+        // 2) Datas alvo em America/Sao_Paulo
         const today = new Date();
         const tz = "America/Sao_Paulo";
         const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" });
-        const isoOf = (d: Date) => fmt.format(d); // YYYY-MM-DD
+        const isoOf = (d: Date) => fmt.format(d);
         const addDays = (d: Date, n: number) => { const x = new Date(d); x.setUTCDate(x.getUTCDate() + n); return x; };
 
         const targets: Array<{ tipo: typeof NOTIFICATION_TYPES[number]; date: string }> = [
@@ -39,8 +44,8 @@ export const Route = createFileRoute("/api/public/hooks/notify-matriculas")({
         const summary = { scanned: 0, sent: 0, failed: 0, skipped: 0, byType: {} as Record<string, number> };
 
         for (const { tipo, date } of targets) {
-          const { data: matriculas, error } = await supabaseAdmin
-            .from("matriculas")
+          const { data: mensalidades, error } = await supabaseAdmin
+            .from("mensalidades")
             .select(`
               id, tenant_id, valor_final, data_vencimento, status,
               aluno:alunos!inner ( id, nome_completo, telefone, responsavel_telefone ),
@@ -48,38 +53,31 @@ export const Route = createFileRoute("/api/public/hooks/notify-matriculas")({
             `)
             .eq("data_vencimento", date)
             .eq("status", "pendente");
-          if (error) {
-            console.error("[cron] fetch matriculas error", error);
-            continue;
-          }
-          summary.scanned += matriculas?.length ?? 0;
+          if (error) { console.error("[cron] fetch mensalidades", error); continue; }
+          summary.scanned += mensalidades?.length ?? 0;
 
-          for (const m of matriculas ?? []) {
+          for (const m of mensalidades ?? []) {
             const aluno: any = (m as any).aluno;
             const tenant: any = (m as any).tenant;
             const phone = aluno?.telefone || aluno?.responsavel_telefone;
 
-            // Skip if already notified (race-safe via unique index, but query keeps log clean)
             const { data: existing } = await supabaseAdmin
               .from("notificacoes")
               .select("id")
-              .eq("matricula_id", m.id)
+              .eq("mensalidade_id", m.id)
               .eq("tipo", tipo)
               .maybeSingle();
             if (existing) { summary.skipped++; continue; }
 
-            // Load tenant whatsapp config + templates
             const { data: cfg } = await supabaseAdmin
-              .from("whatsapp_config")
-              .select("*")
-              .eq("tenant_id", m.tenant_id)
-              .maybeSingle();
+              .from("whatsapp_config").select("*")
+              .eq("tenant_id", m.tenant_id).maybeSingle();
 
             const venc = new Date(m.data_vencimento + "T12:00:00").toLocaleDateString("pt-BR", { timeZone: tz });
             const valor = Number(m.valor_final ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             const template = cfg
               ? templateFor(cfg as any, tipo)
-              : "Olá {nome}, sua matrícula na {academia} vence em {vencimento} (R$ {valor}).";
+              : "Olá {nome}, sua mensalidade na {academia} vence em {vencimento} (R$ {valor}).";
             const mensagem = renderTemplate(template, {
               nome: aluno?.nome_completo ?? "",
               academia: tenant?.nome ?? "",
@@ -100,11 +98,10 @@ export const Route = createFileRoute("/api/public/hooks/notify-matriculas")({
               result = { ok: false, error: "WhatsApp desativado na academia" };
             }
 
-            // Insert log row — unique index prevents dupes if cron runs twice
             const { error: insErr } = await supabaseAdmin.from("notificacoes").insert({
               tenant_id: m.tenant_id,
               aluno_id: aluno?.id,
-              matricula_id: m.id,
+              mensalidade_id: m.id,
               tipo,
               canal: "whatsapp",
               destinatario: phone ?? null,
@@ -112,9 +109,9 @@ export const Route = createFileRoute("/api/public/hooks/notify-matriculas")({
               status: result.ok ? "enviada" : "falhou",
               enviada_em: result.ok ? new Date().toISOString() : null,
               erro: result.ok ? null : (result.error ?? "Erro desconhecido"),
-            });
+            } as any);
             if (insErr) {
-              if (insErr.code === "23505") { summary.skipped++; continue; }
+              if ((insErr as any).code === "23505") { summary.skipped++; continue; }
               console.error("[cron] insert notif", insErr);
               summary.failed++;
               continue;
@@ -125,7 +122,7 @@ export const Route = createFileRoute("/api/public/hooks/notify-matriculas")({
           }
         }
 
-        return new Response(JSON.stringify({ ok: true, summary, ranAt: new Date().toISOString() }), {
+        return new Response(JSON.stringify({ ok: true, processed: proc, summary, ranAt: new Date().toISOString() }), {
           status: 200, headers: { "Content-Type": "application/json" },
         });
       },

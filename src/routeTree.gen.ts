@@ -18,7 +18,6 @@ import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AdminMasterDashboardRouteImport } from './routes/admin-master.dashboard'
 import { Route as AppRelatoriosRouteImport } from './routes/_app/relatorios'
 import { Route as AppPlanosRouteImport } from './routes/_app/planos'
-import { Route as AppPagamentosRouteImport } from './routes/_app/pagamentos'
 import { Route as AppNotificacoesRouteImport } from './routes/_app/notificacoes'
 import { Route as AppModalidadesRouteImport } from './routes/_app/modalidades'
 import { Route as AppHorariosRouteImport } from './routes/_app/horarios'
@@ -27,7 +26,6 @@ import { Route as AppEquipeRouteImport } from './routes/_app/equipe'
 import { Route as AppConfiguracoesRouteImport } from './routes/_app/configuracoes'
 import { Route as AppAlunosRouteImport } from './routes/_app/alunos'
 import { Route as AdminMasterTenantIdRouteImport } from './routes/admin-master.tenant.$id'
-import { Route as ApiPublicHooksNotifyMatriculasRouteImport } from './routes/api/public/hooks/notify-matriculas'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
@@ -73,11 +71,6 @@ const AppPlanosRoute = AppPlanosRouteImport.update({
   path: '/planos',
   getParentRoute: () => AppRoute,
 } as any)
-const AppPagamentosRoute = AppPagamentosRouteImport.update({
-  id: '/pagamentos',
-  path: '/pagamentos',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppNotificacoesRoute = AppNotificacoesRouteImport.update({
   id: '/notificacoes',
   path: '/notificacoes',
@@ -118,12 +111,6 @@ const AdminMasterTenantIdRoute = AdminMasterTenantIdRouteImport.update({
   path: '/admin-master/tenant/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicHooksNotifyMatriculasRoute =
-  ApiPublicHooksNotifyMatriculasRouteImport.update({
-    id: '/api/public/hooks/notify-matriculas',
-    path: '/api/public/hooks/notify-matriculas',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -137,13 +124,11 @@ export interface FileRoutesByFullPath {
   '/horarios': typeof AppHorariosRoute
   '/modalidades': typeof AppModalidadesRoute
   '/notificacoes': typeof AppNotificacoesRoute
-  '/pagamentos': typeof AppPagamentosRoute
   '/planos': typeof AppPlanosRoute
   '/relatorios': typeof AppRelatoriosRoute
   '/admin-master/dashboard': typeof AdminMasterDashboardRoute
   '/admin-master/': typeof AdminMasterIndexRoute
   '/admin-master/tenant/$id': typeof AdminMasterTenantIdRoute
-  '/api/public/hooks/notify-matriculas': typeof ApiPublicHooksNotifyMatriculasRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -156,14 +141,12 @@ export interface FileRoutesByTo {
   '/horarios': typeof AppHorariosRoute
   '/modalidades': typeof AppModalidadesRoute
   '/notificacoes': typeof AppNotificacoesRoute
-  '/pagamentos': typeof AppPagamentosRoute
   '/planos': typeof AppPlanosRoute
   '/relatorios': typeof AppRelatoriosRoute
   '/admin-master/dashboard': typeof AdminMasterDashboardRoute
   '/': typeof AppIndexRoute
   '/admin-master': typeof AdminMasterIndexRoute
   '/admin-master/tenant/$id': typeof AdminMasterTenantIdRoute
-  '/api/public/hooks/notify-matriculas': typeof ApiPublicHooksNotifyMatriculasRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -178,14 +161,12 @@ export interface FileRoutesById {
   '/_app/horarios': typeof AppHorariosRoute
   '/_app/modalidades': typeof AppModalidadesRoute
   '/_app/notificacoes': typeof AppNotificacoesRoute
-  '/_app/pagamentos': typeof AppPagamentosRoute
   '/_app/planos': typeof AppPlanosRoute
   '/_app/relatorios': typeof AppRelatoriosRoute
   '/admin-master/dashboard': typeof AdminMasterDashboardRoute
   '/_app/': typeof AppIndexRoute
   '/admin-master/': typeof AdminMasterIndexRoute
   '/admin-master/tenant/$id': typeof AdminMasterTenantIdRoute
-  '/api/public/hooks/notify-matriculas': typeof ApiPublicHooksNotifyMatriculasRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -201,13 +182,11 @@ export interface FileRouteTypes {
     | '/horarios'
     | '/modalidades'
     | '/notificacoes'
-    | '/pagamentos'
     | '/planos'
     | '/relatorios'
     | '/admin-master/dashboard'
     | '/admin-master/'
     | '/admin-master/tenant/$id'
-    | '/api/public/hooks/notify-matriculas'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -220,14 +199,12 @@ export interface FileRouteTypes {
     | '/horarios'
     | '/modalidades'
     | '/notificacoes'
-    | '/pagamentos'
     | '/planos'
     | '/relatorios'
     | '/admin-master/dashboard'
     | '/'
     | '/admin-master'
     | '/admin-master/tenant/$id'
-    | '/api/public/hooks/notify-matriculas'
   id:
     | '__root__'
     | '/_app'
@@ -241,14 +218,12 @@ export interface FileRouteTypes {
     | '/_app/horarios'
     | '/_app/modalidades'
     | '/_app/notificacoes'
-    | '/_app/pagamentos'
     | '/_app/planos'
     | '/_app/relatorios'
     | '/admin-master/dashboard'
     | '/_app/'
     | '/admin-master/'
     | '/admin-master/tenant/$id'
-    | '/api/public/hooks/notify-matriculas'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -259,7 +234,6 @@ export interface RootRouteChildren {
   AdminMasterDashboardRoute: typeof AdminMasterDashboardRoute
   AdminMasterIndexRoute: typeof AdminMasterIndexRoute
   AdminMasterTenantIdRoute: typeof AdminMasterTenantIdRoute
-  ApiPublicHooksNotifyMatriculasRoute: typeof ApiPublicHooksNotifyMatriculasRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -327,13 +301,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppPlanosRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/pagamentos': {
-      id: '/_app/pagamentos'
-      path: '/pagamentos'
-      fullPath: '/pagamentos'
-      preLoaderRoute: typeof AppPagamentosRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/notificacoes': {
       id: '/_app/notificacoes'
       path: '/notificacoes'
@@ -390,13 +357,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminMasterTenantIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/hooks/notify-matriculas': {
-      id: '/api/public/hooks/notify-matriculas'
-      path: '/api/public/hooks/notify-matriculas'
-      fullPath: '/api/public/hooks/notify-matriculas'
-      preLoaderRoute: typeof ApiPublicHooksNotifyMatriculasRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -408,7 +368,6 @@ interface AppRouteChildren {
   AppHorariosRoute: typeof AppHorariosRoute
   AppModalidadesRoute: typeof AppModalidadesRoute
   AppNotificacoesRoute: typeof AppNotificacoesRoute
-  AppPagamentosRoute: typeof AppPagamentosRoute
   AppPlanosRoute: typeof AppPlanosRoute
   AppRelatoriosRoute: typeof AppRelatoriosRoute
   AppIndexRoute: typeof AppIndexRoute
@@ -422,7 +381,6 @@ const AppRouteChildren: AppRouteChildren = {
   AppHorariosRoute: AppHorariosRoute,
   AppModalidadesRoute: AppModalidadesRoute,
   AppNotificacoesRoute: AppNotificacoesRoute,
-  AppPagamentosRoute: AppPagamentosRoute,
   AppPlanosRoute: AppPlanosRoute,
   AppRelatoriosRoute: AppRelatoriosRoute,
   AppIndexRoute: AppIndexRoute,
@@ -438,8 +396,17 @@ const rootRouteChildren: RootRouteChildren = {
   AdminMasterDashboardRoute: AdminMasterDashboardRoute,
   AdminMasterIndexRoute: AdminMasterIndexRoute,
   AdminMasterTenantIdRoute: AdminMasterTenantIdRoute,
-  ApiPublicHooksNotifyMatriculasRoute: ApiPublicHooksNotifyMatriculasRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
