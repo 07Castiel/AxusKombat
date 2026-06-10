@@ -1,152 +1,72 @@
-# Plano de Implementação — CT Aquiles SaaS v2
+## Refatoração: Financeiro Recorrente
 
-Este é um lote grande (10 áreas). Vou implementar tudo em sequência, sem quebrar o que já existe. Abaixo o que será feito em cada bloco.
+Vou substituir o modelo manual atual por **contratos** + **mensalidades** geradas automaticamente. Como você escolheu "resetar", apago todos os pagamentos e matrículas existentes.
 
----
+### 1. Banco de dados (migration única)
 
-## 1. Banco de Dados (migration única)
+**Apaga:**
+- `pagamentos` (todas as linhas e a tabela inteira)
+- `matriculas` (todas as linhas e a tabela inteira)
+- `notificacoes` linhas órfãs (mantém tabela, troca FK para `mensalidade_id`)
 
-**Novas colunas:**
-- `tenants`: `responsavel_nome`, `telefone`, `cnpj_cpf`
-- `alunos`: `email`, `cpf`, `endereco`
-- `horarios`: `hora_fim`, `professor`, `capacidade_maxima`
-- `historico_graduacoes`: já existe (será usado para atribuição/ranking)
+**Cria `contratos`** (assinatura do aluno):
+- aluno_id, plano_id (opcional), valor_mensalidade, dia_vencimento (1–28), data_inicio, data_fim (nullable), status (`ativo` | `pausado` | `cancelado`), observacoes
+- Um aluno pode ter histórico, mas só 1 contrato `ativo` por vez (índice parcial único)
 
-**Permitir DELETE** em `alunos`, `matriculas`, `horarios`, `graduacoes`, `pagamentos`, `historico_graduacoes` (políticas RLS de DELETE para admin).
+**Cria `mensalidades`** (núcleo financeiro):
+- contrato_id, aluno_id, tenant_id
+- competencia (date, dia 1 do mês), data_vencimento, valor, desconto, valor_final (gerado), forma_pagamento, data_pagamento, status (`pendente` | `pago` | `vencido` | `cancelado`), observacoes_pagamento
+- Único por `(contrato_id, competencia)` — evita duplicatas em re-execuções do cron
 
-**Atualizar `handle_new_user`** para gravar `responsavel_nome`, `telefone`, `cnpj_cpf` no tenant a partir de `raw_user_meta_data`.
+**Ajusta `notificacoes`:** troca `matricula_id` por `mensalidade_id` (FK + índice único `(mensalidade_id, tipo)`).
 
-**Atualizar política de SELECT em `tenants`** para permitir que o service role (Admin Mestre) leia tudo — na verdade service role já bypassa RLS, então OK.
+RLS + GRANTs para tenant_id em ambas. Trigger `updated_at`.
 
----
+### 2. Geração automática (rolling 3 meses)
 
-## 2. Admin Mestre (super admin do SaaS)
+**Função SQL `gerar_mensalidades_contrato(contrato_id)`:** garante que existam mensalidades pendentes para o mês corrente + 3 meses à frente, sem duplicar.
 
-- Secrets: `MASTER_ADMIN_EMAIL`, `MASTER_ADMIN_PASSWORD` (vou solicitar via `add_secret`).
-- Server functions (`src/lib/master.functions.ts`) usando `supabaseAdmin` (bypass RLS):
-  - `masterLogin({email, password})` → valida contra secrets, retorna token JWT simples assinado com `MASTER_ADMIN_PASSWORD` como segredo, válido por 12h.
-  - `masterListTenants({token})` → lista todos tenants + contagem alunos + responsável.
-  - `masterGetTenantDetails({token, tenantId})` → alunos, matrículas, pagamentos, horários, graduações.
-- Rotas (públicas, sem `_app`):
-  - `/admin-master` → login
-  - `/admin-master/dashboard` → listagem + busca + totais
-  - `/admin-master/tenant/$id` → detalhes da academia
-- Token salvo em `sessionStorage` (`master_token`).
+**Disparos:**
+- Ao criar/ativar contrato (server fn chama a função)
+- Cron diário 05:00 UTC: roda para todos contratos `ativo` + marca `pendente` com vencimento < hoje como `vencido`
 
----
+### 3. Server functions (`src/lib/contratos.functions.ts`, `mensalidades.functions.ts`)
 
-## 3. Signup completo (self-registration)
+- `createContrato`, `updateContrato`, `pausarContrato`, `cancelarContrato`
+- `listMensalidades` (filtros: status, aluno, mês, vencidos)
+- `registrarPagamento(mensalidade_id, { data_pagamento, forma_pagamento, desconto, observacoes })` → marca `pago`
+- `cancelarMensalidade`, `editarMensalidade` (admin override)
+- `dashboardFinanceiro(mes)` → totais agregados
 
-Refatorar `src/routes/signup.tsx`:
-- Campos: responsável, academia, email, telefone, CNPJ/CPF, senha (min 8) + confirmação.
-- Validação com Zod, mensagens amigáveis (e-mail já cadastrado, senha não confere).
-- Toggle olhinho nos dois campos de senha.
-- Passar `tenant_nome`, `nome_completo`, `telefone`, `cnpj_cpf` em `raw_user_meta_data`.
-- Habilitar `auto_confirm_email` para login automático sem confirmação por e-mail.
-- Após signup, fazer signIn automático e redirect para `/`.
+### 4. UI
 
----
+**Cadastro/edição de aluno** (`_app/alunos.tsx`): nova seção "Plano":
+- valor mensalidade, dia vencimento, data início, status — ao salvar cria/atualiza contrato e gera mensalidades.
 
-## 4. Componente PasswordInput reutilizável
+**Nova rota `/financeiro`** (renomeia `pagamentos` → `financeiro`):
+- Tabela de mensalidades com filtros (status, aluno, mês)
+- Ação "Registrar pagamento" abre modal com desconto/forma/observações
+- Badges: pendente/pago/vencido/cancelado
 
-Criar `src/components/PasswordInput.tsx` com toggle Eye/EyeOff. Aplicar em login, signup, alteração de senha.
+**Dashboard `_app/index.tsx`** (cards adicionais):
+- Receita recebida no mês, receita prevista, vencidas, pendentes, qtd alunos inadimplentes, lista "Próximos 7 dias"
 
----
+### 5. Notificações WhatsApp
 
-## 5. Configurações — alterar senha (somente admin)
+Atualizo `notify-matriculas` (renomeio para `notify-mensalidades`) para varrer `mensalidades` com `status = 'pendente'` em D-7, D-3, D-0. Como o cron marca `vencido` antes, e o filtro é estrito por status, pagas/canceladas/vencidas não recebem aviso — atende a regra "se pago, cancela próximos avisos".
 
-Reformular `src/routes/_app/configuracoes.tsx`:
-- Mostrar info do perfil (já existe).
-- Card "Alterar senha" condicional a `isAdmin`:
-  - Senha atual, nova senha, confirmar (todos com PasswordInput).
-  - Validar senha atual via `signInWithPassword` antes de `updateUser({password})`.
-- Permitir editar `nome_completo` do perfil (afeta o "Bem-vindo, X" do dashboard).
+### 6. Limpeza
 
----
+Remove `src/lib/notifications.functions.ts` refs a `matricula_id` → `mensalidade_id`. Atualiza `notificacoes` page para mostrar contexto da mensalidade.
 
-## 6. Dashboard — saudação por nome
+### Detalhes técnicos
 
-Em `src/routes/_app/index.tsx`, header passa de e-mail → `profile.nome_completo`.
+- `valor_final` como coluna gerada: `GENERATED ALWAYS AS (valor - COALESCE(desconto,0)) STORED`
+- Função `gerar_mensalidades_contrato` `SECURITY DEFINER`, idempotente via `ON CONFLICT DO NOTHING`
+- Cron diário único substitui o cron antigo de notificações (`notify-matriculas` deixa de existir)
+- Dia de vencimento > último dia do mês (ex: 31 em fev): usa último dia do mês
+- "Inadimplente" = aluno com pelo menos 1 mensalidade `vencido` (query simples no dashboard)
 
----
+### Pergunta final antes de executar
 
-## 7. CRUD Alunos completo
-
-Refatorar `src/routes/_app/alunos.tsx`:
-- Tabela com colunas + 3 ações: editar (lápis), ativar/desativar, deletar (lixeira).
-- Modal "Editar aluno" (reaproveita o form de criação, pré-preenchido).
-- AlertDialog de confirmação para delete (com nome do aluno).
-- Novos campos: email, cpf, endereco, observações.
-
----
-
-## 8. CRUD Matrículas completo
-
-Refatorar `src/routes/_app/matriculas.tsx`:
-- 3 ícones de ação: editar, cancelar/reativar, deletar.
-- Modal de edição (aluno, plano, datas, valor, observações).
-- Confirmação de delete.
-
----
-
-## 9. Pagamentos — modo manual
-
-Refatorar `src/routes/_app/pagamentos.tsx`:
-- Botão "Registrar pagamento" abrindo modal (aluno, valor, vencimento, pago em, método, status, observações). Sem `matricula_id` obrigatório (vou tornar nullable na migration).
-- Lista com filtros (status, mês/ano, aluno).
-- Edição (lápis) e deleção (lixeira).
-- Status "atrasado" calculado automaticamente quando `data_vencimento < hoje && status='pendente'` (visualização — não muda o registro).
-- Badges coloridos.
-
-Migration extra: `pagamentos.matricula_id` → nullable.
-
----
-
-## 10. CRUD Horários completo
-
-Refatorar `src/routes/_app/horarios.tsx`:
-- Novos campos: `hora_fim`, `professor`, `capacidade_maxima`.
-- Form com checkboxes para múltiplos dias da semana (cria N registros).
-- Lista em tabela com editar + deletar.
-- Confirmação de delete.
-
----
-
-## 11. Graduações — 3 módulos
-
-Tabs em `src/routes/_app/graduacoes.tsx`:
-- **Tab 1 — Faixas**: CRUD (criar/editar/deletar) com nome, cor, ordem, categoria.
-- **Tab 2 — Atribuir**: dropdown aluno + dropdown graduação + data + observações. Insere em `historico_graduacoes` e atualiza `alunos.graduacao_atual_id`.
-- **Tab 3 — Ranking**: lista alunos ordenados por `graduacoes.ordem DESC`. Top 3 com troféu (Trophy icon dourado/prata/bronze). Sem graduação → final da lista.
-
----
-
-## 12. Outros
-
-- `auto_confirm_email = true` no Supabase Auth.
-- Toasts sonner em todas operações (já presente).
-- Loading states em botões de submit.
-- Responsividade mantida.
-
----
-
-## Ordem de execução
-
-1. **Solicitar secrets** `MASTER_ADMIN_EMAIL` + `MASTER_ADMIN_PASSWORD`.
-2. Migration SQL.
-3. `auto_confirm_email`.
-4. `PasswordInput` + refatorar login/signup.
-5. Admin Mestre (server fns + rotas).
-6. Configurações + dashboard saudação.
-7. CRUDs (Alunos, Matrículas, Pagamentos, Horários).
-8. Graduações com tabs e ranking.
-
----
-
-## Observação técnica
-
-- Senha mestre será comparada via `timingSafeEqual` no servidor; token assinado com HMAC-SHA256.
-- Para o admin mestre acessar dados de outros tenants, todas as queries usam `supabaseAdmin` (bypass RLS) — só executáveis depois de validar o token mestre.
-- Nenhuma alteração será feita em arquivos protegidos (`client.ts`, `types.ts`, `.env`).
-
-Posso prosseguir?
+Você confirma que posso **apagar todas as tabelas `pagamentos` e `matriculas` + todos os dados existentes nelas**? Não tem volta.
