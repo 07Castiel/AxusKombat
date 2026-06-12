@@ -693,6 +693,33 @@ export type Database = {
           },
         ]
       }
+      system_logs: {
+        Row: {
+          context: Json | null
+          created_at: string
+          id: string
+          level: string
+          message: string
+          source: string | null
+        }
+        Insert: {
+          context?: Json | null
+          created_at?: string
+          id?: string
+          level?: string
+          message: string
+          source?: string | null
+        }
+        Update: {
+          context?: Json | null
+          created_at?: string
+          id?: string
+          level?: string
+          message?: string
+          source?: string | null
+        }
+        Relationships: []
+      }
       tenants: {
         Row: {
           ativo: boolean
@@ -769,6 +796,69 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      visitor_logs: {
+        Row: {
+          browser: string | null
+          city: string | null
+          country: string | null
+          created_at: string
+          current_page: string | null
+          device_type: string | null
+          id: string
+          ip_address: string | null
+          is_logged_user: boolean
+          language: string | null
+          operating_system: string | null
+          referrer: string | null
+          region: string | null
+          screen_resolution: string | null
+          session_id: string | null
+          timezone: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          browser?: string | null
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          current_page?: string | null
+          device_type?: string | null
+          id?: string
+          ip_address?: string | null
+          is_logged_user?: boolean
+          language?: string | null
+          operating_system?: string | null
+          referrer?: string | null
+          region?: string | null
+          screen_resolution?: string | null
+          session_id?: string | null
+          timezone?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          browser?: string | null
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          current_page?: string | null
+          device_type?: string | null
+          id?: string
+          ip_address?: string | null
+          is_logged_user?: boolean
+          language?: string | null
+          operating_system?: string | null
+          referrer?: string | null
+          region?: string | null
+          screen_resolution?: string | null
+          session_id?: string | null
+          timezone?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
       }
       whatsapp_config: {
         Row: {
