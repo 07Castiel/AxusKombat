@@ -1,5 +1,5 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
-import { LayoutDashboard, Users, CreditCard, Wallet, CalendarDays, Award, BarChart3, Settings, LogOut, Menu, Swords, UserCog, Bell } from "lucide-react";
+import { LayoutDashboard, Users, CreditCard, Wallet, CalendarDays, Award, BarChart3, Settings, LogOut, Menu, Swords, UserCog, Bell, Activity } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ const NAV = [
   { to: "/relatorios", icon: BarChart3, label: "Relatórios", adminOnly: true },
   { to: "/notificacoes", icon: Bell, label: "Notificações", adminOnly: true },
   { to: "/equipe", icon: UserCog, label: "Equipe", adminOnly: true },
+  { to: "/acessos", icon: Activity, label: "Acessos", adminOnly: true },
   { to: "/configuracoes", icon: Settings, label: "Configurações", adminOnly: true },
 ] as const;
 

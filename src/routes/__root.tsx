@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Outlet, createRootRouteWithContext, HeadContent, Scripts, Link } from "@tanstack/react-router";
 import { AuthProvider } from "@/hooks/use-auth";
+import { useVisitorTracking } from "@/hooks/use-visitor-tracking";
 import { Toaster } from "@/components/ui/sonner";
 import { translateError } from "@/lib/errors";
 import appCss from "../styles.css?url";
@@ -48,11 +49,17 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
+        <TrackingBridge />
         <Outlet />
         <Toaster />
       </AuthProvider>
     </QueryClientProvider>
   );
+}
+
+function TrackingBridge() {
+  useVisitorTracking();
+  return null;
 }
 
 function RootErrorBoundary({ error, reset }: { error: Error; reset: () => void }) {

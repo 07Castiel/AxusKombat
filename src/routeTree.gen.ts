@@ -26,6 +26,8 @@ import { Route as AppFinanceiroRouteImport } from './routes/_app/financeiro'
 import { Route as AppEquipeRouteImport } from './routes/_app/equipe'
 import { Route as AppConfiguracoesRouteImport } from './routes/_app/configuracoes'
 import { Route as AppAlunosRouteImport } from './routes/_app/alunos'
+import { Route as AppAcessosRouteImport } from './routes/_app/acessos'
+import { Route as ApiPublicTrackVisitRouteImport } from './routes/api/public/track-visit'
 import { Route as AdminMasterTenantIdRouteImport } from './routes/admin-master.tenant.$id'
 import { Route as ApiPublicHooksNotifyMensalidadesRouteImport } from './routes/api/public/hooks/notify-mensalidades'
 
@@ -113,6 +115,16 @@ const AppAlunosRoute = AppAlunosRouteImport.update({
   path: '/alunos',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAcessosRoute = AppAcessosRouteImport.update({
+  id: '/acessos',
+  path: '/acessos',
+  getParentRoute: () => AppRoute,
+} as any)
+const ApiPublicTrackVisitRoute = ApiPublicTrackVisitRouteImport.update({
+  id: '/api/public/track-visit',
+  path: '/api/public/track-visit',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminMasterTenantIdRoute = AdminMasterTenantIdRouteImport.update({
   id: '/admin-master/tenant/$id',
   path: '/admin-master/tenant/$id',
@@ -130,6 +142,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/acessos': typeof AppAcessosRoute
   '/alunos': typeof AppAlunosRoute
   '/configuracoes': typeof AppConfiguracoesRoute
   '/equipe': typeof AppEquipeRoute
@@ -143,12 +156,14 @@ export interface FileRoutesByFullPath {
   '/admin-master/dashboard': typeof AdminMasterDashboardRoute
   '/admin-master/': typeof AdminMasterIndexRoute
   '/admin-master/tenant/$id': typeof AdminMasterTenantIdRoute
+  '/api/public/track-visit': typeof ApiPublicTrackVisitRoute
   '/api/public/hooks/notify-mensalidades': typeof ApiPublicHooksNotifyMensalidadesRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/acessos': typeof AppAcessosRoute
   '/alunos': typeof AppAlunosRoute
   '/configuracoes': typeof AppConfiguracoesRoute
   '/equipe': typeof AppEquipeRoute
@@ -163,6 +178,7 @@ export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
   '/admin-master': typeof AdminMasterIndexRoute
   '/admin-master/tenant/$id': typeof AdminMasterTenantIdRoute
+  '/api/public/track-visit': typeof ApiPublicTrackVisitRoute
   '/api/public/hooks/notify-mensalidades': typeof ApiPublicHooksNotifyMensalidadesRoute
 }
 export interface FileRoutesById {
@@ -171,6 +187,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/_app/acessos': typeof AppAcessosRoute
   '/_app/alunos': typeof AppAlunosRoute
   '/_app/configuracoes': typeof AppConfiguracoesRoute
   '/_app/equipe': typeof AppEquipeRoute
@@ -185,6 +202,7 @@ export interface FileRoutesById {
   '/_app/': typeof AppIndexRoute
   '/admin-master/': typeof AdminMasterIndexRoute
   '/admin-master/tenant/$id': typeof AdminMasterTenantIdRoute
+  '/api/public/track-visit': typeof ApiPublicTrackVisitRoute
   '/api/public/hooks/notify-mensalidades': typeof ApiPublicHooksNotifyMensalidadesRoute
 }
 export interface FileRouteTypes {
@@ -194,6 +212,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/signup'
     | '/sitemap.xml'
+    | '/acessos'
     | '/alunos'
     | '/configuracoes'
     | '/equipe'
@@ -207,12 +226,14 @@ export interface FileRouteTypes {
     | '/admin-master/dashboard'
     | '/admin-master/'
     | '/admin-master/tenant/$id'
+    | '/api/public/track-visit'
     | '/api/public/hooks/notify-mensalidades'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
     | '/signup'
     | '/sitemap.xml'
+    | '/acessos'
     | '/alunos'
     | '/configuracoes'
     | '/equipe'
@@ -227,6 +248,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin-master'
     | '/admin-master/tenant/$id'
+    | '/api/public/track-visit'
     | '/api/public/hooks/notify-mensalidades'
   id:
     | '__root__'
@@ -234,6 +256,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/signup'
     | '/sitemap.xml'
+    | '/_app/acessos'
     | '/_app/alunos'
     | '/_app/configuracoes'
     | '/_app/equipe'
@@ -248,6 +271,7 @@ export interface FileRouteTypes {
     | '/_app/'
     | '/admin-master/'
     | '/admin-master/tenant/$id'
+    | '/api/public/track-visit'
     | '/api/public/hooks/notify-mensalidades'
   fileRoutesById: FileRoutesById
 }
@@ -259,6 +283,7 @@ export interface RootRouteChildren {
   AdminMasterDashboardRoute: typeof AdminMasterDashboardRoute
   AdminMasterIndexRoute: typeof AdminMasterIndexRoute
   AdminMasterTenantIdRoute: typeof AdminMasterTenantIdRoute
+  ApiPublicTrackVisitRoute: typeof ApiPublicTrackVisitRoute
   ApiPublicHooksNotifyMensalidadesRoute: typeof ApiPublicHooksNotifyMensalidadesRoute
 }
 
@@ -383,6 +408,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAlunosRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/acessos': {
+      id: '/_app/acessos'
+      path: '/acessos'
+      fullPath: '/acessos'
+      preLoaderRoute: typeof AppAcessosRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/api/public/track-visit': {
+      id: '/api/public/track-visit'
+      path: '/api/public/track-visit'
+      fullPath: '/api/public/track-visit'
+      preLoaderRoute: typeof ApiPublicTrackVisitRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin-master/tenant/$id': {
       id: '/admin-master/tenant/$id'
       path: '/admin-master/tenant/$id'
@@ -401,6 +440,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteChildren {
+  AppAcessosRoute: typeof AppAcessosRoute
   AppAlunosRoute: typeof AppAlunosRoute
   AppConfiguracoesRoute: typeof AppConfiguracoesRoute
   AppEquipeRoute: typeof AppEquipeRoute
@@ -415,6 +455,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppAcessosRoute: AppAcessosRoute,
   AppAlunosRoute: AppAlunosRoute,
   AppConfiguracoesRoute: AppConfiguracoesRoute,
   AppEquipeRoute: AppEquipeRoute,
@@ -438,6 +479,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminMasterDashboardRoute: AdminMasterDashboardRoute,
   AdminMasterIndexRoute: AdminMasterIndexRoute,
   AdminMasterTenantIdRoute: AdminMasterTenantIdRoute,
+  ApiPublicTrackVisitRoute: ApiPublicTrackVisitRoute,
   ApiPublicHooksNotifyMensalidadesRoute: ApiPublicHooksNotifyMensalidadesRoute,
 }
 export const routeTree = rootRouteImport
