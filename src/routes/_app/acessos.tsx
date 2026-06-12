@@ -150,7 +150,7 @@ function AcessosPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Acessos" subtitle="Auditoria e registro de visitas ao sistema" />
+      <PageHeader title="Acessos" description="Auditoria e registro de visitas ao sistema" />
 
       {/* Totals */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
