@@ -153,3 +153,22 @@ export function templateFor(
   if (type === "AVISO_3_DIAS") return cfg.template_3_dias;
   return cfg.template_vencimento;
 }
+
+/**
+ * Tenant-scoped sender using Evolution API + whatsapp_connections row.
+ * The owner of the gym never sees URL/key/instance name.
+ */
+export async function sendWhatsappByTenant(
+  tenantId: string,
+  phone: string,
+  message: string,
+): Promise<SendResult> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const evo = await import("@/lib/evolution.server");
+  const { data: conn } = await supabaseAdmin
+    .from("whatsapp_connections").select("*").eq("tenant_id", tenantId).maybeSingle();
+  if (!conn) return { ok: false, error: "WhatsApp não conectado para esta academia" };
+  if (!(conn as any).connected) return { ok: false, error: "WhatsApp desconectado — reconecte pelo painel" };
+  const r = await evo.sendText((conn as any).instance_name, phone, message);
+  return { ok: r.ok, providerMessageId: r.id, error: r.error };
+}
