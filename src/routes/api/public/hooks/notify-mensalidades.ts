@@ -21,7 +21,7 @@ export const Route = createFileRoute("/api/public/hooks/notify-mensalidades")({
         }
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-        const { sendWhatsapp, renderTemplate, templateFor, NOTIFICATION_TYPES } =
+        const { sendWhatsappByTenant, renderTemplate, templateFor, NOTIFICATION_TYPES } =
           await import("@/lib/whatsapp.server");
 
         // 1) Processa: marca vencidas + gera rolling 3 meses
