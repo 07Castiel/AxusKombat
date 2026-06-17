@@ -2,13 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-const DEFAULT_CFG = {
-  provider: "evolution",
-  instance_name: "",
-  api_url: "",
-  api_token: "",
-  sender_number: "",
-  enabled: false,
+const DEFAULT_TEMPLATES = {
   template_7_dias: "Olá {nome}, sua matrícula na {academia} vence em {vencimento} (valor R$ {valor}). Caso já tenha pago, desconsidere esta mensagem.",
   template_3_dias: "Olá {nome}, faltam 3 dias para o vencimento da sua matrícula na {academia} ({vencimento} — R$ {valor}). Já pagou? Pode ignorar.",
   template_vencimento: "Olá {nome}, sua matrícula na {academia} vence hoje ({vencimento} — R$ {valor}). Se já efetuou o pagamento, ignore esta mensagem.",
@@ -23,27 +17,23 @@ async function getTenantAdmin(ctx: { supabase: any; userId: string }) {
   return admin.tenant_id as string;
 }
 
-export const getWhatsappConfig = createServerFn({ method: "POST" })
+export const getWhatsappTemplates = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const tenantId = await getTenantAdmin(context as any);
     const supabase = (context as any).supabase;
     const { data, error } = await supabase
-      .from("whatsapp_config").select("*").eq("tenant_id", tenantId).maybeSingle();
+      .from("whatsapp_config")
+      .select("template_7_dias, template_3_dias, template_vencimento")
+      .eq("tenant_id", tenantId).maybeSingle();
     if (error) throw new Error(error.message);
-    return data ?? { tenant_id: tenantId, ...DEFAULT_CFG };
+    return data ?? { tenant_id: tenantId, ...DEFAULT_TEMPLATES };
   });
 
-export const saveWhatsappConfig = createServerFn({ method: "POST" })
+export const saveWhatsappTemplates = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
     z.object({
-      provider: z.enum(["evolution", "zapi", "cloud", "mock"]),
-      instance_name: z.string().trim().max(120).optional().nullable(),
-      api_url: z.string().trim().max(500).optional().nullable(),
-      api_token: z.string().trim().max(1000).optional().nullable(),
-      sender_number: z.string().trim().max(40).optional().nullable(),
-      enabled: z.boolean(),
       template_7_dias: z.string().min(5).max(2000),
       template_3_dias: z.string().min(5).max(2000),
       template_vencimento: z.string().min(5).max(2000),
@@ -54,28 +44,9 @@ export const saveWhatsappConfig = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin
       .from("whatsapp_config")
-      .upsert({ tenant_id: tenantId, ...data }, { onConflict: "tenant_id" });
+      .upsert({ tenant_id: tenantId, provider: "evolution", enabled: true, ...data }, { onConflict: "tenant_id" });
     if (error) throw new Error(error.message);
     return { ok: true };
-  });
-
-export const testWhatsappConnection = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((input) => z.object({ to: z.string().trim().min(8).max(40) }).parse(input))
-  .handler(async ({ data, context }) => {
-    const tenantId = await getTenantAdmin(context as any);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { sendWhatsapp } = await import("@/lib/whatsapp.server");
-    const { data: cfg } = await supabaseAdmin
-      .from("whatsapp_config").select("*").eq("tenant_id", tenantId).maybeSingle();
-    if (!cfg) throw new Error("Configure o WhatsApp antes de testar");
-    const result = await sendWhatsapp(cfg as any, data.to, "🥋 Teste de conexão Axus Kombat — se você recebeu, está tudo certo.");
-    await supabaseAdmin.from("whatsapp_config").update({
-      last_test_at: new Date().toISOString(),
-      last_test_result: result.ok ? "sucesso" : (result.error ?? "falha"),
-      connection_status: result.ok ? "conectado" : "erro",
-    }).eq("tenant_id", tenantId);
-    return { ok: result.ok, error: result.error, providerMessageId: result.providerMessageId };
   });
 
 export const listNotifications = createServerFn({ method: "POST" })
@@ -118,14 +89,13 @@ export const resendNotification = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const tenantId = await getTenantAdmin(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { sendWhatsapp } = await import("@/lib/whatsapp.server");
+    const { sendWhatsappByTenant } = await import("@/lib/whatsapp.server");
 
     const { data: notif, error } = await supabaseAdmin
       .from("notificacoes").select("*").eq("id", data.notification_id).maybeSingle();
     if (error || !notif) throw new Error("Notificação não encontrada");
-    if (notif.tenant_id !== tenantId) throw new Error("Não autorizado");
+    if ((notif as any).tenant_id !== tenantId) throw new Error("Não autorizado");
 
-    // Stop if mensalidade is no longer pending
     const mensalidadeId = (notif as any).mensalidade_id as string | null;
     if (mensalidadeId) {
       const { data: m } = await supabaseAdmin
@@ -135,17 +105,14 @@ export const resendNotification = createServerFn({ method: "POST" })
       }
     }
 
-    const { data: cfg } = await supabaseAdmin
-      .from("whatsapp_config").select("*").eq("tenant_id", tenantId).maybeSingle();
-    if (!cfg) throw new Error("Configure o WhatsApp antes de reenviar");
-    if (!notif.destinatario) throw new Error("Notificação sem telefone destinatário");
+    if (!(notif as any).destinatario) throw new Error("Notificação sem telefone destinatário");
 
-    const result = await sendWhatsapp(cfg as any, notif.destinatario, notif.mensagem);
+    const result = await sendWhatsappByTenant(tenantId, (notif as any).destinatario, (notif as any).mensagem);
     await supabaseAdmin.from("notificacoes").update({
       status: result.ok ? "enviada" : "falhou",
-      enviada_em: result.ok ? new Date().toISOString() : notif.enviada_em,
+      enviada_em: result.ok ? new Date().toISOString() : (notif as any).enviada_em,
       erro: result.ok ? null : (result.error ?? "Erro desconhecido"),
-    }).eq("id", notif.id);
+    }).eq("id", (notif as any).id);
     return { ok: result.ok, error: result.error, providerMessageId: result.providerMessageId };
   });
 

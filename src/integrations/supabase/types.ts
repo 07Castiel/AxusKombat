@@ -922,6 +922,53 @@ export type Database = {
           },
         ]
       }
+      whatsapp_connections: {
+        Row: {
+          connected: boolean
+          created_at: string
+          id: string
+          instance_name: string
+          last_connection: string | null
+          last_qr_at: string | null
+          phone_number: string | null
+          status: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          connected?: boolean
+          created_at?: string
+          id?: string
+          instance_name: string
+          last_connection?: string | null
+          last_qr_at?: string | null
+          phone_number?: string | null
+          status?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          connected?: boolean
+          created_at?: string
+          id?: string
+          instance_name?: string
+          last_connection?: string | null
+          last_qr_at?: string | null
+          phone_number?: string | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_connections_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
