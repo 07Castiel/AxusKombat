@@ -72,6 +72,9 @@ export const Route = createFileRoute("/api/public/hooks/notify-mensalidades")({
             const { data: cfg } = await supabaseAdmin
               .from("whatsapp_config").select("*")
               .eq("tenant_id", m.tenant_id).maybeSingle();
+            const { data: conn } = await supabaseAdmin
+              .from("whatsapp_connections").select("connected")
+              .eq("tenant_id", m.tenant_id).maybeSingle();
 
             const venc = new Date(m.data_vencimento + "T12:00:00").toLocaleDateString("pt-BR", { timeZone: tz });
             const valor = Number(m.valor_final ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -86,16 +89,14 @@ export const Route = createFileRoute("/api/public/hooks/notify-mensalidades")({
             });
 
             let result: { ok: boolean; error?: string; providerMessageId?: string } = {
-              ok: false, error: "Configuração WhatsApp ausente",
+              ok: false, error: "WhatsApp não conectado",
             };
-            if (cfg && (cfg as any).enabled && phone) {
-              result = await sendWhatsapp(cfg as any, phone, mensagem);
-            } else if (!phone) {
+            if (!phone) {
               result = { ok: false, error: "Aluno sem telefone cadastrado" };
-            } else if (!cfg) {
-              result = { ok: false, error: "Academia sem configuração de WhatsApp" };
-            } else if (!(cfg as any).enabled) {
-              result = { ok: false, error: "WhatsApp desativado na academia" };
+            } else if (!conn || !(conn as any).connected) {
+              result = { ok: false, error: "WhatsApp não conectado nesta academia" };
+            } else {
+              result = await sendWhatsappByTenant(m.tenant_id, phone, mensagem);
             }
 
             const { error: insErr } = await supabaseAdmin.from("notificacoes").insert({
