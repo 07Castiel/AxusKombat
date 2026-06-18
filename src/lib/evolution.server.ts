@@ -1,3 +1,5 @@
+import * as QRCode from "qrcode";
+
 /**
  * Evolution API client — server-only.
  * URL and key live exclusively in env vars; never expose to clients.
@@ -59,6 +61,31 @@ export interface EvoCreateOrConnect {
   state?: string;
 }
 
+function getString(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+function isImageQr(value: string): boolean {
+  const compact = value.replace(/\s+/g, "");
+  return (
+    compact.startsWith("data:image/") ||
+    compact.startsWith("iVBORw0KGgo") ||
+    compact.startsWith("/9j/") ||
+    compact.startsWith("UklGR") ||
+    compact.startsWith("PHN2Zy")
+  );
+}
+
+async function normalizeQrImage(imageOrCode: string | null, code: string | null): Promise<string | null> {
+  const qrValue = imageOrCode ?? code;
+  if (!qrValue) return null;
+  if (isImageQr(qrValue)) return qrValue;
+  return QRCode.toDataURL(qrValue, { errorCorrectionLevel: "M", margin: 1, width: 320 });
+}
+
 export async function createInstance(instanceName: string): Promise<EvoCreateOrConnect> {
   const res = await timedFetch(`${baseUrl()}/instance/create`, {
     method: "POST",
@@ -71,8 +98,9 @@ export async function createInstance(instanceName: string): Promise<EvoCreateOrC
   const text = await res.text();
   if (!res.ok) throw new Error(`Evolution create HTTP ${res.status}: ${text.slice(0, 300)}`);
   const body = JSON.parse(text);
-  const qr = body?.qrcode?.base64 ?? body?.qrcode ?? null;
-  return { qrBase64: typeof qr === "string" ? qr : null, state: body?.instance?.status };
+  const image = getString(body?.qrcode?.base64, body?.base64);
+  const code = getString(body?.qrcode?.code, body?.code, typeof body?.qrcode === "string" ? body.qrcode : null);
+  return { qrBase64: await normalizeQrImage(image, code), pairingCode: getString(body?.pairingCode, body?.qrcode?.pairingCode), state: body?.instance?.status };
 }
 
 export async function connectInstance(instanceName: string): Promise<EvoCreateOrConnect> {
@@ -80,8 +108,9 @@ export async function connectInstance(instanceName: string): Promise<EvoCreateOr
   const text = await res.text();
   if (!res.ok) throw new Error(`Evolution connect HTTP ${res.status}: ${text.slice(0, 300)}`);
   const body = text ? JSON.parse(text) : {};
-  const qr = body?.base64 ?? body?.qrcode?.base64 ?? body?.qrcode ?? null;
-  return { qrBase64: typeof qr === "string" ? qr : null, pairingCode: body?.pairingCode ?? null };
+  const image = getString(body?.base64, body?.qrcode?.base64);
+  const code = getString(body?.code, body?.qrcode?.code, typeof body?.qrcode === "string" ? body.qrcode : null);
+  return { qrBase64: await normalizeQrImage(image, code), pairingCode: getString(body?.pairingCode, body?.qrcode?.pairingCode) };
 }
 
 export async function connectionState(instanceName: string): Promise<{ state: string; ownerJid?: string | null }> {
