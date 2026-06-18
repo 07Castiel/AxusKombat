@@ -83,10 +83,11 @@ export const connectWhatsapp = createServerFn({ method: "POST" })
       }
     }
 
-    // Fallback: if no QR but instance exists, try recreate
-    if (!qr && info.exists) {
+    // Fallback: if no QR, try delete + recreate
+    if (!qr) {
       try {
         await evo.logoutInstance(instanceName);
+        await evo.deleteInstance(instanceName);
         const created = await evo.createInstance(instanceName);
         qr = created.qrBase64;
       } catch (e: any) {
