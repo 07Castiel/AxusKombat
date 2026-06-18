@@ -98,6 +98,10 @@ export async function logoutInstance(instanceName: string): Promise<void> {
   await timedFetch(`${baseUrl()}/instance/logout/${encodeURIComponent(instanceName)}`, { method: "DELETE" }).catch(() => {});
 }
 
+export async function deleteInstance(instanceName: string): Promise<void> {
+  await timedFetch(`${baseUrl()}/instance/delete/${encodeURIComponent(instanceName)}`, { method: "DELETE" }).catch(() => {});
+}
+
 function normalizePhone(raw: string): string | null {
   if (!raw) return null;
   const digits = raw.replace(/\D+/g, "");
