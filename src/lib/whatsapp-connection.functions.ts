@@ -59,15 +59,39 @@ export const connectWhatsapp = createServerFn({ method: "POST" })
     // Check if instance exists on Evolution side
     let qr: string | null = null;
     let pairingCode: string | null = null;
+    let lastErr: string | null = null;
 
-    const info = await evo.fetchInstance(instanceName);
+    const info = await evo.fetchInstance(instanceName).catch((e) => {
+      lastErr = `fetchInstance: ${e?.message ?? e}`;
+      return { exists: false } as const;
+    });
+
     if (!info.exists) {
-      const created = await evo.createInstance(instanceName);
-      qr = created.qrBase64;
+      try {
+        const created = await evo.createInstance(instanceName);
+        qr = created.qrBase64;
+      } catch (e: any) {
+        lastErr = `createInstance: ${e?.message ?? e}`;
+      }
     } else {
-      const conn = await evo.connectInstance(instanceName);
-      qr = conn.qrBase64;
-      pairingCode = conn.pairingCode ?? null;
+      try {
+        const conn = await evo.connectInstance(instanceName);
+        qr = conn.qrBase64;
+        pairingCode = conn.pairingCode ?? null;
+      } catch (e: any) {
+        lastErr = `connectInstance: ${e?.message ?? e}`;
+      }
+    }
+
+    // Fallback: if no QR but instance exists, try recreate
+    if (!qr && info.exists) {
+      try {
+        await evo.logoutInstance(instanceName);
+        const created = await evo.createInstance(instanceName);
+        qr = created.qrBase64;
+      } catch (e: any) {
+        lastErr = `recreate: ${e?.message ?? e}`;
+      }
     }
 
     await supabaseAdmin.from("whatsapp_connections").update({
@@ -76,7 +100,14 @@ export const connectWhatsapp = createServerFn({ method: "POST" })
       last_qr_at: new Date().toISOString(),
     }).eq("tenant_id", tenantId);
 
-    if (!qr) throw new Error("Não foi possível gerar o QR Code agora. Tente novamente em instantes.");
+    if (!qr) {
+      console.error("[whatsapp.connect] no QR returned", { instanceName, lastErr, info });
+      throw new Error(
+        lastErr
+          ? `Falha ao gerar QR Code: ${lastErr}`
+          : "Não foi possível gerar o QR Code agora. Tente novamente em instantes.",
+      );
+    }
     const qrImage = qr.startsWith("data:") ? qr : `data:image/png;base64,${qr}`;
     return { qr: qrImage, pairingCode, instanceMasked: "•••••" };
   });
