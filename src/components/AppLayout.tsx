@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 // Toaster mounted globally in __root.tsx
 import { useState, type ReactNode } from "react";
 import logo from "@/assets/axus-kombat-logo.png";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const NAV = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard", adminOnly: false },
@@ -36,7 +37,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div className="dark min-h-screen flex w-full bg-background text-foreground">
+    <div className="min-h-screen flex w-full bg-background text-foreground">
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-40 w-64 bg-sidebar flex flex-col transition-transform md:translate-x-0",
@@ -108,8 +109,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <div className="hidden md:block text-[10px] font-display uppercase tracking-[0.35em] text-metal">
             Axus Kombat · Painel de Controle
           </div>
-          <div className="text-[11px] uppercase tracking-widest text-metal-light font-semibold hidden sm:block">
-            {profile?.nome_completo}
+          <div className="flex items-center gap-3">
+            <div className="text-[11px] uppercase tracking-widest text-metal-light font-semibold hidden sm:block">
+              {profile?.nome_completo}
+            </div>
+            <ThemeToggle />
           </div>
         </header>
         <main className="flex-1 p-4 md:p-8 noise-bg">{children}</main>
