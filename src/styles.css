@@ -110,6 +110,78 @@
 
 .dark { color-scheme: dark; }
 
+/* Light mode — keep blood-red identity, swap surfaces to bone/parchment */
+.light {
+  color-scheme: light;
+  --background: #F4F1EC;
+  --bg-secondary: #ECE7DF;
+  --foreground: #16110F;
+  --card: #FFFFFF;
+  --card-foreground: #16110F;
+  --popover: #FFFFFF;
+  --popover-foreground: #16110F;
+
+  --primary: #B50000;
+  --primary-foreground: #FFFFFF;
+
+  --secondary: #E8E2D8;
+  --secondary-foreground: #16110F;
+  --muted: #E8E2D8;
+  --muted-foreground: #5A534D;
+  --accent: #EFE9DF;
+  --accent-foreground: #16110F;
+  --destructive: #B50000;
+  --destructive-foreground: #FFFFFF;
+
+  --metal-light: #2A2622;
+  --metal-mid: #5A534D;
+  --metal-dark: #8A847C;
+
+  --border: rgba(20, 14, 12, 0.12);
+  --input: #FFFFFF;
+  --ring: #B50000;
+
+  --sidebar: #ECE7DF;
+  --sidebar-foreground: #5A534D;
+  --sidebar-primary: #B50000;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: rgba(181, 0, 0, 0.08);
+  --sidebar-accent-foreground: #16110F;
+  --sidebar-border: rgba(181, 0, 0, 0.2);
+  --sidebar-ring: #B50000;
+
+  --gradient-card: linear-gradient(180deg, #FFFFFF, #F4F1EC);
+  --shadow-card: 0 4px 18px -10px rgba(20, 14, 12, 0.25);
+}
+
+.light ::-webkit-scrollbar-track { background: #ECE7DF; }
+.light ::-webkit-scrollbar-thumb { background: #C9C1B4; }
+.light ::-webkit-scrollbar-thumb:hover { background: #B50000; }
+
+.light thead th {
+  color: #5A534D;
+  background: #ECE7DF;
+  border-bottom-color: rgba(181, 0, 0, 0.3) !important;
+}
+.light tbody tr { border-bottom-color: rgba(20, 14, 12, 0.06); }
+.light tbody tr:hover { background: rgba(181, 0, 0, 0.05) !important; }
+
+.light .card-kombat {
+  background: #FFFFFF;
+  border-color: rgba(20, 14, 12, 0.08);
+  border-top-color: #B50000;
+}
+.light .card-kombat:hover {
+  border-color: rgba(181, 0, 0, 0.4);
+  box-shadow: 0 0 25px rgba(181, 0, 0, 0.06);
+}
+
+.light .noise-bg {
+  background-image:
+    radial-gradient(circle at 50% 40%, rgba(181, 0, 0, 0.06), transparent 60%),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.025 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
 @layer base {
   * { border-color: var(--color-border); }
   html, body {
