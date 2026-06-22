@@ -313,6 +313,59 @@ function NotificacoesPage() {
           )}
         </TabsContent>
 
+        {/* ---------------- Comunicado geral ---------------- */}
+        <TabsContent value="comunicado">
+          <Card className="p-6 max-w-2xl space-y-4">
+            <div className="flex items-center gap-2">
+              <Megaphone className="h-4 w-4 text-primary"/>
+              <h3 className="font-display uppercase tracking-wider text-metal-light">Enviar comunicado em massa</h3>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Envia uma mensagem única via WhatsApp para um grupo de alunos. Use para feriados, eventos, mudanças de horário.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <Label>Para</Label>
+                <Select value={comunicado.categoria} onValueChange={(v: any) => setComunicado({...comunicado, categoria: v})}>
+                  <SelectTrigger className="mt-1.5"><SelectValue/></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os alunos</SelectItem>
+                    <SelectItem value="adulto">Apenas adulto</SelectItem>
+                    <SelectItem value="kids">Apenas kids</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-end">
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={comunicado.apenas_ativos} onChange={(e) => setComunicado({...comunicado, apenas_ativos: e.target.checked})}/>
+                  Apenas alunos ativos
+                </label>
+              </div>
+            </div>
+            <div>
+              <Label>Mensagem</Label>
+              <Textarea
+                rows={5}
+                placeholder="Olá! Avisamos que..."
+                value={comunicado.mensagem}
+                onChange={(e) => setComunicado({...comunicado, mensagem: e.target.value})}
+                className="mt-1.5"
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">{comunicado.mensagem.length}/2000 caracteres</p>
+            </div>
+            <Button
+              onClick={handleEnviarComunicado}
+              disabled={enviandoComunicado || status !== "conectado" || !comunicado.mensagem.trim()}
+              className="gradient-primary text-primary-foreground"
+            >
+              <Send className="h-4 w-4 mr-2"/>{enviandoComunicado ? "Enviando…" : "Enviar comunicado"}
+            </Button>
+            {status !== "conectado" && (
+              <p className="text-xs text-destructive">Conecte o WhatsApp primeiro na aba "WhatsApp".</p>
+            )}
+          </Card>
+        </TabsContent>
+
         {/* ---------------- Histórico ---------------- */}
         <TabsContent value="historico" className="space-y-4">
           <Card className="p-4 flex flex-wrap gap-3 items-end">
