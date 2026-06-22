@@ -179,6 +179,19 @@ function NotificacoesPage() {
     } catch (e: any) { toast.error(translateError(e)); }
   }
 
+  async function handleEnviarComunicado() {
+    if (!comunicado.mensagem.trim()) return toast.error("Digite uma mensagem");
+    if (!confirm(`Enviar comunicado para ${comunicado.categoria === "todos" ? "todos" : comunicado.categoria} alunos${comunicado.apenas_ativos ? " ativos" : ""}?`)) return;
+    setEnviandoComunicado(true);
+    try {
+      const r: any = await enviarComunicadoFn({ data: comunicado });
+      toast.success(`Comunicado enviado: ${r.sent} de ${r.total} (${r.failed} falhas, ${r.skipped} sem telefone)`);
+      setComunicado({ ...comunicado, mensagem: "" });
+      qc.invalidateQueries({ queryKey: ["notificacoes"] });
+    } catch (e: any) { toast.error(translateError(e)); }
+    finally { setEnviandoComunicado(false); }
+  }
+
   if (!isAdmin) return null;
 
   const conn = connQuery.data as any;
