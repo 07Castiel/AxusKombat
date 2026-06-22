@@ -16,12 +16,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Search, Pencil, RotateCcw, Trash2, User, Heart, ClipboardList, Ban } from "lucide-react";
+import { Plus, Search, Pencil, RotateCcw, Trash2, User, Heart, ClipboardList, Ban, Pause, Play, Link as LinkIcon, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { translateError, firstZodMessage } from "@/lib/errors";
 import { alunoSchema } from "@/lib/validators";
 import { fmtDate, fmtMoney, toISODate } from "@/lib/utils";
-import { upsertContratoAtivo, cancelarContrato } from "@/lib/contratos.functions";
+import { upsertContratoAtivo, cancelarContrato, pausarContrato } from "@/lib/contratos.functions";
+import { gerarPortalToken } from "@/lib/tenant.functions";
 
 export const Route = createFileRoute("/_app/alunos")({
   component: AlunosPage,
@@ -57,6 +58,8 @@ function AlunosPage() {
   const qc = useQueryClient();
   const upsertContratoFn = useServerFn(upsertContratoAtivo);
   const cancelarContratoFn = useServerFn(cancelarContrato);
+  const pausarContratoFn = useServerFn(pausarContrato);
+  const gerarTokenFn = useServerFn(gerarPortalToken);
 
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -225,6 +228,28 @@ function AlunosPage() {
     if (error) { toast.error(translateError(error)); return; }
     toast.success("Aluno excluído");
     qc.invalidateQueries();
+  };
+
+  const togglePause = async (contratoId: string, isAtivo: boolean) => {
+    try {
+      await pausarContratoFn({ data: { contrato_id: contratoId, pausar: isAtivo } });
+      toast.success(isAtivo ? "Contrato pausado" : "Contrato reativado");
+      qc.invalidateQueries();
+    } catch (err: any) { toast.error(translateError(err)); }
+  };
+
+  const copyPortalLink = async (alunoId: string, existingToken: string | null) => {
+    try {
+      let token = existingToken;
+      if (!token) {
+        const r: any = await gerarTokenFn({ data: { aluno_id: alunoId } });
+        token = r.token;
+        qc.invalidateQueries({ queryKey: ["alunos"] });
+      }
+      const url = `${window.location.origin}/portal/${token}`;
+      await navigator.clipboard.writeText(url);
+      toast.success("Link do portal copiado");
+    } catch (err: any) { toast.error(translateError(err)); }
   };
 
   const filtered = alunos.filter((a: any) =>
