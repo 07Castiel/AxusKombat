@@ -446,6 +446,12 @@ function AlunosPage() {
                   <TableCell className="text-sm text-muted-foreground">{fmtDate(a.data_entrada)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex gap-1 justify-end">
+                      <Button size="icon" variant="ghost" onClick={()=>copyPortalLink(a.id, a.portal_token)} title="Copiar link do portal" aria-label="Copiar link do portal do aluno"><LinkIcon className="h-4 w-4"/></Button>
+                      {c && (
+                        <Button size="icon" variant="ghost" onClick={()=>togglePause(c.id, c.status === "ativo")} title={c.status === "ativo" ? "Pausar contrato" : "Reativar contrato"} aria-label="Pausar ou retomar contrato">
+                          {c.status === "ativo" ? <Pause className="h-4 w-4"/> : <Play className="h-4 w-4 text-success"/>}
+                        </Button>
+                      )}
                       <Button size="icon" variant="ghost" onClick={()=>startEdit(a)} title="Editar" aria-label="Editar aluno"><Pencil className="h-4 w-4"/></Button>
                       <Button size="icon" variant="ghost" onClick={()=>toggleStatus(a.id, a.status)} title={a.status === "ativo" ? "Desativar" : "Reativar"} aria-label={a.status === "ativo" ? "Desativar aluno" : "Reativar aluno"}><RotateCcw className="h-4 w-4"/></Button>
                       <Button size="icon" variant="ghost" onClick={()=>setDeleting({ id: a.id, nome: a.nome_completo })} title="Excluir" aria-label="Excluir aluno" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button>
