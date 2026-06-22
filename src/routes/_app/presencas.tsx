@@ -52,7 +52,7 @@ function PresencasPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("horarios").select("*, modalidades(nome)")
-        .eq("ativo", true).eq("dia", diaSelecionado).order("hora");
+        .eq("ativo", true).eq("dia", diaSelecionado as any).order("hora");
       if (error) throw error;
       return data ?? [];
     },
