@@ -16,12 +16,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Search, Pencil, RotateCcw, Trash2, User, Heart, ClipboardList, Ban } from "lucide-react";
+import { Plus, Search, Pencil, RotateCcw, Trash2, User, Heart, ClipboardList, Ban, Pause, Play, Link as LinkIcon, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { translateError, firstZodMessage } from "@/lib/errors";
 import { alunoSchema } from "@/lib/validators";
 import { fmtDate, fmtMoney, toISODate } from "@/lib/utils";
-import { upsertContratoAtivo, cancelarContrato } from "@/lib/contratos.functions";
+import { upsertContratoAtivo, cancelarContrato, pausarContrato } from "@/lib/contratos.functions";
+import { gerarPortalToken } from "@/lib/tenant.functions";
 
 export const Route = createFileRoute("/_app/alunos")({
   component: AlunosPage,
@@ -57,6 +58,8 @@ function AlunosPage() {
   const qc = useQueryClient();
   const upsertContratoFn = useServerFn(upsertContratoAtivo);
   const cancelarContratoFn = useServerFn(cancelarContrato);
+  const pausarContratoFn = useServerFn(pausarContrato);
+  const gerarTokenFn = useServerFn(gerarPortalToken);
 
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -82,7 +85,7 @@ function AlunosPage() {
       const { data, error } = await supabase
         .from("contratos")
         .select("*, planos(nome)")
-        .eq("status", "ativo");
+        .in("status", ["ativo", "pausado"]);
       if (error) throw error;
       return data ?? [];
     },
@@ -225,6 +228,28 @@ function AlunosPage() {
     if (error) { toast.error(translateError(error)); return; }
     toast.success("Aluno excluído");
     qc.invalidateQueries();
+  };
+
+  const togglePause = async (contratoId: string, isAtivo: boolean) => {
+    try {
+      await pausarContratoFn({ data: { contrato_id: contratoId, pausar: isAtivo } });
+      toast.success(isAtivo ? "Contrato pausado" : "Contrato reativado");
+      qc.invalidateQueries();
+    } catch (err: any) { toast.error(translateError(err)); }
+  };
+
+  const copyPortalLink = async (alunoId: string, existingToken: string | null) => {
+    try {
+      let token = existingToken;
+      if (!token) {
+        const r: any = await gerarTokenFn({ data: { aluno_id: alunoId } });
+        token = r.token;
+        qc.invalidateQueries({ queryKey: ["alunos"] });
+      }
+      const url = `${window.location.origin}/portal/${token}`;
+      await navigator.clipboard.writeText(url);
+      toast.success("Link do portal copiado");
+    } catch (err: any) { toast.error(translateError(err)); }
   };
 
   const filtered = alunos.filter((a: any) =>
@@ -421,6 +446,12 @@ function AlunosPage() {
                   <TableCell className="text-sm text-muted-foreground">{fmtDate(a.data_entrada)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex gap-1 justify-end">
+                      <Button size="icon" variant="ghost" onClick={()=>copyPortalLink(a.id, a.portal_token)} title="Copiar link do portal" aria-label="Copiar link do portal do aluno"><LinkIcon className="h-4 w-4"/></Button>
+                      {c && (
+                        <Button size="icon" variant="ghost" onClick={()=>togglePause(c.id, c.status === "ativo")} title={c.status === "ativo" ? "Pausar contrato" : "Reativar contrato"} aria-label="Pausar ou retomar contrato">
+                          {c.status === "ativo" ? <Pause className="h-4 w-4"/> : <Play className="h-4 w-4 text-success"/>}
+                        </Button>
+                      )}
                       <Button size="icon" variant="ghost" onClick={()=>startEdit(a)} title="Editar" aria-label="Editar aluno"><Pencil className="h-4 w-4"/></Button>
                       <Button size="icon" variant="ghost" onClick={()=>toggleStatus(a.id, a.status)} title={a.status === "ativo" ? "Desativar" : "Reativar"} aria-label={a.status === "ativo" ? "Desativar aluno" : "Reativar aluno"}><RotateCcw className="h-4 w-4"/></Button>
                       <Button size="icon" variant="ghost" onClick={()=>setDeleting({ id: a.id, nome: a.nome_completo })} title="Excluir" aria-label="Excluir aluno" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button>

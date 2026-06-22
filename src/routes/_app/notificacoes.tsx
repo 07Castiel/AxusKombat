@@ -3,7 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Send, RefreshCw, Play, Save, MessageSquare, QrCode, Smartphone, Wifi, WifiOff, Loader2 } from "lucide-react";
+import { Send, RefreshCw, Play, Save, MessageSquare, QrCode, Smartphone, Wifi, WifiOff, Loader2, Megaphone } from "lucide-react";
 
 import { useAuth } from "@/hooks/use-auth";
 import { PageHeader } from "@/components/PageHeader";
@@ -26,6 +26,7 @@ import {
   getWhatsappConnection, connectWhatsapp, refreshWhatsappStatus,
   disconnectWhatsapp, sendWhatsappTest,
 } from "@/lib/whatsapp-connection.functions";
+import { enviarComunicado } from "@/lib/comunicados.functions";
 
 export const Route = createFileRoute("/_app/notificacoes")({
   component: NotificacoesPage,
@@ -39,7 +40,7 @@ export const Route = createFileRoute("/_app/notificacoes")({
 });
 
 const TIPO_LABEL: Record<string, string> = {
-  AVISO_7_DIAS: "7 dias antes", AVISO_3_DIAS: "3 dias antes", AVISO_VENCIMENTO: "Vencimento",
+  AVISO_7_DIAS: "7 dias antes", AVISO_3_DIAS: "3 dias antes", AVISO_VENCIMENTO: "Vencimento", COMUNICADO: "Comunicado",
 };
 
 function NotificacoesPage() {
@@ -60,6 +61,7 @@ function NotificacoesPage() {
   const list = useServerFn(listNotifications);
   const resend = useServerFn(resendNotification);
   const runNow = useServerFn(runNotificationsNow);
+  const enviarComunicadoFn = useServerFn(enviarComunicado);
 
   const connQuery = useQuery({ queryKey: ["whatsapp_connection"], queryFn: () => getConn(), enabled: isAdmin });
   const tplQuery = useQuery({ queryKey: ["whatsapp_templates"], queryFn: () => getTpl(), enabled: isAdmin });
@@ -85,6 +87,8 @@ function NotificacoesPage() {
   const [testTo, setTestTo] = useState("");
   const [saving, setSaving] = useState(false);
   const [sendingTest, setSendingTest] = useState(false);
+  const [comunicado, setComunicado] = useState({ mensagem: "", categoria: "todos" as "todos"|"adulto"|"kids", apenas_ativos: true });
+  const [enviandoComunicado, setEnviandoComunicado] = useState(false);
 
   function stopPolling() {
     if (pollRef.current) { window.clearInterval(pollRef.current); pollRef.current = null; }
@@ -175,6 +179,19 @@ function NotificacoesPage() {
     } catch (e: any) { toast.error(translateError(e)); }
   }
 
+  async function handleEnviarComunicado() {
+    if (!comunicado.mensagem.trim()) return toast.error("Digite uma mensagem");
+    if (!confirm(`Enviar comunicado para ${comunicado.categoria === "todos" ? "todos" : comunicado.categoria} alunos${comunicado.apenas_ativos ? " ativos" : ""}?`)) return;
+    setEnviandoComunicado(true);
+    try {
+      const r: any = await enviarComunicadoFn({ data: comunicado });
+      toast.success(`Comunicado enviado: ${r.sent} de ${r.total} (${r.failed} falhas, ${r.skipped} sem telefone)`);
+      setComunicado({ ...comunicado, mensagem: "" });
+      qc.invalidateQueries({ queryKey: ["notificacoes"] });
+    } catch (e: any) { toast.error(translateError(e)); }
+    finally { setEnviandoComunicado(false); }
+  }
+
   if (!isAdmin) return null;
 
   const conn = connQuery.data as any;
@@ -197,6 +214,7 @@ function NotificacoesPage() {
         <TabsList>
           <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
           <TabsTrigger value="templates">Mensagens</TabsTrigger>
+          <TabsTrigger value="comunicado"><Megaphone className="h-3.5 w-3.5 mr-1"/>Comunicado</TabsTrigger>
           <TabsTrigger value="historico">Histórico</TabsTrigger>
         </TabsList>
 
@@ -295,6 +313,59 @@ function NotificacoesPage() {
           )}
         </TabsContent>
 
+        {/* ---------------- Comunicado geral ---------------- */}
+        <TabsContent value="comunicado">
+          <Card className="p-6 max-w-2xl space-y-4">
+            <div className="flex items-center gap-2">
+              <Megaphone className="h-4 w-4 text-primary"/>
+              <h3 className="font-display uppercase tracking-wider text-metal-light">Enviar comunicado em massa</h3>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Envia uma mensagem única via WhatsApp para um grupo de alunos. Use para feriados, eventos, mudanças de horário.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <Label>Para</Label>
+                <Select value={comunicado.categoria} onValueChange={(v: any) => setComunicado({...comunicado, categoria: v})}>
+                  <SelectTrigger className="mt-1.5"><SelectValue/></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os alunos</SelectItem>
+                    <SelectItem value="adulto">Apenas adulto</SelectItem>
+                    <SelectItem value="kids">Apenas kids</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-end">
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={comunicado.apenas_ativos} onChange={(e) => setComunicado({...comunicado, apenas_ativos: e.target.checked})}/>
+                  Apenas alunos ativos
+                </label>
+              </div>
+            </div>
+            <div>
+              <Label>Mensagem</Label>
+              <Textarea
+                rows={5}
+                placeholder="Olá! Avisamos que..."
+                value={comunicado.mensagem}
+                onChange={(e) => setComunicado({...comunicado, mensagem: e.target.value})}
+                className="mt-1.5"
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">{comunicado.mensagem.length}/2000 caracteres</p>
+            </div>
+            <Button
+              onClick={handleEnviarComunicado}
+              disabled={enviandoComunicado || status !== "conectado" || !comunicado.mensagem.trim()}
+              className="gradient-primary text-primary-foreground"
+            >
+              <Send className="h-4 w-4 mr-2"/>{enviandoComunicado ? "Enviando…" : "Enviar comunicado"}
+            </Button>
+            {status !== "conectado" && (
+              <p className="text-xs text-destructive">Conecte o WhatsApp primeiro na aba "WhatsApp".</p>
+            )}
+          </Card>
+        </TabsContent>
+
         {/* ---------------- Histórico ---------------- */}
         <TabsContent value="historico" className="space-y-4">
           <Card className="p-4 flex flex-wrap gap-3 items-end">
@@ -320,6 +391,7 @@ function NotificacoesPage() {
                   <SelectItem value="AVISO_7_DIAS">7 dias antes</SelectItem>
                   <SelectItem value="AVISO_3_DIAS">3 dias antes</SelectItem>
                   <SelectItem value="AVISO_VENCIMENTO">Vencimento</SelectItem>
+                  <SelectItem value="COMUNICADO">Comunicado</SelectItem>
                 </SelectContent>
               </Select>
             </div>

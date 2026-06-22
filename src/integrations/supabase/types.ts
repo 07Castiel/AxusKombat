@@ -32,6 +32,7 @@ export type Database = {
           observacoes: string | null
           observacoes_medicas: string | null
           peso: number | null
+          portal_token: string | null
           responsavel_cpf: string | null
           responsavel_nome: string | null
           responsavel_telefone: string | null
@@ -57,6 +58,7 @@ export type Database = {
           observacoes?: string | null
           observacoes_medicas?: string | null
           peso?: number | null
+          portal_token?: string | null
           responsavel_cpf?: string | null
           responsavel_nome?: string | null
           responsavel_telefone?: string | null
@@ -82,6 +84,7 @@ export type Database = {
           observacoes?: string | null
           observacoes_medicas?: string | null
           peso?: number | null
+          portal_token?: string | null
           responsavel_cpf?: string | null
           responsavel_nome?: string | null
           responsavel_telefone?: string | null
@@ -646,6 +649,67 @@ export type Database = {
           },
         ]
       }
+      presencas: {
+        Row: {
+          aluno_id: string
+          created_at: string
+          data: string
+          horario_id: string
+          id: string
+          observacoes: string | null
+          presente: boolean
+          registrado_por: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          aluno_id: string
+          created_at?: string
+          data: string
+          horario_id: string
+          id?: string
+          observacoes?: string | null
+          presente?: boolean
+          registrado_por?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          aluno_id?: string
+          created_at?: string
+          data?: string
+          horario_id?: string
+          id?: string
+          observacoes?: string | null
+          presente?: boolean
+          registrado_por?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "presencas_aluno_id_fkey"
+            columns: ["aluno_id"]
+            isOneToOne: false
+            referencedRelation: "alunos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "presencas_horario_id_fkey"
+            columns: ["horario_id"]
+            isOneToOne: false
+            referencedRelation: "horarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "presencas_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           ativo: boolean
@@ -723,12 +787,18 @@ export type Database = {
       tenants: {
         Row: {
           ativo: boolean
+          banco: string | null
           cnpj_cpf: string | null
           created_at: string
           endereco: string | null
           id: string
           logo_url: string | null
           nome: string
+          nome_fantasia: string | null
+          notif_hora_envio: string | null
+          notif_lembretes_ativos: boolean | null
+          pix_chave: string | null
+          pix_titular: string | null
           responsavel_email: string | null
           responsavel_nome: string | null
           slug: string
@@ -737,12 +807,18 @@ export type Database = {
         }
         Insert: {
           ativo?: boolean
+          banco?: string | null
           cnpj_cpf?: string | null
           created_at?: string
           endereco?: string | null
           id?: string
           logo_url?: string | null
           nome: string
+          nome_fantasia?: string | null
+          notif_hora_envio?: string | null
+          notif_lembretes_ativos?: boolean | null
+          pix_chave?: string | null
+          pix_titular?: string | null
           responsavel_email?: string | null
           responsavel_nome?: string | null
           slug: string
@@ -751,12 +827,18 @@ export type Database = {
         }
         Update: {
           ativo?: boolean
+          banco?: string | null
           cnpj_cpf?: string | null
           created_at?: string
           endereco?: string | null
           id?: string
           logo_url?: string | null
           nome?: string
+          nome_fantasia?: string | null
+          notif_hora_envio?: string | null
+          notif_lembretes_ativos?: boolean | null
+          pix_chave?: string | null
+          pix_titular?: string | null
           responsavel_email?: string | null
           responsavel_nome?: string | null
           slug?: string
@@ -989,6 +1071,7 @@ export type Database = {
       is_admin: { Args: never; Returns: boolean }
       is_professor_adulto: { Args: never; Returns: boolean }
       is_professor_kids: { Args: never; Returns: boolean }
+      portal_aluno_dados: { Args: { p_token: string }; Returns: Json }
       processar_mensalidades_diario: { Args: never; Returns: Json }
     }
     Enums: {

@@ -15,8 +15,10 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AdminMasterIndexRouteImport } from './routes/admin-master.index'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as PortalTokenRouteImport } from './routes/portal.$token'
 import { Route as AdminMasterDashboardRouteImport } from './routes/admin-master.dashboard'
 import { Route as AppRelatoriosRouteImport } from './routes/_app/relatorios'
+import { Route as AppPresencasRouteImport } from './routes/_app/presencas'
 import { Route as AppPlanosRouteImport } from './routes/_app/planos'
 import { Route as AppNotificacoesRouteImport } from './routes/_app/notificacoes'
 import { Route as AppModalidadesRouteImport } from './routes/_app/modalidades'
@@ -24,6 +26,7 @@ import { Route as AppHorariosRouteImport } from './routes/_app/horarios'
 import { Route as AppGraduacoesRouteImport } from './routes/_app/graduacoes'
 import { Route as AppFinanceiroRouteImport } from './routes/_app/financeiro'
 import { Route as AppEquipeRouteImport } from './routes/_app/equipe'
+import { Route as AppDespesasRouteImport } from './routes/_app/despesas'
 import { Route as AppConfiguracoesRouteImport } from './routes/_app/configuracoes'
 import { Route as AppAlunosRouteImport } from './routes/_app/alunos'
 import { Route as AppAcessosRouteImport } from './routes/_app/acessos'
@@ -60,6 +63,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
+const PortalTokenRoute = PortalTokenRouteImport.update({
+  id: '/portal/$token',
+  path: '/portal/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminMasterDashboardRoute = AdminMasterDashboardRouteImport.update({
   id: '/admin-master/dashboard',
   path: '/admin-master/dashboard',
@@ -68,6 +76,11 @@ const AdminMasterDashboardRoute = AdminMasterDashboardRouteImport.update({
 const AppRelatoriosRoute = AppRelatoriosRouteImport.update({
   id: '/relatorios',
   path: '/relatorios',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPresencasRoute = AppPresencasRouteImport.update({
+  id: '/presencas',
+  path: '/presencas',
   getParentRoute: () => AppRoute,
 } as any)
 const AppPlanosRoute = AppPlanosRouteImport.update({
@@ -103,6 +116,11 @@ const AppFinanceiroRoute = AppFinanceiroRouteImport.update({
 const AppEquipeRoute = AppEquipeRouteImport.update({
   id: '/equipe',
   path: '/equipe',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDespesasRoute = AppDespesasRouteImport.update({
+  id: '/despesas',
+  path: '/despesas',
   getParentRoute: () => AppRoute,
 } as any)
 const AppConfiguracoesRoute = AppConfiguracoesRouteImport.update({
@@ -145,6 +163,7 @@ export interface FileRoutesByFullPath {
   '/acessos': typeof AppAcessosRoute
   '/alunos': typeof AppAlunosRoute
   '/configuracoes': typeof AppConfiguracoesRoute
+  '/despesas': typeof AppDespesasRoute
   '/equipe': typeof AppEquipeRoute
   '/financeiro': typeof AppFinanceiroRoute
   '/graduacoes': typeof AppGraduacoesRoute
@@ -152,8 +171,10 @@ export interface FileRoutesByFullPath {
   '/modalidades': typeof AppModalidadesRoute
   '/notificacoes': typeof AppNotificacoesRoute
   '/planos': typeof AppPlanosRoute
+  '/presencas': typeof AppPresencasRoute
   '/relatorios': typeof AppRelatoriosRoute
   '/admin-master/dashboard': typeof AdminMasterDashboardRoute
+  '/portal/$token': typeof PortalTokenRoute
   '/admin-master/': typeof AdminMasterIndexRoute
   '/admin-master/tenant/$id': typeof AdminMasterTenantIdRoute
   '/api/public/track-visit': typeof ApiPublicTrackVisitRoute
@@ -166,6 +187,7 @@ export interface FileRoutesByTo {
   '/acessos': typeof AppAcessosRoute
   '/alunos': typeof AppAlunosRoute
   '/configuracoes': typeof AppConfiguracoesRoute
+  '/despesas': typeof AppDespesasRoute
   '/equipe': typeof AppEquipeRoute
   '/financeiro': typeof AppFinanceiroRoute
   '/graduacoes': typeof AppGraduacoesRoute
@@ -173,8 +195,10 @@ export interface FileRoutesByTo {
   '/modalidades': typeof AppModalidadesRoute
   '/notificacoes': typeof AppNotificacoesRoute
   '/planos': typeof AppPlanosRoute
+  '/presencas': typeof AppPresencasRoute
   '/relatorios': typeof AppRelatoriosRoute
   '/admin-master/dashboard': typeof AdminMasterDashboardRoute
+  '/portal/$token': typeof PortalTokenRoute
   '/': typeof AppIndexRoute
   '/admin-master': typeof AdminMasterIndexRoute
   '/admin-master/tenant/$id': typeof AdminMasterTenantIdRoute
@@ -190,6 +214,7 @@ export interface FileRoutesById {
   '/_app/acessos': typeof AppAcessosRoute
   '/_app/alunos': typeof AppAlunosRoute
   '/_app/configuracoes': typeof AppConfiguracoesRoute
+  '/_app/despesas': typeof AppDespesasRoute
   '/_app/equipe': typeof AppEquipeRoute
   '/_app/financeiro': typeof AppFinanceiroRoute
   '/_app/graduacoes': typeof AppGraduacoesRoute
@@ -197,8 +222,10 @@ export interface FileRoutesById {
   '/_app/modalidades': typeof AppModalidadesRoute
   '/_app/notificacoes': typeof AppNotificacoesRoute
   '/_app/planos': typeof AppPlanosRoute
+  '/_app/presencas': typeof AppPresencasRoute
   '/_app/relatorios': typeof AppRelatoriosRoute
   '/admin-master/dashboard': typeof AdminMasterDashboardRoute
+  '/portal/$token': typeof PortalTokenRoute
   '/_app/': typeof AppIndexRoute
   '/admin-master/': typeof AdminMasterIndexRoute
   '/admin-master/tenant/$id': typeof AdminMasterTenantIdRoute
@@ -215,6 +242,7 @@ export interface FileRouteTypes {
     | '/acessos'
     | '/alunos'
     | '/configuracoes'
+    | '/despesas'
     | '/equipe'
     | '/financeiro'
     | '/graduacoes'
@@ -222,8 +250,10 @@ export interface FileRouteTypes {
     | '/modalidades'
     | '/notificacoes'
     | '/planos'
+    | '/presencas'
     | '/relatorios'
     | '/admin-master/dashboard'
+    | '/portal/$token'
     | '/admin-master/'
     | '/admin-master/tenant/$id'
     | '/api/public/track-visit'
@@ -236,6 +266,7 @@ export interface FileRouteTypes {
     | '/acessos'
     | '/alunos'
     | '/configuracoes'
+    | '/despesas'
     | '/equipe'
     | '/financeiro'
     | '/graduacoes'
@@ -243,8 +274,10 @@ export interface FileRouteTypes {
     | '/modalidades'
     | '/notificacoes'
     | '/planos'
+    | '/presencas'
     | '/relatorios'
     | '/admin-master/dashboard'
+    | '/portal/$token'
     | '/'
     | '/admin-master'
     | '/admin-master/tenant/$id'
@@ -259,6 +292,7 @@ export interface FileRouteTypes {
     | '/_app/acessos'
     | '/_app/alunos'
     | '/_app/configuracoes'
+    | '/_app/despesas'
     | '/_app/equipe'
     | '/_app/financeiro'
     | '/_app/graduacoes'
@@ -266,8 +300,10 @@ export interface FileRouteTypes {
     | '/_app/modalidades'
     | '/_app/notificacoes'
     | '/_app/planos'
+    | '/_app/presencas'
     | '/_app/relatorios'
     | '/admin-master/dashboard'
+    | '/portal/$token'
     | '/_app/'
     | '/admin-master/'
     | '/admin-master/tenant/$id'
@@ -281,6 +317,7 @@ export interface RootRouteChildren {
   SignupRoute: typeof SignupRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   AdminMasterDashboardRoute: typeof AdminMasterDashboardRoute
+  PortalTokenRoute: typeof PortalTokenRoute
   AdminMasterIndexRoute: typeof AdminMasterIndexRoute
   AdminMasterTenantIdRoute: typeof AdminMasterTenantIdRoute
   ApiPublicTrackVisitRoute: typeof ApiPublicTrackVisitRoute
@@ -331,6 +368,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/portal/$token': {
+      id: '/portal/$token'
+      path: '/portal/$token'
+      fullPath: '/portal/$token'
+      preLoaderRoute: typeof PortalTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin-master/dashboard': {
       id: '/admin-master/dashboard'
       path: '/admin-master/dashboard'
@@ -343,6 +387,13 @@ declare module '@tanstack/react-router' {
       path: '/relatorios'
       fullPath: '/relatorios'
       preLoaderRoute: typeof AppRelatoriosRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/presencas': {
+      id: '/_app/presencas'
+      path: '/presencas'
+      fullPath: '/presencas'
+      preLoaderRoute: typeof AppPresencasRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/planos': {
@@ -394,6 +445,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppEquipeRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/despesas': {
+      id: '/_app/despesas'
+      path: '/despesas'
+      fullPath: '/despesas'
+      preLoaderRoute: typeof AppDespesasRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/configuracoes': {
       id: '/_app/configuracoes'
       path: '/configuracoes'
@@ -443,6 +501,7 @@ interface AppRouteChildren {
   AppAcessosRoute: typeof AppAcessosRoute
   AppAlunosRoute: typeof AppAlunosRoute
   AppConfiguracoesRoute: typeof AppConfiguracoesRoute
+  AppDespesasRoute: typeof AppDespesasRoute
   AppEquipeRoute: typeof AppEquipeRoute
   AppFinanceiroRoute: typeof AppFinanceiroRoute
   AppGraduacoesRoute: typeof AppGraduacoesRoute
@@ -450,6 +509,7 @@ interface AppRouteChildren {
   AppModalidadesRoute: typeof AppModalidadesRoute
   AppNotificacoesRoute: typeof AppNotificacoesRoute
   AppPlanosRoute: typeof AppPlanosRoute
+  AppPresencasRoute: typeof AppPresencasRoute
   AppRelatoriosRoute: typeof AppRelatoriosRoute
   AppIndexRoute: typeof AppIndexRoute
 }
@@ -458,6 +518,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAcessosRoute: AppAcessosRoute,
   AppAlunosRoute: AppAlunosRoute,
   AppConfiguracoesRoute: AppConfiguracoesRoute,
+  AppDespesasRoute: AppDespesasRoute,
   AppEquipeRoute: AppEquipeRoute,
   AppFinanceiroRoute: AppFinanceiroRoute,
   AppGraduacoesRoute: AppGraduacoesRoute,
@@ -465,6 +526,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppModalidadesRoute: AppModalidadesRoute,
   AppNotificacoesRoute: AppNotificacoesRoute,
   AppPlanosRoute: AppPlanosRoute,
+  AppPresencasRoute: AppPresencasRoute,
   AppRelatoriosRoute: AppRelatoriosRoute,
   AppIndexRoute: AppIndexRoute,
 }
@@ -477,6 +539,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignupRoute: SignupRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   AdminMasterDashboardRoute: AdminMasterDashboardRoute,
+  PortalTokenRoute: PortalTokenRoute,
   AdminMasterIndexRoute: AdminMasterIndexRoute,
   AdminMasterTenantIdRoute: AdminMasterTenantIdRoute,
   ApiPublicTrackVisitRoute: ApiPublicTrackVisitRoute,
@@ -485,13 +548,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
