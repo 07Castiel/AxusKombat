@@ -24,6 +24,7 @@ import { Route as AppHorariosRouteImport } from './routes/_app/horarios'
 import { Route as AppGraduacoesRouteImport } from './routes/_app/graduacoes'
 import { Route as AppFinanceiroRouteImport } from './routes/_app/financeiro'
 import { Route as AppEquipeRouteImport } from './routes/_app/equipe'
+import { Route as AppDespesasRouteImport } from './routes/_app/despesas'
 import { Route as AppConfiguracoesRouteImport } from './routes/_app/configuracoes'
 import { Route as AppAlunosRouteImport } from './routes/_app/alunos'
 import { Route as AppAcessosRouteImport } from './routes/_app/acessos'
@@ -105,6 +106,11 @@ const AppEquipeRoute = AppEquipeRouteImport.update({
   path: '/equipe',
   getParentRoute: () => AppRoute,
 } as any)
+const AppDespesasRoute = AppDespesasRouteImport.update({
+  id: '/despesas',
+  path: '/despesas',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppConfiguracoesRoute = AppConfiguracoesRouteImport.update({
   id: '/configuracoes',
   path: '/configuracoes',
@@ -145,6 +151,7 @@ export interface FileRoutesByFullPath {
   '/acessos': typeof AppAcessosRoute
   '/alunos': typeof AppAlunosRoute
   '/configuracoes': typeof AppConfiguracoesRoute
+  '/despesas': typeof AppDespesasRoute
   '/equipe': typeof AppEquipeRoute
   '/financeiro': typeof AppFinanceiroRoute
   '/graduacoes': typeof AppGraduacoesRoute
@@ -166,6 +173,7 @@ export interface FileRoutesByTo {
   '/acessos': typeof AppAcessosRoute
   '/alunos': typeof AppAlunosRoute
   '/configuracoes': typeof AppConfiguracoesRoute
+  '/despesas': typeof AppDespesasRoute
   '/equipe': typeof AppEquipeRoute
   '/financeiro': typeof AppFinanceiroRoute
   '/graduacoes': typeof AppGraduacoesRoute
@@ -190,6 +198,7 @@ export interface FileRoutesById {
   '/_app/acessos': typeof AppAcessosRoute
   '/_app/alunos': typeof AppAlunosRoute
   '/_app/configuracoes': typeof AppConfiguracoesRoute
+  '/_app/despesas': typeof AppDespesasRoute
   '/_app/equipe': typeof AppEquipeRoute
   '/_app/financeiro': typeof AppFinanceiroRoute
   '/_app/graduacoes': typeof AppGraduacoesRoute
@@ -215,6 +224,7 @@ export interface FileRouteTypes {
     | '/acessos'
     | '/alunos'
     | '/configuracoes'
+    | '/despesas'
     | '/equipe'
     | '/financeiro'
     | '/graduacoes'
@@ -236,6 +246,7 @@ export interface FileRouteTypes {
     | '/acessos'
     | '/alunos'
     | '/configuracoes'
+    | '/despesas'
     | '/equipe'
     | '/financeiro'
     | '/graduacoes'
@@ -259,6 +270,7 @@ export interface FileRouteTypes {
     | '/_app/acessos'
     | '/_app/alunos'
     | '/_app/configuracoes'
+    | '/_app/despesas'
     | '/_app/equipe'
     | '/_app/financeiro'
     | '/_app/graduacoes'
@@ -394,6 +406,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppEquipeRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/despesas': {
+      id: '/_app/despesas'
+      path: '/despesas'
+      fullPath: '/despesas'
+      preLoaderRoute: typeof AppDespesasRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/configuracoes': {
       id: '/_app/configuracoes'
       path: '/configuracoes'
@@ -443,6 +462,7 @@ interface AppRouteChildren {
   AppAcessosRoute: typeof AppAcessosRoute
   AppAlunosRoute: typeof AppAlunosRoute
   AppConfiguracoesRoute: typeof AppConfiguracoesRoute
+  AppDespesasRoute: typeof AppDespesasRoute
   AppEquipeRoute: typeof AppEquipeRoute
   AppFinanceiroRoute: typeof AppFinanceiroRoute
   AppGraduacoesRoute: typeof AppGraduacoesRoute
@@ -458,6 +478,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAcessosRoute: AppAcessosRoute,
   AppAlunosRoute: AppAlunosRoute,
   AppConfiguracoesRoute: AppConfiguracoesRoute,
+  AppDespesasRoute: AppDespesasRoute,
   AppEquipeRoute: AppEquipeRoute,
   AppFinanceiroRoute: AppFinanceiroRoute,
   AppGraduacoesRoute: AppGraduacoesRoute,
