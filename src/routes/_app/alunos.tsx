@@ -85,7 +85,7 @@ function AlunosPage() {
       const { data, error } = await supabase
         .from("contratos")
         .select("*, planos(nome)")
-        .eq("status", "ativo");
+        .in("status", ["ativo", "pausado"]);
       if (error) throw error;
       return data ?? [];
     },
