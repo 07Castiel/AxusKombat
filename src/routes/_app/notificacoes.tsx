@@ -391,6 +391,7 @@ function NotificacoesPage() {
                   <SelectItem value="AVISO_7_DIAS">7 dias antes</SelectItem>
                   <SelectItem value="AVISO_3_DIAS">3 dias antes</SelectItem>
                   <SelectItem value="AVISO_VENCIMENTO">Vencimento</SelectItem>
+                  <SelectItem value="COMUNICADO">Comunicado</SelectItem>
                 </SelectContent>
               </Select>
             </div>
