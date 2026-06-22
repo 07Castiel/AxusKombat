@@ -1,72 +1,112 @@
-## Refatoração: Financeiro Recorrente
+# Plano de Melhorias — Axus Kombat
 
-Vou substituir o modelo manual atual por **contratos** + **mensalidades** geradas automaticamente. Como você escolheu "resetar", apago todos os pagamentos e matrículas existentes.
+Baseado na auditoria completa do sistema, aqui estão as melhorias prioritárias, ordenadas por impacto no dia a dia da academia.
 
-### 1. Banco de dados (migration única)
+---
 
-**Apaga:**
-- `pagamentos` (todas as linhas e a tabela inteira)
-- `matriculas` (todas as linhas e a tabela inteira)
-- `notificacoes` linhas órfãs (mantém tabela, troca FK para `mensalidade_id`)
+## 1. Módulo de Relatórios (impacto alto)
 
-**Cria `contratos`** (assinatura do aluno):
-- aluno_id, plano_id (opcional), valor_mensalidade, dia_vencimento (1–28), data_inicio, data_fim (nullable), status (`ativo` | `pausado` | `cancelado`), observacoes
-- Um aluno pode ter histórico, mas só 1 contrato `ativo` por vez (índice parcial único)
+A página `/relatorios` hoje mostra apenas 5 cards estáticos sem filtros nem período.
 
-**Cria `mensalidades`** (núcleo financeiro):
-- contrato_id, aluno_id, tenant_id
-- competencia (date, dia 1 do mês), data_vencimento, valor, desconto, valor_final (gerado), forma_pagamento, data_pagamento, status (`pendente` | `pago` | `vencido` | `cancelado`), observacoes_pagamento
-- Único por `(contrato_id, competencia)` — evita duplicatas em re-execuções do cron
+**O que construir:**
+- Filtros por data (mês/ano, intervalo personalizado)
+- Gráficos de receita vs. despesa por período
+- Ranking de inadimplência (alunos com mais mensalidades atrasadas)
+- Resumo de presença por modalidade/professor
+- Exportação CSV/PDF
 
-**Ajusta `notificacoes`:** troca `matricula_id` por `mensalidade_id` (FK + índice único `(mensalidade_id, tipo)`).
+---
 
-RLS + GRANTs para tenant_id em ambas. Trigger `updated_at`.
+## 2. Módulo de Despesas (impacto alto)
 
-### 2. Geração automática (rolling 3 meses)
+A tabela `despesas` existe no banco com schema completo, mas não há tela para lançar contas (aluguel, luz, material, etc).
 
-**Função SQL `gerar_mensalidades_contrato(contrato_id)`:** garante que existam mensalidades pendentes para o mês corrente + 3 meses à frente, sem duplicar.
+**O que construir:**
+- CRUD de despesas com categoria, data, valor, anexo (opcional)
+- Filtros por mês e categoria
+- Integração automática no cálculo de "lucro líquido" do dashboard e relatórios
 
-**Disparos:**
-- Ao criar/ativar contrato (server fn chama a função)
-- Cron diário 05:00 UTC: roda para todos contratos `ativo` + marca `pendente` com vencimento < hoje como `vencido`
+---
 
-### 3. Server functions (`src/lib/contratos.functions.ts`, `mensalidades.functions.ts`)
+## 3. Controle de Presença / Check-in (impacto alto)
 
-- `createContrato`, `updateContrato`, `pausarContrato`, `cancelarContrato`
-- `listMensalidades` (filtros: status, aluno, mês, vencidos)
-- `registrarPagamento(mensalidade_id, { data_pagamento, forma_pagamento, desconto, observacoes })` → marca `pago`
-- `cancelarMensalidade`, `editarMensalidade` (admin override)
-- `dashboardFinanceiro(mes)` → totais agregados
+Os horários têm `capacidade_maxima`, mas não existe registro de quem compareceu à aula.
 
-### 4. UI
+**O que construir:**
+- Tela de "chamada" por horário: lista de alunos matriculados na modalidade + checkbox de presença
+- Histórico de frequência por aluno
+- Alerta automático para alunos com baixa frequência (ex: 3 faltas seguidas)
+- Percentual de ocupação por horário no dashboard
 
-**Cadastro/edição de aluno** (`_app/alunos.tsx`): nova seção "Plano":
-- valor mensalidade, dia vencimento, data início, status — ao salvar cria/atualiza contrato e gera mensalidades.
+---
 
-**Nova rota `/financeiro`** (renomeia `pagamentos` → `financeiro`):
-- Tabela de mensalidades com filtros (status, aluno, mês)
-- Ação "Registrar pagamento" abre modal com desconto/forma/observações
-- Badges: pendente/pago/vencido/cancelado
+## 4. Portal do Aluno (impacto médio-alto)
 
-**Dashboard `_app/index.tsx`** (cards adicionais):
-- Receita recebida no mês, receita prevista, vencidas, pendentes, qtd alunos inadimplentes, lista "Próximos 7 dias"
+Hoje tudo é visão do gestor/professor. O aluno não acessa própria situação.
 
-### 5. Notificações WhatsApp
+**O que construir:**
+- Login simplificado para alunos (acesso read-only)
+- Visualização de mensalidades pendentes/pagas
+- Próximos horários de aula
+- Histórico de graduação
+- Comunicados gerais
 
-Atualizo `notify-matriculas` (renomeio para `notify-mensalidades`) para varrer `mensalidades` com `status = 'pendente'` em D-7, D-3, D-0. Como o cron marca `vencido` antes, e o filtro é estrito por status, pagas/canceladas/vencidas não recebem aviso — atende a regra "se pago, cancela próximos avisos".
+---
 
-### 6. Limpeza
+## 5. Pausar Contratos + Melhorias no Financeiro (impacto médio)
 
-Remove `src/lib/notifications.functions.ts` refs a `matricula_id` → `mensalidade_id`. Atualiza `notificacoes` page para mostrar contexto da mensalidade.
+A função `pausarContrato` existe no backend, mas não há botão na interface.
 
-### Detalhes técnicos
+**O que construir:**
+- Ação "Pausar" e "Reativar" no cadastro do aluno, com motivo e data de pausa
+- Ao pausar, suspender geração automática de mensalidades futuras
+- Regra de "reajuste de mensalidade": ao reativar, permitir novo valor
 
-- `valor_final` como coluna gerada: `GENERATED ALWAYS AS (valor - COALESCE(desconto,0)) STORED`
-- Função `gerar_mensalidades_contrato` `SECURITY DEFINER`, idempotente via `ON CONFLICT DO NOTHING`
-- Cron diário único substitui o cron antigo de notificações (`notify-matriculas` deixa de existir)
-- Dia de vencimento > último dia do mês (ex: 31 em fev): usa último dia do mês
-- "Inadimplente" = aluno com pelo menos 1 mensalidade `vencido` (query simples no dashboard)
+---
 
-### Pergunta final antes de executar
+## 6. Notificações Expandidas (impacto médio)
 
-Você confirma que posso **apagar todas as tabelas `pagamentos` e `matriculas` + todos os dados existentes nelas**? Não tem volta.
+Hoje só existem lembretes de cobrança (D-7, D-3, D-0).
+
+**O que construir:**
+- Notificação de promoção de graduação ("Parabéns, você subiu de faixa!")
+- Alerta de baixa frequência
+- Comunicados gerais da academia (feriado, evento, mudança de horário)
+- Envio via WhatsApp ou e-mail (quando houver)
+
+---
+
+## 7. Configurações da Academia (impacto médio)
+
+A tela `/configuracoes` só permite trocar nome e senha. O título da aba ainda diz "CT Aquiles" (bug).
+
+**O que construir:**
+- Dados da academia: nome fantasia, CNPJ, endereço, telefone, logo
+- Configurações de notificação: horário padrão de envio, habilitar/desabilitar lembretes
+- Dados bancários para PIX (exibição no boleto/QR Code)
+
+---
+
+## 8. Pequenos Polimentos (impacto baixo, esforço baixo)
+
+- Corrigir título da aba Configurações
+- Verificar se `use-visitor-tracking` está realmente ativo no layout
+- Adicionar busca/filtro no módulo de graduações
+- Tema light: revisar contraste em badges de status (vermelho sobre fundo claro)
+
+---
+
+## Resumo de Prioridade
+
+| Prioridade | Melhoria | Esforço estimado |
+|---|---|---|
+| 1 | Relatórios com filtros e gráficos | Médio |
+| 2 | CRUD de Despesas | Baixo |
+| 3 | Controle de Presença / Check-in | Médio |
+| 4 | Portal do Aluno | Médio-Alto |
+| 5 | Pausar contratos + ajustes financeiros | Baixo |
+| 6 | Notificações expandidas | Médio |
+| 7 | Configurações da academia | Baixo |
+| 8 | Polimentos diversos | Muito baixo |
+
+Se quiser, posso detalhar qualquer um desses itens ou criar um plano técnico completo para implementação.
