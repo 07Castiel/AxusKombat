@@ -3,7 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Send, RefreshCw, Play, Save, MessageSquare, QrCode, Smartphone, Wifi, WifiOff, Loader2 } from "lucide-react";
+import { Send, RefreshCw, Play, Save, MessageSquare, QrCode, Smartphone, Wifi, WifiOff, Loader2, Megaphone } from "lucide-react";
 
 import { useAuth } from "@/hooks/use-auth";
 import { PageHeader } from "@/components/PageHeader";
@@ -26,6 +26,7 @@ import {
   getWhatsappConnection, connectWhatsapp, refreshWhatsappStatus,
   disconnectWhatsapp, sendWhatsappTest,
 } from "@/lib/whatsapp-connection.functions";
+import { enviarComunicado } from "@/lib/comunicados.functions";
 
 export const Route = createFileRoute("/_app/notificacoes")({
   component: NotificacoesPage,
@@ -39,7 +40,7 @@ export const Route = createFileRoute("/_app/notificacoes")({
 });
 
 const TIPO_LABEL: Record<string, string> = {
-  AVISO_7_DIAS: "7 dias antes", AVISO_3_DIAS: "3 dias antes", AVISO_VENCIMENTO: "Vencimento",
+  AVISO_7_DIAS: "7 dias antes", AVISO_3_DIAS: "3 dias antes", AVISO_VENCIMENTO: "Vencimento", COMUNICADO: "Comunicado",
 };
 
 function NotificacoesPage() {
@@ -60,6 +61,7 @@ function NotificacoesPage() {
   const list = useServerFn(listNotifications);
   const resend = useServerFn(resendNotification);
   const runNow = useServerFn(runNotificationsNow);
+  const enviarComunicadoFn = useServerFn(enviarComunicado);
 
   const connQuery = useQuery({ queryKey: ["whatsapp_connection"], queryFn: () => getConn(), enabled: isAdmin });
   const tplQuery = useQuery({ queryKey: ["whatsapp_templates"], queryFn: () => getTpl(), enabled: isAdmin });
@@ -85,6 +87,8 @@ function NotificacoesPage() {
   const [testTo, setTestTo] = useState("");
   const [saving, setSaving] = useState(false);
   const [sendingTest, setSendingTest] = useState(false);
+  const [comunicado, setComunicado] = useState({ mensagem: "", categoria: "todos" as "todos"|"adulto"|"kids", apenas_ativos: true });
+  const [enviandoComunicado, setEnviandoComunicado] = useState(false);
 
   function stopPolling() {
     if (pollRef.current) { window.clearInterval(pollRef.current); pollRef.current = null; }
@@ -197,6 +201,7 @@ function NotificacoesPage() {
         <TabsList>
           <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
           <TabsTrigger value="templates">Mensagens</TabsTrigger>
+          <TabsTrigger value="comunicado"><Megaphone className="h-3.5 w-3.5 mr-1"/>Comunicado</TabsTrigger>
           <TabsTrigger value="historico">Histórico</TabsTrigger>
         </TabsList>
 
