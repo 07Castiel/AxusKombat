@@ -334,6 +334,9 @@ function AtribuirTab({ tenantId, modalidadeId, termo }: { tenantId: string | nul
 
 /* ----- Tab 3: Ranking ----- */
 function RankingTab({ tenantId, modalidadeId, termo }: { tenantId: string | null; modalidadeId: string; termo: string }) {
+  const [busca, setBusca] = useState("");
+  const [filtroCategoria, setFiltroCategoria] = useState<"todas" | "adulto" | "kids">("todas");
+
   const { data } = useQuery({
     queryKey: ["ranking", tenantId, modalidadeId],
     enabled: !!tenantId,
@@ -365,6 +368,15 @@ function RankingTab({ tenantId, modalidadeId, termo }: { tenantId: string | null
       .sort((x: any, y: any) => y.ordem - x.ordem);
   }, [data, modalidadeId]);
 
+  const rankingFiltrado = useMemo(() => {
+    const termoBusca = busca.trim().toLowerCase();
+    return ranking.filter((r: any) => {
+      if (filtroCategoria !== "todas" && r.categoria !== filtroCategoria) return false;
+      if (termoBusca && !r.nome_completo.toLowerCase().includes(termoBusca)) return false;
+      return true;
+    });
+  }, [ranking, busca, filtroCategoria]);
+
   const trophy = (pos: number) => {
     if (pos === 0) return <Trophy className="h-5 w-5" style={{ color: "#FFD700" }}/>;
     if (pos === 1) return <Trophy className="h-5 w-5" style={{ color: "#C0C0C0" }}/>;
@@ -373,29 +385,50 @@ function RankingTab({ tenantId, modalidadeId, termo }: { tenantId: string | null
   };
 
   return (
-    <Card className="gradient-card border-border overflow-hidden">
-      <Table>
-        <TableHeader><TableRow><TableHead className="w-16">#</TableHead><TableHead>Aluno</TableHead><TableHead>{termo}</TableHead><TableHead>Categoria</TableHead><TableHead>Última {termo.toLowerCase()}</TableHead></TableRow></TableHeader>
-        <TableBody>
-          {ranking.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">Nenhum aluno no ranking</TableCell></TableRow>}
-          {ranking.map((r: any, i: number) => (
-            <TableRow key={r.id} className={i < 3 ? "bg-primary/5" : ""}>
-              <TableCell><div className="flex items-center justify-center w-8">{trophy(i)}</div></TableCell>
-              <TableCell className="font-medium">{r.nome_completo}</TableCell>
-              <TableCell>
-                {r.graduacao ? (
-                  <div className="flex items-center gap-2">
-                    <span className="inline-block h-4 w-8 rounded" style={{ background: r.graduacao.cor }}/>
-                    <span>{r.graduacao.nome}</span>
-                  </div>
-                ) : <span className="text-xs text-muted-foreground">—</span>}
-              </TableCell>
-              <TableCell className="capitalize">{r.categoria}</TableCell>
-              <TableCell className="text-sm text-muted-foreground">{r.ultima_data ? fmtDate(r.ultima_data) : "—"}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </Card>
+    <div>
+      <div className="flex flex-col sm:flex-row gap-2 mb-3 max-w-2xl">
+        <div className="relative flex-1">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
+          <Input
+            placeholder="Buscar aluno..."
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+        <Select value={filtroCategoria} onValueChange={(v: "todas"|"adulto"|"kids") => setFiltroCategoria(v)}>
+          <SelectTrigger className="sm:w-40"><SelectValue/></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todas">Todas categorias</SelectItem>
+            <SelectItem value="adulto">Adulto</SelectItem>
+            <SelectItem value="kids">Kids</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <Card className="gradient-card border-border overflow-hidden">
+        <Table>
+          <TableHeader><TableRow><TableHead className="w-16">#</TableHead><TableHead>Aluno</TableHead><TableHead>{termo}</TableHead><TableHead>Categoria</TableHead><TableHead>Última {termo.toLowerCase()}</TableHead></TableRow></TableHeader>
+          <TableBody>
+            {rankingFiltrado.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">{ranking.length === 0 ? "Nenhum aluno no ranking" : "Nenhum resultado para os filtros aplicados"}</TableCell></TableRow>}
+            {rankingFiltrado.map((r: any, i: number) => (
+              <TableRow key={r.id} className={i < 3 && !busca && filtroCategoria === "todas" ? "bg-primary/5" : ""}>
+                <TableCell><div className="flex items-center justify-center w-8">{trophy(i)}</div></TableCell>
+                <TableCell className="font-medium">{r.nome_completo}</TableCell>
+                <TableCell>
+                  {r.graduacao ? (
+                    <div className="flex items-center gap-2">
+                      <span className="inline-block h-4 w-8 rounded" style={{ background: r.graduacao.cor }}/>
+                      <span>{r.graduacao.nome}</span>
+                    </div>
+                  ) : <span className="text-xs text-muted-foreground">—</span>}
+                </TableCell>
+                <TableCell className="capitalize">{r.categoria}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{r.ultima_data ? fmtDate(r.ultima_data) : "—"}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Card>
+    </div>
   );
 }
