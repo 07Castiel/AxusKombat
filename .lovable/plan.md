@@ -128,7 +128,7 @@ Página `/configuracoes` totalmente reformulada em abas.
 | ✅ Concluído | 5. Pausar contratos |
 | ✅ Concluído | 6. Comunicado em massa |
 | ✅ Concluído | 7. Configurações da academia |
-| ⏳ Pendente | 8. Polimentos diversos |
+| ✅ Concluído | 8. Polimentos diversos |
 
 ## Arquivos criados/alterados
 
