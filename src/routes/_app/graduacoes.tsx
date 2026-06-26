@@ -101,6 +101,8 @@ function FaixasTab({ tenantId, modalidadeId, termo }: { tenantId: string | null;
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FAIXA);
   const [deleting, setDeleting] = useState<{ id: string; nome: string } | null>(null);
+  const [busca, setBusca] = useState("");
+  const [filtroCategoria, setFiltroCategoria] = useState<"todas" | "adulto" | "kids">("todas");
 
   const { data: graduacoes = [] } = useQuery({
     queryKey: ["graduacoes", tenantId, modalidadeId],
@@ -111,6 +113,15 @@ function FaixasTab({ tenantId, modalidadeId, termo }: { tenantId: string | null;
       return (await q).data ?? [];
     },
   });
+
+  const graduacoesFiltradas = useMemo(() => {
+    const termoBusca = busca.trim().toLowerCase();
+    return graduacoes.filter((g: any) => {
+      if (filtroCategoria !== "todas" && g.categoria !== filtroCategoria) return false;
+      if (termoBusca && !g.nome.toLowerCase().includes(termoBusca)) return false;
+      return true;
+    });
+  }, [graduacoes, busca, filtroCategoria]);
 
   const startCreate = () => {
     if (!modalidadeId) { toast.error("Selecione uma modalidade primeiro"); return; }
