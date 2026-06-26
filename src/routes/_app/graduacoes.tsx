@@ -211,8 +211,8 @@ function FaixasTab({ tenantId, modalidadeId, termo }: { tenantId: string | null;
         <Table>
           <TableHeader><TableRow><TableHead>Cor</TableHead><TableHead>{termo}</TableHead><TableHead>Categoria</TableHead><TableHead>Ordem</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
           <TableBody>
-            {graduacoes.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">Nenhum(a) {termo.toLowerCase()} cadastrado(a){modalidadeId ? "" : " — selecione uma modalidade"}</TableCell></TableRow>}
-            {graduacoes.map((g: any) => (
+            {graduacoesFiltradas.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">{graduacoes.length === 0 ? `Nenhum(a) ${termo.toLowerCase()} cadastrado(a)${modalidadeId ? "" : " — selecione uma modalidade"}` : "Nenhum resultado para os filtros aplicados"}</TableCell></TableRow>}
+            {graduacoesFiltradas.map((g: any) => (
               <TableRow key={g.id}>
                 <TableCell><span className="inline-block h-6 w-12 rounded" style={{ background: g.cor }}/></TableCell>
                 <TableCell className="font-medium">{g.nome}</TableCell>
