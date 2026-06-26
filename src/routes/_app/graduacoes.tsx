@@ -161,7 +161,26 @@ function FaixasTab({ tenantId, modalidadeId, termo }: { tenantId: string | null;
 
   return (
     <div>
-      <div className="flex justify-end mb-3">
+      <div className="flex flex-col sm:flex-row gap-2 sm:items-center justify-between mb-3">
+        <div className="flex flex-col sm:flex-row gap-2 flex-1 max-w-2xl">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
+            <Input
+              placeholder={`Buscar ${termo.toLowerCase()}...`}
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              className="pl-8"
+            />
+          </div>
+          <Select value={filtroCategoria} onValueChange={(v: "todas"|"adulto"|"kids") => setFiltroCategoria(v)}>
+            <SelectTrigger className="sm:w-40"><SelectValue/></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todas">Todas categorias</SelectItem>
+              <SelectItem value="adulto">Adulto</SelectItem>
+              <SelectItem value="kids">Kids</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <Button className="gradient-primary text-primary-foreground" onClick={startCreate}>
           <Plus className="h-4 w-4 mr-2"/>Novo(a) {termo}
         </Button>
