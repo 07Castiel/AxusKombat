@@ -108,12 +108,12 @@ Página `/configuracoes` totalmente reformulada em abas.
 
 ---
 
-## ⏳ 8. Pequenos Polimentos — **PENDENTE** (baixa prioridade)
+## ✅ 8. Pequenos Polimentos — **CONCLUÍDO**
 
-- ⏳ Adicionar busca/filtro no módulo de graduações
-- ⏳ Tema light: revisar contraste em badges de status
-- ⏳ Validar se `use-visitor-tracking` está ativo no layout
-- ✅ Título da aba Configurações **já corrigido** no item 7
+- ✅ Busca e filtro por categoria adicionados nas abas **Faixas** e **Ranking** de Graduações
+- ✅ `StatusBadge` refatorado para usar tokens semânticos (`success`/`warning`/`destructive`/`muted`) — contraste correto em ambos os temas
+- ✅ `useVisitorTracking` validado: ativo em `src/routes/__root.tsx`
+- ✅ Título da aba Configurações já corrigido no item 7
 
 ---
 
