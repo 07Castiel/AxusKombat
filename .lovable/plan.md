@@ -1,155 +1,107 @@
-# Plano de Melhorias — Axus Kombat
 
-> ## ✅ STATUS: MELHORIAS DE ALTO E MÉDIO IMPACTO **CONCLUÍDAS** (itens 1–7)
-> Implementadas em 22/06/2026. Apenas o item 8 (polimentos diversos) ainda está pendente.
+# Onboarding + Checkout Stripe (Axus Kombat)
 
----
+Implementação das 3 rotas (/login, /precos, /bem-vindo) integradas à estrutura multi-tenant existente. Stripe BYOK. Status mora em `tenants`. Webhook é a única fonte de verdade.
 
-## ✅ 1. Módulo de Relatórios — **CONCLUÍDO**
+## Escopo
 
-A página `/relatorios` foi reconstruída do zero com filtros, gráficos e exportação.
+### 1. Migração — colunas em `tenants`
+- `status` text NOT NULL default `'active'` — `pending | trialing | active | trial_expired` (default `active` para não bloquear tenants existentes; novos signups gravam `pending`)
+- `plan` text NULL — `start | pro | elite`
+- `plan_period` text NULL — `monthly | annual`
+- `is_trial` boolean default false
+- `stripe_customer_id` text NULL (index)
+- `stripe_subscription_id` text NULL (index)
+- `trial_ends_at` timestamptz NULL
+- `onboarding_completed` boolean default true (antigos não veem /bem-vindo; novos gravam false)
 
-**Entregue:**
-- ✅ Filtros por data (intervalo personalizado, atalhos "mês atual" e "últimos 12 meses")
-- ✅ 5 KPIs do período: recebido, vencido, pendente, despesas, lucro líquido
-- ✅ Gráfico de barras Receita × Despesa por mês (Recharts)
-- ✅ Gráfico de despesas por categoria (barras horizontais)
-- ✅ Top 10 ranking de inadimplência (nome, mensalidades atrasadas, total devido)
-- ✅ Composição de alunos (adulto vs. kids) com barras de proporção
-- ✅ Exportação CSV completa do período
+### 2. Trigger `handle_new_user`
+Refatorar para ler `plan`, `plan_period`, `is_trial` de `raw_user_meta_data` e gravar tenant com `status='pending'`, `onboarding_completed=false`.
 
----
+### 3. `/login` — alterações mínimas
+- Mantém layout atual.
+- Adiciona checkbox "Lembrar de mim" e link "Ainda não é cliente? Ver planos →" (→ `/precos`).
+- Após login, ler `tenants.status`:
+  - `active`/`trialing` → `/`
+  - `pending` → `/precos?retomar=true` (abre modal direto no Step 2 com `plan`/`plan_period` salvos)
+  - `trial_expired` → `/precos?expirado=true`
+- Se já autenticado e visitar `/login`, redireciona para `/`.
 
-## ✅ 2. Módulo de Despesas — **CONCLUÍDO**
+### 4. `/precos` (pública)
+- Header dark: logo + "Já sou cliente" → `/login`.
+- Bloco CTA: "Teste 14 dias grátis no Plano Pro" + botão "Começar trial gratuito" (abre modal Pro + `is_trial:true`).
+- Toggle Mensal/Anual (Anual: Start R$790, Pro R$990, Elite R$1.490 + badge "2 meses grátis").
+- 3 cards: Start R$79, Pro R$99 (badge "Mais vendido" + borda 2px #8B0000), Elite R$149, com features exatas do brief.
+- Mobile: Pro expandido, Start/Elite colapsados com "Ver detalhes".
+- Banners condicionais via query (`?retomar`, `?expirado`) — **estilo custom inline**: `bg:#1a0000`, `border:1px solid #8B0000`, texto branco, Rajdhani. Não usar `<Alert>` padrão.
+- Autenticado `active`/`trialing`: "Plano atual" desabilitado ou "Fazer upgrade" (apenas UI).
+- Rodapé: WhatsApp + Política/Termos.
 
-Nova rota `/despesas` com CRUD completo.
+### 5. Modal de Checkout (3 steps)
+**Step 1 — Cadastro**: nome (≥3), e-mail, senha (≥8), confirmar (tempo real). Server fn `checkEmailAvailable`. Server fn `signupPendingTenant` cria `auth.user` via `supabaseAdmin.auth.admin.createUser` com metadata; trigger cria tenant pending. Login automático no cliente.
 
-**Entregue:**
-- ✅ CRUD de despesas com 10 categorias pré-definidas (Aluguel, Energia, Material, Salário, etc.)
-- ✅ Campos: descrição, categoria, valor, data, observações
-- ✅ Filtros por mês e categoria + total do período no header
-- ✅ Server functions `upsertDespesa`/`deleteDespesa` (`src/lib/despesas.functions.ts`)
-- ✅ Integração automática no cálculo de lucro líquido em Relatórios e Dashboard
-- ✅ Adicionado ao menu lateral com ícone Receipt
+**Step 2 — Resumo**: plano, período, valor (trial: "R$0,00 hoje. Cobrança de R$XX/mês após 14 dias.").
 
----
+**Step 3 — Pagamento**: server fn `createCheckoutSession` (requireSupabaseAuth):
+- Cria/recupera Customer Stripe (idempotente via `stripe_customer_id`).
+- Checkout Session `mode:subscription`, price_id do env, `metadata.tenant_id`.
+- Se trial: `subscription_data.trial_period_days:14`, `payment_method_collection:'if_required'`.
+- `success_url: /bem-vindo?plano=X&trial=Y`, `cancel_url: /precos`.
+- Erro → "Tentar novamente".
 
-## ✅ 3. Controle de Presença / Check-in — **CONCLUÍDO**
+### 6. Webhook — `src/routes/api/public/stripe-webhook.ts`
+- Verifica assinatura com `STRIPE_WEBHOOK_SECRET` sobre raw body.
+- `checkout.session.completed`: salva customer/subscription, status `trialing`|`active`, `trial_ends_at`.
+- `invoice.paid`: status = `active`.
+- `customer.subscription.updated|deleted` com `past_due|canceled|unpaid`: status = `trial_expired`.
+- Usa `supabaseAdmin` carregado dentro do handler.
 
-Nova rota `/presencas` com tela de chamada e dashboard de ocupação.
+### 7. `/bem-vindo` (em `_app`)
+- Se `onboarding_completed=true` → `/`.
+- Ícone ✓ 64px (#8B0000), título Cinzel, subtítulo dinâmico por `?plano`/`?trial` (trial: data atual+14d DD/MM/AAAA). Botão "Acessar o sistema" → marca `onboarding_completed=true` e vai para `/`.
 
-**Entregue:**
-- ✅ Tabela `presencas` criada (horário + aluno + data, único, RLS por tenant)
-- ✅ Tela de chamada: seleciona data → horário → marca presença com checkbox
-- ✅ Filtra automaticamente alunos pela categoria do horário (adulto/kids)
-- ✅ KPIs em tempo real: presentes / total, capacidade, % ocupação (vermelho se >90%)
-- ✅ Server functions `togglePresenca` e `frequenciaAluno` para histórico
-- ✅ Adicionado ao menu lateral (visível para professores também)
+### 8. Guard global em `_app/route.tsx`
+Após carregar perfil, se `tenants.status ∈ {pending, trial_expired}` → redireciona `/precos?retomar|expirado=true`. Admin master livre.
 
----
+### 9. Substituir todas as referências a `/signup` por `/precos`
+Antes de mexer no roteamento, varrer o projeto e atualizar:
+- Buscar (`rg "/signup"`, `rg "signup"`) em `src/**` e identificar:
+  - Links/botões em `src/routes/login.tsx` ("Criar academia") e qualquer outro CTA/header/navbar.
+  - `navigate({ to: "/signup" })` ou `<Link to="/signup">`.
+  - Strings em e-mails transacionais, templates, copy de auth, mensagens de erro.
+  - Comentários/docs (`.lovable/plan.md`, README, llms.txt, sitemap).
+- Substituir todas as ocorrências de destino por `/precos`.
+- A rota `src/routes/signup.tsx` é removida. Como fallback de bookmarks antigos, criar um stub que apenas faz `redirect({ to: "/precos" })` no `beforeLoad` (sem UI).
+- Validar com nova busca por `/signup` que só sobra o stub.
 
-## ✅ 4. Portal do Aluno — **CONCLUÍDO**
+### 10. Estilo
+- Fontes Cinzel + Rajdhani já existem.
+- Wrapper `<div className="dark">` nas 3 rotas.
+- Cores: bg #0D0D0D, accent #8B0000 (hover #6B0000), cards #111111, checks #8B0000.
 
-Portal público read-only acessível via link único.
+### 11. Secrets BYOK (via add_secret após aprovação)
+`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_{START|PRO|ELITE}_{MONTHLY|ANNUAL}`.
 
-**Entregue:**
-- ✅ Campo `portal_token` (text único) em `alunos`
-- ✅ Função RPC `portal_aluno_dados(token)` (SECURITY DEFINER) retornando dados em JSON
-- ✅ Rota pública `/portal/$token` (sem autenticação) com layout responsivo
-- ✅ Aluno vê: dados pessoais, mensalidades (com status colorido), próximos horários, histórico de graduação
-- ✅ Total em aberto destacado em vermelho
-- ✅ Geração de link a partir do cadastro do aluno: botão "copiar link do portal" em cada linha
-- ✅ Server function `gerarPortalToken` cria token aleatório e copia URL completa para o clipboard
+URL do webhook: `https://project--{id}.lovable.app/api/public/stripe-webhook`.
 
----
+## Detalhes técnicos
+- `bun add stripe`.
+- `src/lib/stripe.server.ts` (cliente) + `src/lib/billing.functions.ts` (server fns).
+- Webhook em server route com `await request.text()` para HMAC.
+- Migração: ALTER em `tenants` (GRANT já existe).
 
-## ✅ 5. Pausar Contratos — **CONCLUÍDO**
+## Fora de escopo
+- Não substituir layout do /login.
+- Não migrar para Lovable Payments.
+- Sem portal de gestão de assinatura/troca de cartão nesta fase.
+- Troca real de subscription (upgrade) fica para fase seguinte; nesta entrega só a UI.
 
-Função `pausarContrato` agora tem UI.
-
-**Entregue:**
-- ✅ Botão Pausar/Retomar contrato (ícone Pause/Play) na lista de alunos
-- ✅ Server function `pausarContrato` já existente, agora exposta
-- ✅ Query de contratos atualizada para incluir status "pausado" (não só ativo)
-- ✅ Ao pausar, geração de mensalidades futuras é suspensa
-- ✅ Ao reativar, mensalidades são geradas novamente automaticamente
-- ✅ Toast de feedback ao alternar status
-
----
-
-## ✅ 6. Notificações Expandidas — **CONCLUÍDO**
-
-Nova capacidade de comunicado em massa via WhatsApp.
-
-**Entregue:**
-- ✅ Nova aba "Comunicado" em `/notificacoes`
-- ✅ Server function `enviarComunicado` envia mensagem única para um grupo
-- ✅ Filtros: todos / adulto / kids + opção "apenas ativos"
-- ✅ Cada envio é registrado em `notificacoes` com tipo `COMUNICADO`
-- ✅ Resultado retorna contagem: enviados, falhas, sem-telefone
-- ✅ Confirmação antes de envio em massa
-- ✅ Filtro "Comunicado" adicionado ao histórico
-- ✅ Validação: requer WhatsApp conectado
-
----
-
-## ✅ 7. Configurações da Academia — **CONCLUÍDO**
-
-Página `/configuracoes` totalmente reformulada em abas.
-
-**Entregue:**
-- ✅ Bug corrigido: título da aba agora é "Configurações | Axus Kombat" (antes "CT Aquiles")
-- ✅ Página organizada em 4 abas: Perfil, Academia, Notificações, Segurança
-- ✅ **Academia**: nome, nome fantasia, CNPJ/CPF, telefone, responsável, e-mail, endereço, URL do logo
-- ✅ **Dados bancários/PIX**: chave PIX, titular, banco
-- ✅ **Notificações**: switch para ativar/desativar lembretes automáticos + horário padrão de envio
-- ✅ Novos campos adicionados em `tenants`: nome_fantasia, pix_chave, pix_titular, banco, notif_hora_envio, notif_lembretes_ativos
-- ✅ Server functions `getTenantConfig` / `updateTenantConfig` com gate de admin
-
----
-
-## ✅ 8. Pequenos Polimentos — **CONCLUÍDO**
-
-- ✅ Busca e filtro por categoria adicionados nas abas **Faixas** e **Ranking** de Graduações
-- ✅ `StatusBadge` refatorado para usar tokens semânticos (`success`/`warning`/`destructive`/`muted`) — contraste correto em ambos os temas
-- ✅ `useVisitorTracking` validado: ativo em `src/routes/__root.tsx`
-- ✅ Título da aba Configurações já corrigido no item 7
-
----
-
-## Resumo Final
-
-| Status | Melhoria |
-|---|---|
-| ✅ Concluído | 1. Relatórios com filtros e gráficos |
-| ✅ Concluído | 2. CRUD de Despesas |
-| ✅ Concluído | 3. Controle de Presença / Check-in |
-| ✅ Concluído | 4. Portal do Aluno (link público) |
-| ✅ Concluído | 5. Pausar contratos |
-| ✅ Concluído | 6. Comunicado em massa |
-| ✅ Concluído | 7. Configurações da academia |
-| ✅ Concluído | 8. Polimentos diversos |
-
-## Arquivos criados/alterados
-
-**Novos:**
-- `src/lib/despesas.functions.ts`
-- `src/lib/presencas.functions.ts`
-- `src/lib/tenant.functions.ts`
-- `src/lib/comunicados.functions.ts`
-- `src/routes/_app/despesas.tsx`
-- `src/routes/_app/presencas.tsx`
-- `src/routes/portal.$token.tsx` (rota pública)
-
-**Alterados:**
-- `src/routes/_app/relatorios.tsx` (reescrita completa)
-- `src/routes/_app/configuracoes.tsx` (reescrita completa)
-- `src/routes/_app/alunos.tsx` (botões pausar + portal)
-- `src/routes/_app/notificacoes.tsx` (aba comunicado)
-- `src/components/AppLayout.tsx` (itens "Despesas" e "Presenças" no menu)
-
-**Migração:**
-- Nova tabela `presencas` com RLS por tenant
-- Coluna `portal_token` em `alunos`
-- 6 novas colunas em `tenants` (nome_fantasia, pix_*, banco, notif_*)
-- Função RPC `portal_aluno_dados(token)`
+## Ordem de execução
+1. Migração `tenants` + refator do trigger.
+2. Varredura e substituição de `/signup` → `/precos` (incluindo stub de redirect).
+3. Pedir secrets Stripe.
+4. `stripe.server.ts` + `billing.functions.ts` + webhook.
+5. `/precos` + modal 3 steps + banners custom.
+6. Ajustes em `/login`.
+7. `/bem-vindo` + guard em `_app`.
+8. Teste end-to-end (Stripe test mode).

@@ -792,17 +792,25 @@ export type Database = {
           created_at: string
           endereco: string | null
           id: string
+          is_trial: boolean
           logo_url: string | null
           nome: string
           nome_fantasia: string | null
           notif_hora_envio: string | null
           notif_lembretes_ativos: boolean | null
+          onboarding_completed: boolean
           pix_chave: string | null
           pix_titular: string | null
+          plan: string | null
+          plan_period: string | null
           responsavel_email: string | null
           responsavel_nome: string | null
           slug: string
+          status: string
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
           telefone: string | null
+          trial_ends_at: string | null
           updated_at: string
         }
         Insert: {
@@ -812,17 +820,25 @@ export type Database = {
           created_at?: string
           endereco?: string | null
           id?: string
+          is_trial?: boolean
           logo_url?: string | null
           nome: string
           nome_fantasia?: string | null
           notif_hora_envio?: string | null
           notif_lembretes_ativos?: boolean | null
+          onboarding_completed?: boolean
           pix_chave?: string | null
           pix_titular?: string | null
+          plan?: string | null
+          plan_period?: string | null
           responsavel_email?: string | null
           responsavel_nome?: string | null
           slug: string
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
           telefone?: string | null
+          trial_ends_at?: string | null
           updated_at?: string
         }
         Update: {
@@ -832,17 +848,25 @@ export type Database = {
           created_at?: string
           endereco?: string | null
           id?: string
+          is_trial?: boolean
           logo_url?: string | null
           nome?: string
           nome_fantasia?: string | null
           notif_hora_envio?: string | null
           notif_lembretes_ativos?: boolean | null
+          onboarding_completed?: boolean
           pix_chave?: string | null
           pix_titular?: string | null
+          plan?: string | null
+          plan_period?: string | null
           responsavel_email?: string | null
           responsavel_nome?: string | null
           slug?: string
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
           telefone?: string | null
+          trial_ends_at?: string | null
           updated_at?: string
         }
         Relationships: []
