@@ -30,6 +30,7 @@ function LoginPage() {
   
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -41,9 +42,26 @@ function LoginPage() {
     const parsed = loginSchema.safeParse({ email, password });
     if (!parsed.success) { toast.error(firstZodMessage(parsed.error)); return; }
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) { setLoading(false); toast.error(translateError(error)); return; }
+    try { localStorage.setItem("axus-remember", remember ? "1" : "0"); } catch {}
+
+    // Verifica status do tenant para decidir destino
+    const uid = data.user?.id;
+    if (uid) {
+      const { data: profile } = await supabase
+        .from("profiles").select("tenant_id").eq("id", uid).maybeSingle();
+      const tid = (profile as { tenant_id?: string } | null)?.tenant_id;
+      if (tid) {
+        const { data: tenant } = await supabase
+          .from("tenants").select("status").eq("id", tid).maybeSingle();
+        const status = (tenant as { status?: string } | null)?.status;
+        setLoading(false);
+        if (status === "pending") { window.location.href = "/precos?retomar=true"; return; }
+        if (status === "trial_expired") { window.location.href = "/precos?expirado=true"; return; }
+      }
+    }
     setLoading(false);
-    if (error) { toast.error(translateError(error)); return; }
     toast.success("Bem-vindo de volta");
     navigate({ to: "/" });
   };
