@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SignupRouteImport } from './routes/signup'
+import { Route as PrecosRouteImport } from './routes/precos'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AdminMasterIndexRouteImport } from './routes/admin-master.index'
@@ -28,9 +29,11 @@ import { Route as AppFinanceiroRouteImport } from './routes/_app/financeiro'
 import { Route as AppEquipeRouteImport } from './routes/_app/equipe'
 import { Route as AppDespesasRouteImport } from './routes/_app/despesas'
 import { Route as AppConfiguracoesRouteImport } from './routes/_app/configuracoes'
+import { Route as AppBemVindoRouteImport } from './routes/_app/bem-vindo'
 import { Route as AppAlunosRouteImport } from './routes/_app/alunos'
 import { Route as AppAcessosRouteImport } from './routes/_app/acessos'
 import { Route as ApiPublicTrackVisitRouteImport } from './routes/api/public/track-visit'
+import { Route as ApiPublicStripeWebhookRouteImport } from './routes/api/public/stripe-webhook'
 import { Route as AdminMasterTenantIdRouteImport } from './routes/admin-master.tenant.$id'
 import { Route as ApiPublicHooksNotifyMensalidadesRouteImport } from './routes/api/public/hooks/notify-mensalidades'
 
@@ -42,6 +45,11 @@ const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
   path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrecosRoute = PrecosRouteImport.update({
+  id: '/precos',
+  path: '/precos',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -128,6 +136,11 @@ const AppConfiguracoesRoute = AppConfiguracoesRouteImport.update({
   path: '/configuracoes',
   getParentRoute: () => AppRoute,
 } as any)
+const AppBemVindoRoute = AppBemVindoRouteImport.update({
+  id: '/bem-vindo',
+  path: '/bem-vindo',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAlunosRoute = AppAlunosRouteImport.update({
   id: '/alunos',
   path: '/alunos',
@@ -141,6 +154,11 @@ const AppAcessosRoute = AppAcessosRouteImport.update({
 const ApiPublicTrackVisitRoute = ApiPublicTrackVisitRouteImport.update({
   id: '/api/public/track-visit',
   path: '/api/public/track-visit',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicStripeWebhookRoute = ApiPublicStripeWebhookRouteImport.update({
+  id: '/api/public/stripe-webhook',
+  path: '/api/public/stripe-webhook',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminMasterTenantIdRoute = AdminMasterTenantIdRouteImport.update({
@@ -158,10 +176,12 @@ const ApiPublicHooksNotifyMensalidadesRoute =
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
+  '/precos': typeof PrecosRoute
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/acessos': typeof AppAcessosRoute
   '/alunos': typeof AppAlunosRoute
+  '/bem-vindo': typeof AppBemVindoRoute
   '/configuracoes': typeof AppConfiguracoesRoute
   '/despesas': typeof AppDespesasRoute
   '/equipe': typeof AppEquipeRoute
@@ -177,15 +197,18 @@ export interface FileRoutesByFullPath {
   '/portal/$token': typeof PortalTokenRoute
   '/admin-master/': typeof AdminMasterIndexRoute
   '/admin-master/tenant/$id': typeof AdminMasterTenantIdRoute
+  '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/api/public/track-visit': typeof ApiPublicTrackVisitRoute
   '/api/public/hooks/notify-mensalidades': typeof ApiPublicHooksNotifyMensalidadesRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/precos': typeof PrecosRoute
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/acessos': typeof AppAcessosRoute
   '/alunos': typeof AppAlunosRoute
+  '/bem-vindo': typeof AppBemVindoRoute
   '/configuracoes': typeof AppConfiguracoesRoute
   '/despesas': typeof AppDespesasRoute
   '/equipe': typeof AppEquipeRoute
@@ -202,6 +225,7 @@ export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
   '/admin-master': typeof AdminMasterIndexRoute
   '/admin-master/tenant/$id': typeof AdminMasterTenantIdRoute
+  '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/api/public/track-visit': typeof ApiPublicTrackVisitRoute
   '/api/public/hooks/notify-mensalidades': typeof ApiPublicHooksNotifyMensalidadesRoute
 }
@@ -209,10 +233,12 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/precos': typeof PrecosRoute
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/_app/acessos': typeof AppAcessosRoute
   '/_app/alunos': typeof AppAlunosRoute
+  '/_app/bem-vindo': typeof AppBemVindoRoute
   '/_app/configuracoes': typeof AppConfiguracoesRoute
   '/_app/despesas': typeof AppDespesasRoute
   '/_app/equipe': typeof AppEquipeRoute
@@ -229,6 +255,7 @@ export interface FileRoutesById {
   '/_app/': typeof AppIndexRoute
   '/admin-master/': typeof AdminMasterIndexRoute
   '/admin-master/tenant/$id': typeof AdminMasterTenantIdRoute
+  '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/api/public/track-visit': typeof ApiPublicTrackVisitRoute
   '/api/public/hooks/notify-mensalidades': typeof ApiPublicHooksNotifyMensalidadesRoute
 }
@@ -237,10 +264,12 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/precos'
     | '/signup'
     | '/sitemap.xml'
     | '/acessos'
     | '/alunos'
+    | '/bem-vindo'
     | '/configuracoes'
     | '/despesas'
     | '/equipe'
@@ -256,15 +285,18 @@ export interface FileRouteTypes {
     | '/portal/$token'
     | '/admin-master/'
     | '/admin-master/tenant/$id'
+    | '/api/public/stripe-webhook'
     | '/api/public/track-visit'
     | '/api/public/hooks/notify-mensalidades'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
+    | '/precos'
     | '/signup'
     | '/sitemap.xml'
     | '/acessos'
     | '/alunos'
+    | '/bem-vindo'
     | '/configuracoes'
     | '/despesas'
     | '/equipe'
@@ -281,16 +313,19 @@ export interface FileRouteTypes {
     | '/'
     | '/admin-master'
     | '/admin-master/tenant/$id'
+    | '/api/public/stripe-webhook'
     | '/api/public/track-visit'
     | '/api/public/hooks/notify-mensalidades'
   id:
     | '__root__'
     | '/_app'
     | '/login'
+    | '/precos'
     | '/signup'
     | '/sitemap.xml'
     | '/_app/acessos'
     | '/_app/alunos'
+    | '/_app/bem-vindo'
     | '/_app/configuracoes'
     | '/_app/despesas'
     | '/_app/equipe'
@@ -307,6 +342,7 @@ export interface FileRouteTypes {
     | '/_app/'
     | '/admin-master/'
     | '/admin-master/tenant/$id'
+    | '/api/public/stripe-webhook'
     | '/api/public/track-visit'
     | '/api/public/hooks/notify-mensalidades'
   fileRoutesById: FileRoutesById
@@ -314,12 +350,14 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
+  PrecosRoute: typeof PrecosRoute
   SignupRoute: typeof SignupRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   AdminMasterDashboardRoute: typeof AdminMasterDashboardRoute
   PortalTokenRoute: typeof PortalTokenRoute
   AdminMasterIndexRoute: typeof AdminMasterIndexRoute
   AdminMasterTenantIdRoute: typeof AdminMasterTenantIdRoute
+  ApiPublicStripeWebhookRoute: typeof ApiPublicStripeWebhookRoute
   ApiPublicTrackVisitRoute: typeof ApiPublicTrackVisitRoute
   ApiPublicHooksNotifyMensalidadesRoute: typeof ApiPublicHooksNotifyMensalidadesRoute
 }
@@ -338,6 +376,13 @@ declare module '@tanstack/react-router' {
       path: '/signup'
       fullPath: '/signup'
       preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/precos': {
+      id: '/precos'
+      path: '/precos'
+      fullPath: '/precos'
+      preLoaderRoute: typeof PrecosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -459,6 +504,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppConfiguracoesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/bem-vindo': {
+      id: '/_app/bem-vindo'
+      path: '/bem-vindo'
+      fullPath: '/bem-vindo'
+      preLoaderRoute: typeof AppBemVindoRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/alunos': {
       id: '/_app/alunos'
       path: '/alunos'
@@ -478,6 +530,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/track-visit'
       fullPath: '/api/public/track-visit'
       preLoaderRoute: typeof ApiPublicTrackVisitRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/stripe-webhook': {
+      id: '/api/public/stripe-webhook'
+      path: '/api/public/stripe-webhook'
+      fullPath: '/api/public/stripe-webhook'
+      preLoaderRoute: typeof ApiPublicStripeWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin-master/tenant/$id': {
@@ -500,6 +559,7 @@ declare module '@tanstack/react-router' {
 interface AppRouteChildren {
   AppAcessosRoute: typeof AppAcessosRoute
   AppAlunosRoute: typeof AppAlunosRoute
+  AppBemVindoRoute: typeof AppBemVindoRoute
   AppConfiguracoesRoute: typeof AppConfiguracoesRoute
   AppDespesasRoute: typeof AppDespesasRoute
   AppEquipeRoute: typeof AppEquipeRoute
@@ -517,6 +577,7 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppAcessosRoute: AppAcessosRoute,
   AppAlunosRoute: AppAlunosRoute,
+  AppBemVindoRoute: AppBemVindoRoute,
   AppConfiguracoesRoute: AppConfiguracoesRoute,
   AppDespesasRoute: AppDespesasRoute,
   AppEquipeRoute: AppEquipeRoute,
@@ -536,12 +597,14 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
+  PrecosRoute: PrecosRoute,
   SignupRoute: SignupRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   AdminMasterDashboardRoute: AdminMasterDashboardRoute,
   PortalTokenRoute: PortalTokenRoute,
   AdminMasterIndexRoute: AdminMasterIndexRoute,
   AdminMasterTenantIdRoute: AdminMasterTenantIdRoute,
+  ApiPublicStripeWebhookRoute: ApiPublicStripeWebhookRoute,
   ApiPublicTrackVisitRoute: ApiPublicTrackVisitRoute,
   ApiPublicHooksNotifyMensalidadesRoute: ApiPublicHooksNotifyMensalidadesRoute,
 }

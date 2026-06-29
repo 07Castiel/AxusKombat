@@ -105,3 +105,18 @@ URL do webhook: `https://project--{id}.lovable.app/api/public/stripe-webhook`.
 6. Ajustes em `/login`.
 7. `/bem-vindo` + guard em `_app`.
 8. Teste end-to-end (Stripe test mode).
+
+---
+
+## ✅ Implementação concluída (Stripe BYOK)
+
+Todas as etapas do plano foram executadas. Falta apenas o usuário adicionar as **secrets** do Stripe (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` e os 6 `STRIPE_PRICE_*`) e configurar o webhook em `https://<domínio>/api/public/stripe-webhook` para o fluxo ficar 100% operacional.
+
+- ✅ Migração: colunas de billing em `tenants` + trigger `handle_new_user` lendo `plan`/`plan_period`/`is_trial`.
+- ✅ `/signup` → stub que redireciona para `/precos`. Login, sitemap e llms.txt atualizados.
+- ✅ `src/lib/stripe.server.ts` + `src/lib/billing.functions.ts` (createCheckoutSession, completeOnboarding, getMyTenantStatus).
+- ✅ Webhook `src/routes/api/public/stripe-webhook.ts` com HMAC e os 4 eventos do escopo.
+- ✅ `/precos` pública com header, hero, trial CTA, toggle mensal/anual, 3 cards (Pro destacado), banners custom dark/vermelhos e modal de 3 steps.
+- ✅ `/login` com checkbox "Lembrar de mim", link "Ver planos →" e roteamento pós-login por status.
+- ✅ `/bem-vindo` (sob `_app`) com mensagem dinâmica por plano/trial.
+- ✅ Guard em `_app.tsx` redireciona pending/trial_expired para `/precos`.
