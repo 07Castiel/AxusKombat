@@ -12,7 +12,7 @@ export function getStripe(): Stripe {
     );
   }
   _stripe = new Stripe(key, {
-    apiVersion: "2024-06-20" as Stripe.StripeConfig["apiVersion"],
+    apiVersion: "2024-06-20" as never,
     httpClient: Stripe.createFetchHttpClient(),
   });
   return _stripe;
