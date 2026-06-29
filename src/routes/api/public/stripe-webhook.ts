@@ -30,8 +30,9 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
           customerId: string,
           patch: Record<string, unknown>,
         ) => {
-          await supabaseAdmin
-            .from("tenants")
+          await (supabaseAdmin.from("tenants") as unknown as {
+            update: (p: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<unknown> };
+          })
             .update(patch)
             .eq("stripe_customer_id", customerId);
         };

@@ -31,6 +31,7 @@ import { Route as AppConfiguracoesRouteImport } from './routes/_app/configuracoe
 import { Route as AppAlunosRouteImport } from './routes/_app/alunos'
 import { Route as AppAcessosRouteImport } from './routes/_app/acessos'
 import { Route as ApiPublicTrackVisitRouteImport } from './routes/api/public/track-visit'
+import { Route as ApiPublicStripeWebhookRouteImport } from './routes/api/public/stripe-webhook'
 import { Route as AdminMasterTenantIdRouteImport } from './routes/admin-master.tenant.$id'
 import { Route as ApiPublicHooksNotifyMensalidadesRouteImport } from './routes/api/public/hooks/notify-mensalidades'
 
@@ -143,6 +144,11 @@ const ApiPublicTrackVisitRoute = ApiPublicTrackVisitRouteImport.update({
   path: '/api/public/track-visit',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicStripeWebhookRoute = ApiPublicStripeWebhookRouteImport.update({
+  id: '/api/public/stripe-webhook',
+  path: '/api/public/stripe-webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminMasterTenantIdRoute = AdminMasterTenantIdRouteImport.update({
   id: '/admin-master/tenant/$id',
   path: '/admin-master/tenant/$id',
@@ -177,6 +183,7 @@ export interface FileRoutesByFullPath {
   '/portal/$token': typeof PortalTokenRoute
   '/admin-master/': typeof AdminMasterIndexRoute
   '/admin-master/tenant/$id': typeof AdminMasterTenantIdRoute
+  '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/api/public/track-visit': typeof ApiPublicTrackVisitRoute
   '/api/public/hooks/notify-mensalidades': typeof ApiPublicHooksNotifyMensalidadesRoute
 }
@@ -202,6 +209,7 @@ export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
   '/admin-master': typeof AdminMasterIndexRoute
   '/admin-master/tenant/$id': typeof AdminMasterTenantIdRoute
+  '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/api/public/track-visit': typeof ApiPublicTrackVisitRoute
   '/api/public/hooks/notify-mensalidades': typeof ApiPublicHooksNotifyMensalidadesRoute
 }
@@ -229,6 +237,7 @@ export interface FileRoutesById {
   '/_app/': typeof AppIndexRoute
   '/admin-master/': typeof AdminMasterIndexRoute
   '/admin-master/tenant/$id': typeof AdminMasterTenantIdRoute
+  '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/api/public/track-visit': typeof ApiPublicTrackVisitRoute
   '/api/public/hooks/notify-mensalidades': typeof ApiPublicHooksNotifyMensalidadesRoute
 }
@@ -256,6 +265,7 @@ export interface FileRouteTypes {
     | '/portal/$token'
     | '/admin-master/'
     | '/admin-master/tenant/$id'
+    | '/api/public/stripe-webhook'
     | '/api/public/track-visit'
     | '/api/public/hooks/notify-mensalidades'
   fileRoutesByTo: FileRoutesByTo
@@ -281,6 +291,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin-master'
     | '/admin-master/tenant/$id'
+    | '/api/public/stripe-webhook'
     | '/api/public/track-visit'
     | '/api/public/hooks/notify-mensalidades'
   id:
@@ -307,6 +318,7 @@ export interface FileRouteTypes {
     | '/_app/'
     | '/admin-master/'
     | '/admin-master/tenant/$id'
+    | '/api/public/stripe-webhook'
     | '/api/public/track-visit'
     | '/api/public/hooks/notify-mensalidades'
   fileRoutesById: FileRoutesById
@@ -320,6 +332,7 @@ export interface RootRouteChildren {
   PortalTokenRoute: typeof PortalTokenRoute
   AdminMasterIndexRoute: typeof AdminMasterIndexRoute
   AdminMasterTenantIdRoute: typeof AdminMasterTenantIdRoute
+  ApiPublicStripeWebhookRoute: typeof ApiPublicStripeWebhookRoute
   ApiPublicTrackVisitRoute: typeof ApiPublicTrackVisitRoute
   ApiPublicHooksNotifyMensalidadesRoute: typeof ApiPublicHooksNotifyMensalidadesRoute
 }
@@ -480,6 +493,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicTrackVisitRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/stripe-webhook': {
+      id: '/api/public/stripe-webhook'
+      path: '/api/public/stripe-webhook'
+      fullPath: '/api/public/stripe-webhook'
+      preLoaderRoute: typeof ApiPublicStripeWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin-master/tenant/$id': {
       id: '/admin-master/tenant/$id'
       path: '/admin-master/tenant/$id'
@@ -542,19 +562,10 @@ const rootRouteChildren: RootRouteChildren = {
   PortalTokenRoute: PortalTokenRoute,
   AdminMasterIndexRoute: AdminMasterIndexRoute,
   AdminMasterTenantIdRoute: AdminMasterTenantIdRoute,
+  ApiPublicStripeWebhookRoute: ApiPublicStripeWebhookRoute,
   ApiPublicTrackVisitRoute: ApiPublicTrackVisitRoute,
   ApiPublicHooksNotifyMensalidadesRoute: ApiPublicHooksNotifyMensalidadesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
