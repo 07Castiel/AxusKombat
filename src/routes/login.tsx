@@ -150,6 +150,16 @@ function LoginPage() {
               />
             </div>
 
+            <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={remember}
+                onChange={(e) => setRemember(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-white/20 bg-[#1f1f1f] accent-[#A30000]"
+              />
+              Lembrar de mim neste dispositivo
+            </label>
+
             <Button
               type="submit"
               disabled={loading}
@@ -171,9 +181,9 @@ function LoginPage() {
 
           <div className="mt-6 pt-5 border-t border-white/[0.05] text-center">
             <p className="text-sm text-muted-foreground">
-              Não tem conta?{" "}
-              <Link to="/signup" className="text-metal-light hover:text-foreground font-medium transition-colors">
-                Criar academia
+              Ainda não é cliente?{" "}
+              <Link to="/precos" className="text-metal-light hover:text-foreground font-medium transition-colors">
+                Ver planos →
               </Link>
             </p>
           </div>
