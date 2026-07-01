@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Search, Pencil, RotateCcw, Trash2, User, Heart, ClipboardList, Ban, Pause, Play, Link as LinkIcon, Copy } from "lucide-react";
+import { Plus, Search, Pencil, RotateCcw, Trash2, User, Heart, ClipboardList, Ban, Pause, Play, Link as LinkIcon, Copy, Archive } from "lucide-react";
 import { toast } from "sonner";
 import { translateError, firstZodMessage } from "@/lib/errors";
 import { alunoSchema } from "@/lib/validators";
