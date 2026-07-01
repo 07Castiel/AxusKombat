@@ -232,6 +232,15 @@ function AlunosPage() {
     qc.invalidateQueries();
   };
 
+  const doArchive = async () => {
+    if (!archiving) return;
+    const { error } = await supabase.from("alunos").update({ status: "arquivado" }).eq("id", archiving.id);
+    setArchiving(null);
+    if (error) { toast.error(translateError(error)); return; }
+    toast.success("Aluno arquivado");
+    qc.invalidateQueries({ queryKey: ["alunos"] });
+  };
+
   const togglePause = async (contratoId: string, isAtivo: boolean) => {
     try {
       await pausarContratoFn({ data: { contrato_id: contratoId, pausar: isAtivo } });
@@ -254,10 +263,11 @@ function AlunosPage() {
     } catch (err: any) { toast.error(translateError(err)); }
   };
 
-  const filtered = alunos.filter((a: any) =>
-    a.nome_completo.toLowerCase().includes(search.toLowerCase()) ||
-    (a.email ?? "").toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = alunos.filter((a: any) => {
+    if (a.status === "arquivado" && !(isAdmin && showArchived)) return false;
+    const q = search.toLowerCase();
+    return a.nome_completo.toLowerCase().includes(q) || (a.email ?? "").toLowerCase().includes(q);
+  });
 
   return (
     <div>
