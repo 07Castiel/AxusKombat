@@ -1080,6 +1080,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_access_categoria: {
+        Args: { _cat: Database["public"]["Enums"]["categoria_aluno"] }
+        Returns: boolean
+      }
       gerar_mensalidades_contrato: {
         Args: { p_contrato_id: string }
         Returns: number
@@ -1093,8 +1097,10 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      is_financeiro: { Args: never; Returns: boolean }
       is_professor_adulto: { Args: never; Returns: boolean }
       is_professor_kids: { Args: never; Returns: boolean }
+      is_recepcao: { Args: never; Returns: boolean }
       portal_aluno_dados: { Args: { p_token: string }; Returns: Json }
       processar_mensalidades_diario: { Args: never; Returns: Json }
     }
@@ -1121,7 +1127,7 @@ export type Database = {
         | "anual"
         | "personalizado"
       metodo_pagamento: "pix" | "dinheiro" | "cartao" | "boleto"
-      status_aluno: "ativo" | "inativo" | "pendente"
+      status_aluno: "ativo" | "inativo" | "pendente" | "arquivado"
       status_contrato: "ativo" | "pausado" | "cancelado"
       status_mensalidade: "pendente" | "pago" | "vencido" | "cancelado"
       status_notificacao: "agendada" | "enviada" | "falhou" | "cancelada"
@@ -1277,7 +1283,7 @@ export const Constants = {
         "personalizado",
       ],
       metodo_pagamento: ["pix", "dinheiro", "cartao", "boleto"],
-      status_aluno: ["ativo", "inativo", "pendente"],
+      status_aluno: ["ativo", "inativo", "pendente", "arquivado"],
       status_contrato: ["ativo", "pausado", "cancelado"],
       status_mensalidade: ["pendente", "pago", "vencido", "cancelado"],
       status_notificacao: ["agendada", "enviada", "falhou", "cancelada"],
