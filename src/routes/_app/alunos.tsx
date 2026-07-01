@@ -54,7 +54,7 @@ const EMPTY = {
 type FormState = typeof EMPTY;
 
 function AlunosPage() {
-  const { profile } = useAuth();
+  const { profile, isAdmin } = useAuth();
   const qc = useQueryClient();
   const upsertContratoFn = useServerFn(upsertContratoAtivo);
   const cancelarContratoFn = useServerFn(cancelarContrato);
@@ -66,6 +66,8 @@ function AlunosPage() {
   const [search, setSearch] = useState("");
   const [form, setForm] = useState<FormState>(EMPTY);
   const [deleting, setDeleting] = useState<{ id: string; nome: string } | null>(null);
+  const [archiving, setArchiving] = useState<{ id: string; nome: string } | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const { data: alunos = [] } = useQuery({
