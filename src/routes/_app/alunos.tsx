@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Search, Pencil, RotateCcw, Trash2, User, Heart, ClipboardList, Ban, Pause, Play, Link as LinkIcon, Copy } from "lucide-react";
+import { Plus, Search, Pencil, RotateCcw, Trash2, User, Heart, ClipboardList, Ban, Pause, Play, Link as LinkIcon, Copy, Archive } from "lucide-react";
 import { toast } from "sonner";
 import { translateError, firstZodMessage } from "@/lib/errors";
 import { alunoSchema } from "@/lib/validators";
@@ -54,7 +54,7 @@ const EMPTY = {
 type FormState = typeof EMPTY;
 
 function AlunosPage() {
-  const { profile } = useAuth();
+  const { profile, isAdmin } = useAuth();
   const qc = useQueryClient();
   const upsertContratoFn = useServerFn(upsertContratoAtivo);
   const cancelarContratoFn = useServerFn(cancelarContrato);
@@ -66,6 +66,8 @@ function AlunosPage() {
   const [search, setSearch] = useState("");
   const [form, setForm] = useState<FormState>(EMPTY);
   const [deleting, setDeleting] = useState<{ id: string; nome: string } | null>(null);
+  const [archiving, setArchiving] = useState<{ id: string; nome: string } | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const { data: alunos = [] } = useQuery({
@@ -230,6 +232,15 @@ function AlunosPage() {
     qc.invalidateQueries();
   };
 
+  const doArchive = async () => {
+    if (!archiving) return;
+    const { error } = await supabase.from("alunos").update({ status: "arquivado" }).eq("id", archiving.id);
+    setArchiving(null);
+    if (error) { toast.error(translateError(error)); return; }
+    toast.success("Aluno arquivado");
+    qc.invalidateQueries({ queryKey: ["alunos"] });
+  };
+
   const togglePause = async (contratoId: string, isAtivo: boolean) => {
     try {
       await pausarContratoFn({ data: { contrato_id: contratoId, pausar: isAtivo } });
@@ -252,10 +263,11 @@ function AlunosPage() {
     } catch (err: any) { toast.error(translateError(err)); }
   };
 
-  const filtered = alunos.filter((a: any) =>
-    a.nome_completo.toLowerCase().includes(search.toLowerCase()) ||
-    (a.email ?? "").toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = alunos.filter((a: any) => {
+    if (a.status === "arquivado" && !(isAdmin && showArchived)) return false;
+    const q = search.toLowerCase();
+    return a.nome_completo.toLowerCase().includes(q) || (a.email ?? "").toLowerCase().includes(q);
+  });
 
   return (
     <div>
@@ -404,9 +416,17 @@ function AlunosPage() {
       </Dialog>
 
       <Card className="p-4 gradient-card border-border mb-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
-          <Input placeholder="Buscar por nome ou e-mail..." aria-label="Buscar alunos" value={search} onChange={(e)=>setSearch(e.target.value)} className="pl-9"/>
+        <div className="flex flex-col md:flex-row gap-3 md:items-center">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
+            <Input placeholder="Buscar por nome ou e-mail..." aria-label="Buscar alunos" value={search} onChange={(e)=>setSearch(e.target.value)} className="pl-9"/>
+          </div>
+          {isAdmin && (
+            <label className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground cursor-pointer">
+              <Checkbox checked={showArchived} onCheckedChange={(v)=>setShowArchived(!!v)} />
+              Mostrar arquivados
+            </label>
+          )}
         </div>
       </Card>
 
@@ -454,7 +474,10 @@ function AlunosPage() {
                       )}
                       <Button size="icon" variant="ghost" onClick={()=>startEdit(a)} title="Editar" aria-label="Editar aluno"><Pencil className="h-4 w-4"/></Button>
                       <Button size="icon" variant="ghost" onClick={()=>toggleStatus(a.id, a.status)} title={a.status === "ativo" ? "Desativar" : "Reativar"} aria-label={a.status === "ativo" ? "Desativar aluno" : "Reativar aluno"}><RotateCcw className="h-4 w-4"/></Button>
-                      <Button size="icon" variant="ghost" onClick={()=>setDeleting({ id: a.id, nome: a.nome_completo })} title="Excluir" aria-label="Excluir aluno" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button>
+                      <Button size="icon" variant="ghost" onClick={()=>setArchiving({ id: a.id, nome: a.nome_completo })} title="Arquivar" aria-label="Arquivar aluno"><Archive className="h-4 w-4"/></Button>
+                      {isAdmin && (
+                        <Button size="icon" variant="ghost" onClick={()=>setDeleting({ id: a.id, nome: a.nome_completo })} title="Excluir definitivamente" aria-label="Excluir aluno" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -467,9 +490,16 @@ function AlunosPage() {
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(v) => !v && setDeleting(null)}
-        title="Excluir aluno"
-        description={`Tem certeza que deseja excluir o aluno ${deleting?.nome}? Esta ação não pode ser desfeita.`}
+        title="Excluir aluno definitivamente"
+        description={`Excluir permanentemente ${deleting?.nome}? Esta ação remove o aluno do banco e não pode ser desfeita. Para preservar o histórico, prefira Arquivar.`}
         onConfirm={doDelete}
+      />
+      <ConfirmDialog
+        open={!!archiving}
+        onOpenChange={(v) => !v && setArchiving(null)}
+        title="Arquivar aluno"
+        description={`Arquivar ${archiving?.nome}? Ele deixará de aparecer nas listagens, mas o histórico será preservado e apenas o Administrador poderá visualizá-lo novamente.`}
+        onConfirm={doArchive}
       />
     </div>
   );
