@@ -416,9 +416,17 @@ function AlunosPage() {
       </Dialog>
 
       <Card className="p-4 gradient-card border-border mb-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
-          <Input placeholder="Buscar por nome ou e-mail..." aria-label="Buscar alunos" value={search} onChange={(e)=>setSearch(e.target.value)} className="pl-9"/>
+        <div className="flex flex-col md:flex-row gap-3 md:items-center">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
+            <Input placeholder="Buscar por nome ou e-mail..." aria-label="Buscar alunos" value={search} onChange={(e)=>setSearch(e.target.value)} className="pl-9"/>
+          </div>
+          {isAdmin && (
+            <label className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground cursor-pointer">
+              <Checkbox checked={showArchived} onCheckedChange={(v)=>setShowArchived(!!v)} />
+              Mostrar arquivados
+            </label>
+          )}
         </div>
       </Card>
 
