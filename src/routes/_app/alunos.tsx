@@ -474,7 +474,10 @@ function AlunosPage() {
                       )}
                       <Button size="icon" variant="ghost" onClick={()=>startEdit(a)} title="Editar" aria-label="Editar aluno"><Pencil className="h-4 w-4"/></Button>
                       <Button size="icon" variant="ghost" onClick={()=>toggleStatus(a.id, a.status)} title={a.status === "ativo" ? "Desativar" : "Reativar"} aria-label={a.status === "ativo" ? "Desativar aluno" : "Reativar aluno"}><RotateCcw className="h-4 w-4"/></Button>
-                      <Button size="icon" variant="ghost" onClick={()=>setDeleting({ id: a.id, nome: a.nome_completo })} title="Excluir" aria-label="Excluir aluno" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button>
+                      <Button size="icon" variant="ghost" onClick={()=>setArchiving({ id: a.id, nome: a.nome_completo })} title="Arquivar" aria-label="Arquivar aluno"><Archive className="h-4 w-4"/></Button>
+                      {isAdmin && (
+                        <Button size="icon" variant="ghost" onClick={()=>setDeleting({ id: a.id, nome: a.nome_completo })} title="Excluir definitivamente" aria-label="Excluir aluno" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -487,9 +490,16 @@ function AlunosPage() {
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(v) => !v && setDeleting(null)}
-        title="Excluir aluno"
-        description={`Tem certeza que deseja excluir o aluno ${deleting?.nome}? Esta ação não pode ser desfeita.`}
+        title="Excluir aluno definitivamente"
+        description={`Excluir permanentemente ${deleting?.nome}? Esta ação remove o aluno do banco e não pode ser desfeita. Para preservar o histórico, prefira Arquivar.`}
         onConfirm={doDelete}
+      />
+      <ConfirmDialog
+        open={!!archiving}
+        onOpenChange={(v) => !v && setArchiving(null)}
+        title="Arquivar aluno"
+        description={`Arquivar ${archiving?.nome}? Ele deixará de aparecer nas listagens, mas o histórico será preservado e apenas o Administrador poderá visualizá-lo novamente.`}
+        onConfirm={doArchive}
       />
     </div>
   );
