@@ -36,6 +36,7 @@ import { Route as ApiPublicTrackVisitRouteImport } from './routes/api/public/tra
 import { Route as ApiPublicStripeWebhookRouteImport } from './routes/api/public/stripe-webhook'
 import { Route as AdminMasterTenantIdRouteImport } from './routes/admin-master.tenant.$id'
 import { Route as ApiPublicHooksNotifyMensalidadesRouteImport } from './routes/api/public/hooks/notify-mensalidades'
+import { Route as ApiPublicHooksDispatchNotificationsRouteImport } from './routes/api/public/hooks/dispatch-notifications'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
@@ -172,6 +173,12 @@ const ApiPublicHooksNotifyMensalidadesRoute =
     path: '/api/public/hooks/notify-mensalidades',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksDispatchNotificationsRoute =
+  ApiPublicHooksDispatchNotificationsRouteImport.update({
+    id: '/api/public/hooks/dispatch-notifications',
+    path: '/api/public/hooks/dispatch-notifications',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -199,6 +206,7 @@ export interface FileRoutesByFullPath {
   '/admin-master/tenant/$id': typeof AdminMasterTenantIdRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/api/public/track-visit': typeof ApiPublicTrackVisitRoute
+  '/api/public/hooks/dispatch-notifications': typeof ApiPublicHooksDispatchNotificationsRoute
   '/api/public/hooks/notify-mensalidades': typeof ApiPublicHooksNotifyMensalidadesRoute
 }
 export interface FileRoutesByTo {
@@ -227,6 +235,7 @@ export interface FileRoutesByTo {
   '/admin-master/tenant/$id': typeof AdminMasterTenantIdRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/api/public/track-visit': typeof ApiPublicTrackVisitRoute
+  '/api/public/hooks/dispatch-notifications': typeof ApiPublicHooksDispatchNotificationsRoute
   '/api/public/hooks/notify-mensalidades': typeof ApiPublicHooksNotifyMensalidadesRoute
 }
 export interface FileRoutesById {
@@ -257,6 +266,7 @@ export interface FileRoutesById {
   '/admin-master/tenant/$id': typeof AdminMasterTenantIdRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/api/public/track-visit': typeof ApiPublicTrackVisitRoute
+  '/api/public/hooks/dispatch-notifications': typeof ApiPublicHooksDispatchNotificationsRoute
   '/api/public/hooks/notify-mensalidades': typeof ApiPublicHooksNotifyMensalidadesRoute
 }
 export interface FileRouteTypes {
@@ -287,6 +297,7 @@ export interface FileRouteTypes {
     | '/admin-master/tenant/$id'
     | '/api/public/stripe-webhook'
     | '/api/public/track-visit'
+    | '/api/public/hooks/dispatch-notifications'
     | '/api/public/hooks/notify-mensalidades'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -315,6 +326,7 @@ export interface FileRouteTypes {
     | '/admin-master/tenant/$id'
     | '/api/public/stripe-webhook'
     | '/api/public/track-visit'
+    | '/api/public/hooks/dispatch-notifications'
     | '/api/public/hooks/notify-mensalidades'
   id:
     | '__root__'
@@ -344,6 +356,7 @@ export interface FileRouteTypes {
     | '/admin-master/tenant/$id'
     | '/api/public/stripe-webhook'
     | '/api/public/track-visit'
+    | '/api/public/hooks/dispatch-notifications'
     | '/api/public/hooks/notify-mensalidades'
   fileRoutesById: FileRoutesById
 }
@@ -359,6 +372,7 @@ export interface RootRouteChildren {
   AdminMasterTenantIdRoute: typeof AdminMasterTenantIdRoute
   ApiPublicStripeWebhookRoute: typeof ApiPublicStripeWebhookRoute
   ApiPublicTrackVisitRoute: typeof ApiPublicTrackVisitRoute
+  ApiPublicHooksDispatchNotificationsRoute: typeof ApiPublicHooksDispatchNotificationsRoute
   ApiPublicHooksNotifyMensalidadesRoute: typeof ApiPublicHooksNotifyMensalidadesRoute
 }
 
@@ -553,6 +567,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksNotifyMensalidadesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/dispatch-notifications': {
+      id: '/api/public/hooks/dispatch-notifications'
+      path: '/api/public/hooks/dispatch-notifications'
+      fullPath: '/api/public/hooks/dispatch-notifications'
+      preLoaderRoute: typeof ApiPublicHooksDispatchNotificationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -606,18 +627,10 @@ const rootRouteChildren: RootRouteChildren = {
   AdminMasterTenantIdRoute: AdminMasterTenantIdRoute,
   ApiPublicStripeWebhookRoute: ApiPublicStripeWebhookRoute,
   ApiPublicTrackVisitRoute: ApiPublicTrackVisitRoute,
+  ApiPublicHooksDispatchNotificationsRoute:
+    ApiPublicHooksDispatchNotificationsRoute,
   ApiPublicHooksNotifyMensalidadesRoute: ApiPublicHooksNotifyMensalidadesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

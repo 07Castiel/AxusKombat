@@ -527,11 +527,13 @@ export type Database = {
           canal: string
           created_at: string
           destinatario: string | null
+          dias_offset: number | null
           enviada_em: string | null
           erro: string | null
           id: string
           mensagem: string
           mensalidade_id: string | null
+          motivo_cancelamento: string | null
           status: Database["public"]["Enums"]["status_notificacao"]
           tenant_id: string
           tipo: string
@@ -543,11 +545,13 @@ export type Database = {
           canal?: string
           created_at?: string
           destinatario?: string | null
+          dias_offset?: number | null
           enviada_em?: string | null
           erro?: string | null
           id?: string
           mensagem: string
           mensalidade_id?: string | null
+          motivo_cancelamento?: string | null
           status?: Database["public"]["Enums"]["status_notificacao"]
           tenant_id: string
           tipo: string
@@ -559,11 +563,13 @@ export type Database = {
           canal?: string
           created_at?: string
           destinatario?: string | null
+          dias_offset?: number | null
           enviada_em?: string | null
           erro?: string | null
           id?: string
           mensagem?: string
           mensalidade_id?: string | null
+          motivo_cancelamento?: string | null
           status?: Database["public"]["Enums"]["status_notificacao"]
           tenant_id?: string
           tipo?: string
@@ -586,6 +592,103 @@ export type Database = {
           },
           {
             foreignKeyName: "notificacoes_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_settings: {
+        Row: {
+          assinatura: string | null
+          created_at: string
+          dias_antes_lembrete: number[]
+          dias_apos_vencimento: number[]
+          enviar_no_vencimento: boolean
+          hora_fim: string
+          hora_inicio: string
+          hora_preferencial: string
+          id: string
+          pix_chave: string | null
+          tenant_id: string
+          timezone: string
+          updated_at: string
+        }
+        Insert: {
+          assinatura?: string | null
+          created_at?: string
+          dias_antes_lembrete?: number[]
+          dias_apos_vencimento?: number[]
+          enviar_no_vencimento?: boolean
+          hora_fim?: string
+          hora_inicio?: string
+          hora_preferencial?: string
+          id?: string
+          pix_chave?: string | null
+          tenant_id: string
+          timezone?: string
+          updated_at?: string
+        }
+        Update: {
+          assinatura?: string | null
+          created_at?: string
+          dias_antes_lembrete?: number[]
+          dias_apos_vencimento?: number[]
+          enviar_no_vencimento?: boolean
+          hora_fim?: string
+          hora_inicio?: string
+          hora_preferencial?: string
+          id?: string
+          pix_chave?: string | null
+          tenant_id?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_settings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_templates: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          dias_offset: number
+          id: string
+          mensagem: string
+          tenant_id: string
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          dias_offset?: number
+          id?: string
+          mensagem: string
+          tenant_id: string
+          tipo: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          dias_offset?: number
+          id?: string
+          mensagem?: string
+          tenant_id?: string
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_templates_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -1080,9 +1183,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      agendar_notificacoes_mensalidade: {
+        Args: { p_mensalidade_id: string }
+        Returns: number
+      }
       can_access_categoria: {
         Args: { _cat: Database["public"]["Enums"]["categoria_aluno"] }
         Returns: boolean
+      }
+      cancelar_notificacoes_mensalidade: {
+        Args: { p_mensalidade_id: string; p_motivo: string }
+        Returns: number
       }
       gerar_mensalidades_contrato: {
         Args: { p_contrato_id: string }

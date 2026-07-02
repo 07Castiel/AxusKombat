@@ -2,12 +2,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-const DEFAULT_TEMPLATES = {
-  template_7_dias: "Olá {nome}, sua matrícula na {academia} vence em {vencimento} (valor R$ {valor}). Caso já tenha pago, desconsidere esta mensagem.",
-  template_3_dias: "Olá {nome}, faltam 3 dias para o vencimento da sua matrícula na {academia} ({vencimento} — R$ {valor}). Já pagou? Pode ignorar.",
-  template_vencimento: "Olá {nome}, sua matrícula na {academia} vence hoje ({vencimento} — R$ {valor}). Se já efetuou o pagamento, ignore esta mensagem.",
-};
-
 async function getTenantAdmin(ctx: { supabase: any; userId: string }) {
   const { data: roles, error } = await ctx.supabase
     .from("user_roles").select("role, tenant_id").eq("user_id", ctx.userId);
@@ -17,60 +11,131 @@ async function getTenantAdmin(ctx: { supabase: any; userId: string }) {
   return admin.tenant_id as string;
 }
 
-export const getWhatsappTemplates = createServerFn({ method: "POST" })
+// ============ SETTINGS ============
+export const getNotificationSettings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const tenantId = await getTenantAdmin(context as any);
     const supabase = (context as any).supabase;
     const { data, error } = await supabase
-      .from("whatsapp_config")
-      .select("template_7_dias, template_3_dias, template_vencimento")
-      .eq("tenant_id", tenantId).maybeSingle();
+      .from("notification_settings").select("*").eq("tenant_id", tenantId).maybeSingle();
     if (error) throw new Error(error.message);
-    return data ?? { tenant_id: tenantId, ...DEFAULT_TEMPLATES };
+    if (data) return data;
+    // cria default se ausente
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: created, error: e2 } = await supabaseAdmin
+      .from("notification_settings").insert({ tenant_id: tenantId }).select().single();
+    if (e2) throw new Error(e2.message);
+    return created;
   });
 
-export const saveWhatsappTemplates = createServerFn({ method: "POST" })
+export const saveNotificationSettings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input) =>
-    z.object({
-      template_7_dias: z.string().min(5).max(2000),
-      template_3_dias: z.string().min(5).max(2000),
-      template_vencimento: z.string().min(5).max(2000),
-    }).parse(input)
-  )
+  .inputValidator((i) => z.object({
+    dias_antes_lembrete: z.array(z.number().int().min(1).max(30)).max(5),
+    enviar_no_vencimento: z.boolean(),
+    dias_apos_vencimento: z.array(z.number().int().min(1).max(30)).max(5),
+    hora_inicio: z.string().regex(/^\d{2}:\d{2}$/),
+    hora_fim: z.string().regex(/^\d{2}:\d{2}$/),
+    hora_preferencial: z.string().regex(/^\d{2}:\d{2}$/),
+    timezone: z.string().min(3).max(64),
+    pix_chave: z.string().max(200).nullable().optional(),
+    assinatura: z.string().max(500).nullable().optional(),
+  }).parse(i))
   .handler(async ({ data, context }) => {
     const tenantId = await getTenantAdmin(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin
-      .from("whatsapp_config")
-      .upsert({ tenant_id: tenantId, provider: "evolution", enabled: true, ...data }, { onConflict: "tenant_id" });
+    const { error } = await supabaseAdmin.from("notification_settings")
+      .upsert({ tenant_id: tenantId, ...data }, { onConflict: "tenant_id" });
+    if (error) throw new Error(error.message);
+
+    // reagendar tudo pendente do tenant após mudança de settings
+    const { data: mens } = await supabaseAdmin.from("mensalidades")
+      .select("id").eq("tenant_id", tenantId).eq("status", "pendente")
+      .gte("data_vencimento", new Date().toISOString().slice(0, 10));
+    for (const m of (mens ?? []) as any[]) {
+      await supabaseAdmin.rpc("cancelar_notificacoes_mensalidade", {
+        p_mensalidade_id: m.id,
+        p_motivo: "Configurações de notificação atualizadas.",
+      });
+      await supabaseAdmin.rpc("agendar_notificacoes_mensalidade", { p_mensalidade_id: m.id });
+    }
+    return { ok: true, reagendadas: (mens ?? []).length };
+  });
+
+// ============ TEMPLATES ============
+export const listTemplates = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const tenantId = await getTenantAdmin(context as any);
+    const { data, error } = await (context as any).supabase
+      .from("notification_templates").select("*")
+      .eq("tenant_id", tenantId)
+      .order("tipo").order("dias_offset");
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  });
+
+export const upsertTemplate = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => z.object({
+    id: z.string().uuid().optional().nullable(),
+    tipo: z.enum(["lembrete", "vencimento", "atraso", "boas_vindas", "manual"]),
+    dias_offset: z.number().int().min(-30).max(30),
+    mensagem: z.string().min(5).max(2000),
+    ativo: z.boolean().default(true),
+  }).parse(i))
+  .handler(async ({ data, context }) => {
+    const tenantId = await getTenantAdmin(context as any);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const payload: any = {
+      tenant_id: tenantId,
+      tipo: data.tipo,
+      dias_offset: data.dias_offset,
+      mensagem: data.mensagem,
+      ativo: data.ativo,
+    };
+    if (data.id) payload.id = data.id;
+    const { error } = await supabaseAdmin.from("notification_templates")
+      .upsert(payload, { onConflict: "tenant_id,tipo,dias_offset" });
     if (error) throw new Error(error.message);
     return { ok: true };
   });
 
-export const listNotifications = createServerFn({ method: "POST" })
+export const deleteTemplate = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input) =>
-    z.object({
-      aluno_id: z.string().uuid().optional().nullable(),
-      status: z.enum(["agendada", "enviada", "falhou", "cancelada"]).optional().nullable(),
-      tipo: z.string().optional().nullable(),
-      from: z.string().optional().nullable(),
-      to: z.string().optional().nullable(),
-      limit: z.number().min(1).max(500).default(100),
-    }).parse(input)
-  )
+  .inputValidator((i) => z.object({ id: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
     const tenantId = await getTenantAdmin(context as any);
-    const supabase = (context as any).supabase;
-    let q = supabase
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("notification_templates")
+      .delete().eq("id", data.id).eq("tenant_id", tenantId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+// ============ HISTÓRICO ============
+export const listNotifications = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => z.object({
+    aluno_id: z.string().uuid().optional().nullable(),
+    status: z.enum(["agendada", "enviada", "falhou", "cancelada"]).optional().nullable(),
+    tipo: z.string().optional().nullable(),
+    from: z.string().optional().nullable(),
+    to: z.string().optional().nullable(),
+    limit: z.number().min(1).max(500).default(200),
+  }).parse(i))
+  .handler(async ({ data, context }) => {
+    const tenantId = await getTenantAdmin(context as any);
+    let q = (context as any).supabase
       .from("notificacoes")
       .select(`
-        id, tipo, canal, destinatario, mensagem, status, enviada_em, erro, created_at,
+        id, tipo, canal, destinatario, mensagem, status, dias_offset,
+        agendada_para, enviada_em, erro, motivo_cancelamento, created_at,
         mensalidade_id, aluno:alunos ( id, nome_completo )
       `)
       .eq("tenant_id", tenantId)
+      .order("agendada_para", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       .limit(data.limit);
     if (data.aluno_id) q = q.eq("aluno_id", data.aluno_id);
@@ -85,47 +150,37 @@ export const listNotifications = createServerFn({ method: "POST" })
 
 export const resendNotification = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input) => z.object({ notification_id: z.string().uuid() }).parse(input))
+  .inputValidator((i) => z.object({ notification_id: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
     const tenantId = await getTenantAdmin(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { sendWhatsappByTenant } = await import("@/lib/whatsapp.server");
 
-    const { data: notif, error } = await supabaseAdmin
+    const { data: n, error } = await supabaseAdmin
       .from("notificacoes").select("*").eq("id", data.notification_id).maybeSingle();
-    if (error || !notif) throw new Error("Notificação não encontrada");
-    if ((notif as any).tenant_id !== tenantId) throw new Error("Não autorizado");
+    if (error || !n) throw new Error("Notificação não encontrada");
+    if ((n as any).tenant_id !== tenantId) throw new Error("Não autorizado");
+    if (!(n as any).destinatario) throw new Error("Notificação sem telefone destinatário");
 
-    const mensalidadeId = (notif as any).mensalidade_id as string | null;
-    if (mensalidadeId) {
-      const { data: m } = await supabaseAdmin
-        .from("mensalidades").select("status").eq("id", mensalidadeId).maybeSingle();
-      if (m && (m as any).status !== "pendente") {
-        throw new Error(`Mensalidade está como '${(m as any).status}' — não é possível reenviar aviso de cobrança.`);
-      }
-    }
-
-    if (!(notif as any).destinatario) throw new Error("Notificação sem telefone destinatário");
-
-    const result = await sendWhatsappByTenant(tenantId, (notif as any).destinatario, (notif as any).mensagem);
+    const r = await sendWhatsappByTenant(tenantId, (n as any).destinatario, (n as any).mensagem);
     await supabaseAdmin.from("notificacoes").update({
-      status: result.ok ? "enviada" : "falhou",
-      enviada_em: result.ok ? new Date().toISOString() : (notif as any).enviada_em,
-      erro: result.ok ? null : (result.error ?? "Erro desconhecido"),
-    }).eq("id", (notif as any).id);
-    return { ok: result.ok, error: result.error, providerMessageId: result.providerMessageId };
+      status: r.ok ? "enviada" : "falhou",
+      enviada_em: r.ok ? new Date().toISOString() : (n as any).enviada_em,
+      erro: r.ok ? null : (r.error ?? "Erro desconhecido"),
+    }).eq("id", (n as any).id);
+    return { ok: r.ok, error: r.error };
   });
 
-export const runNotificationsNow = createServerFn({ method: "POST" })
+// ============ EXECUTAR VERIFICAÇÕES AGORA ============
+export const runDispatchNow = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await getTenantAdmin(context as any);
-    const handler = await import("@/routes/api/public/hooks/notify-mensalidades");
-    const req = new Request("https://internal/api/public/hooks/notify-mensalidades", {
+    const handler = await import("@/routes/api/public/hooks/dispatch-notifications");
+    const req = new Request("https://internal/api/public/hooks/dispatch-notifications", {
       method: "POST",
       headers: { apikey: process.env.SUPABASE_PUBLISHABLE_KEY ?? "" },
     });
     const res = await (handler.Route as any).options.server.handlers.POST({ request: req });
-    const json = await res.json();
-    return json as { ok: boolean; summary?: { sent: number; failed: number; skipped: number; scanned: number } };
+    return await res.json();
   });

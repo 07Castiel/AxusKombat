@@ -1,122 +1,129 @@
+## Refatoração do Módulo de Notificações — Axus Kombat
 
-# Onboarding + Checkout Stripe (Axus Kombat)
+### Diagnóstico dos problemas atuais
 
-Implementação das 3 rotas (/login, /precos, /bem-vindo) integradas à estrutura multi-tenant existente. Stripe BYOK. Status mora em `tenants`. Webhook é a única fonte de verdade.
+1. **Modelo daily-scan**: `notify-mensalidades` (cron 05:00 UTC = **02:00 BRT**) varre `mensalidades` procurando `D-7 / D-3 / D-0`. Se o vencimento mudar depois do scan, ou o aluno for criado no meio do dia, nada acontece até o próximo dia — e a mensagem sai às 2h.
+2. **Prazos fixos**: `D-7 / D-3 / D-0` estão hardcoded no handler.
+3. **Sem janela horária**: nada controla horário permitido/preferencial nem fuso.
+4. **Sem cancelamento em alterações**: contratos/mensalidades mudam sem limpar notificações pendentes.
+5. **Templates só cobrem 3 tipos**, variáveis limitadas.
+6. **Aba "Mensagens" mistura tudo**.
 
-## Escopo
+### Nova arquitetura — event-driven + worker de janela
 
-### 1. Migração — colunas em `tenants`
-- `status` text NOT NULL default `'active'` — `pending | trialing | active | trial_expired` (default `active` para não bloquear tenants existentes; novos signups gravam `pending`)
-- `plan` text NULL — `start | pro | elite`
-- `plan_period` text NULL — `monthly | annual`
-- `is_trial` boolean default false
-- `stripe_customer_id` text NULL (index)
-- `stripe_subscription_id` text NULL (index)
-- `trial_ends_at` timestamptz NULL
-- `onboarding_completed` boolean default true (antigos não veem /bem-vindo; novos gravam false)
+```text
++-----------------------------------+       +----------------------------+
+| Trigger DB (alunos, contratos,    | ----> | fn agendar_notificacoes()  |
+| mensalidades: INSERT/UPDATE/DEL)  |       | - cancela pendentes        |
++-----------------------------------+       | - recalcula agendada_para  |
+                                            |   em cada mensalidade      |
++-----------------------------------+       +-------------+--------------+
+| Aba Automação (config por tenant) | ------>              |
++-----------------------------------+                      v
+                                            +----------------------------+
+             pg_cron a cada 15 min  ------> | /api/public/hooks/         |
+             (cobre janela 08–20h)          | dispatch-notifications     |
+                                            | envia só as due AGORA      |
+                                            | dentro da janela do tenant |
+                                            +----------------------------+
+```
 
-### 2. Trigger `handle_new_user`
-Refatorar para ler `plan`, `plan_period`, `is_trial` de `raw_user_meta_data` e gravar tenant com `status='pending'`, `onboarding_completed=false`.
+Notificações passam a ser **agendadas com timestamp exato** (`agendada_para`), não descobertas em runtime. Um worker leve dispara apenas o que está `pendente` e cujo `agendada_para <= now()` dentro da `[hora_inicio, hora_fim]` do tenant.
 
-### 3. `/login` — alterações mínimas
-- Mantém layout atual.
-- Adiciona checkbox "Lembrar de mim" e link "Ainda não é cliente? Ver planos →" (→ `/precos`).
-- Após login, ler `tenants.status`:
-  - `active`/`trialing` → `/`
-  - `pending` → `/precos?retomar=true` (abre modal direto no Step 2 com `plan`/`plan_period` salvos)
-  - `trial_expired` → `/precos?expirado=true`
-- Se já autenticado e visitar `/login`, redireciona para `/`.
+### Alterações no banco
 
-### 4. `/precos` (pública)
-- Header dark: logo + "Já sou cliente" → `/login`.
-- Bloco CTA: "Teste 14 dias grátis no Plano Pro" + botão "Começar trial gratuito" (abre modal Pro + `is_trial:true`).
-- Toggle Mensal/Anual (Anual: Start R$790, Pro R$990, Elite R$1.490 + badge "2 meses grátis").
-- 3 cards: Start R$79, Pro R$99 (badge "Mais vendido" + borda 2px #8B0000), Elite R$149, com features exatas do brief.
-- Mobile: Pro expandido, Start/Elite colapsados com "Ver detalhes".
-- Banners condicionais via query (`?retomar`, `?expirado`) — **estilo custom inline**: `bg:#1a0000`, `border:1px solid #8B0000`, texto branco, Rajdhani. Não usar `<Alert>` padrão.
-- Autenticado `active`/`trialing`: "Plano atual" desabilitado ou "Fazer upgrade" (apenas UI).
-- Rodapé: WhatsApp + Política/Termos.
+**Nova tabela `notification_settings` (1 por tenant):**
+- `dias_antes_lembrete int[]` (default `{2}`)
+- `enviar_no_vencimento bool` (default true)
+- `dias_apos_vencimento int[]` (default `{}`)
+- `hora_inicio time` (default `08:00`), `hora_fim time` (`20:00`)
+- `hora_preferencial time` (`09:00`)
+- `timezone text` (`America/Sao_Paulo`)
+- `pix_chave text`, `assinatura text`
 
-### 5. Modal de Checkout (3 steps)
-**Step 1 — Cadastro**: nome (≥3), e-mail, senha (≥8), confirmar (tempo real). Server fn `checkEmailAvailable`. Server fn `signupPendingTenant` cria `auth.user` via `supabaseAdmin.auth.admin.createUser` com metadata; trigger cria tenant pending. Login automático no cliente.
+**Nova tabela `notification_templates` (1 por tipo por tenant):**
+- `tipo text` (`lembrete`, `vencimento`, `atraso`, `boas_vindas`, `manual`)
+- `dias_offset int` (permite N templates de lembrete: -2, -1, +1)
+- `mensagem text`
 
-**Step 2 — Resumo**: plano, período, valor (trial: "R$0,00 hoje. Cobrança de R$XX/mês após 14 dias.").
+**Alterações em `notificacoes`:**
+- adicionar `agendada_para timestamptz NOT NULL`
+- adicionar `motivo_cancelamento text`
+- novo status `cancelada` (já existe no enum)
+- novo status `agendada` (já existe)
+- adicionar índice `(tenant_id, status, agendada_para)`
 
-**Step 3 — Pagamento**: server fn `createCheckoutSession` (requireSupabaseAuth):
-- Cria/recupera Customer Stripe (idempotente via `stripe_customer_id`).
-- Checkout Session `mode:subscription`, price_id do env, `metadata.tenant_id`.
-- Se trial: `subscription_data.trial_period_days:14`, `payment_method_collection:'if_required'`.
-- `success_url: /bem-vindo?plano=X&trial=Y`, `cancel_url: /precos`.
-- Erro → "Tentar novamente".
+**Novas funções SQL:**
+- `agendar_notificacoes_mensalidade(mensalidade_id)` — cancela pendentes/agendadas dessa mensalidade com motivo, recalcula e insere novos registros `status='agendada'` combinando `data_vencimento + offset` com `hora_preferencial` no timezone do tenant.
+- `agendar_notificacoes_aluno(aluno_id)` — itera mensalidades futuras `pendente` do aluno.
+- `cancelar_notificacoes_mensalidade(mensalidade_id, motivo)`.
 
-### 6. Webhook — `src/routes/api/public/stripe-webhook.ts`
-- Verifica assinatura com `STRIPE_WEBHOOK_SECRET` sobre raw body.
-- `checkout.session.completed`: salva customer/subscription, status `trialing`|`active`, `trial_ends_at`.
-- `invoice.paid`: status = `active`.
-- `customer.subscription.updated|deleted` com `past_due|canceled|unpaid`: status = `trial_expired`.
-- Usa `supabaseAdmin` carregado dentro do handler.
+**Triggers (AFTER):**
+- `alunos`: INSERT / UPDATE de status → reagendar
+- `contratos`: INSERT / UPDATE de `dia_vencimento`, `valor_mensalidade`, `status`, `plano_id` → cancelar + regenerar mensalidades futuras + reagendar
+- `mensalidades`: INSERT → agendar; UPDATE de `data_vencimento` → cancelar antigas + reagendar; UPDATE `status` para `pago` → cancelar pendentes; DELETE → cancelar.
 
-### 7. `/bem-vindo` (em `_app`)
-- Se `onboarding_completed=true` → `/`.
-- Ícone ✓ 64px (#8B0000), título Cinzel, subtítulo dinâmico por `?plano`/`?trial` (trial: data atual+14d DD/MM/AAAA). Botão "Acessar o sistema" → marca `onboarding_completed=true` e vai para `/`.
+**GRANTS + RLS** por tenant (segue padrão existente; nenhuma policy antiga de alunos/professores é tocada).
 
-### 8. Guard global em `_app/route.tsx`
-Após carregar perfil, se `tenants.status ∈ {pending, trial_expired}` → redireciona `/precos?retomar|expirado=true`. Admin master livre.
+### Worker de disparo
 
-### 9. Substituir todas as referências a `/signup` por `/precos`
-Antes de mexer no roteamento, varrer o projeto e atualizar:
-- Buscar (`rg "/signup"`, `rg "signup"`) em `src/**` e identificar:
-  - Links/botões em `src/routes/login.tsx` ("Criar academia") e qualquer outro CTA/header/navbar.
-  - `navigate({ to: "/signup" })` ou `<Link to="/signup">`.
-  - Strings em e-mails transacionais, templates, copy de auth, mensagens de erro.
-  - Comentários/docs (`.lovable/plan.md`, README, llms.txt, sitemap).
-- Substituir todas as ocorrências de destino por `/precos`.
-- A rota `src/routes/signup.tsx` é removida. Como fallback de bookmarks antigos, criar um stub que apenas faz `redirect({ to: "/precos" })` no `beforeLoad` (sem UI).
-- Validar com nova busca por `/signup` que só sobra o stub.
+- Rota nova `src/routes/api/public/hooks/dispatch-notifications.ts` — chamada a cada 15 min por `pg_cron`.
+- Lê `notificacoes` `status='agendada' AND agendada_para <= now()`, agrupa por `tenant_id`, checa `notification_settings.hora_inicio/hora_fim/timezone` — fora da janela: pula (não marca falha).
+- Renderiza template com todas as variáveis (`{primeiro_nome}`, `{telefone}`, `{modalidade}`, `{plano}`, `{pix}`, `{dias_restantes}`, `{professor}`, `{link_pagamento}` além das existentes).
+- Envia via `sendWhatsappByTenant`, atualiza `status`, `enviada_em`, `erro`.
+- Cron antigo `mensalidades-daily` **mantido só** para: marcar vencidas + gerar mensalidades futuras (rolling 3 meses). O trigger em `mensalidades` cuida do agendamento das novas.
+- Novo cron `dispatch-notifications-15min` `*/15 * * * *` chamando o worker.
 
-### 10. Estilo
-- Fontes Cinzel + Rajdhani já existem.
-- Wrapper `<div className="dark">` nas 3 rotas.
-- Cores: bg #0D0D0D, accent #8B0000 (hover #6B0000), cards #111111, checks #8B0000.
+**Correção da causa raiz do envio às 2h:** worker respeita janela por tenant no timezone configurado; cron a cada 15 min só serve como tick — o filtro é aplicado por linha.
 
-### 11. Secrets BYOK (via add_secret após aprovação)
-`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_{START|PRO|ELITE}_{MONTHLY|ANNUAL}`.
+### Frontend — nova organização de abas
 
-URL do webhook: `https://project--{id}.lovable.app/api/public/stripe-webhook`.
+Reescrever `src/routes/_app/notificacoes.tsx` com 5 abas:
 
-## Detalhes técnicos
-- `bun add stripe`.
-- `src/lib/stripe.server.ts` (cliente) + `src/lib/billing.functions.ts` (server fns).
-- Webhook em server route com `await request.text()` para HMAC.
-- Migração: ALTER em `tenants` (GRANT já existe).
+1. **WhatsApp** — conteúdo atual de conexão/QR/teste (reaproveita `whatsapp-connection.functions`).
+2. **Automação** — form de `notification_settings`: chips para `dias_antes_lembrete`, toggle vencimento, chips `dias_apos_vencimento`, `hora_inicio/fim/preferencial`, `timezone`, `pix_chave`, `assinatura`. Botão **"Executar verificações agora"** com descrição pedida.
+3. **Modelos** — CRUD de `notification_templates` com sidebar de variáveis clicáveis (insere no cursor).
+4. **Comunicados** — reaproveita `comunicados.functions.ts` já existente.
+5. **Histórico** — tabela com filtros (aluno, tipo, status, período), colunas: aluno, telefone, tipo, agendada_para, enviada_em, status, erro, motivo_cancelamento, prévia da mensagem, ação **Reenviar** (se `falhou`).
 
-## Fora de escopo
-- Não substituir layout do /login.
-- Não migrar para Lovable Payments.
-- Sem portal de gestão de assinatura/troca de cartão nesta fase.
-- Troca real de subscription (upgrade) fica para fase seguinte; nesta entrega só a UI.
+**Sidebar (`AppLayout`)**: remover item "Acessos" (estrutura de banco preservada).
 
-## Ordem de execução
-1. Migração `tenants` + refator do trigger.
-2. Varredura e substituição de `/signup` → `/precos` (incluindo stub de redirect).
-3. Pedir secrets Stripe.
-4. `stripe.server.ts` + `billing.functions.ts` + webhook.
-5. `/precos` + modal 3 steps + banners custom.
-6. Ajustes em `/login`.
-7. `/bem-vindo` + guard em `_app`.
-8. Teste end-to-end (Stripe test mode).
+### Server functions (todas com `requireSupabaseAuth` + admin check)
 
----
+`src/lib/notifications.functions.ts` — reescrito:
+- `getNotificationSettings`, `saveNotificationSettings`
+- `listTemplates`, `upsertTemplate`, `deleteTemplate`
+- `listNotifications` (com filtros novos)
+- `resendNotification`
+- `runDispatchNow` — invoca a rota `dispatch-notifications` com secret interno.
 
-## ✅ Implementação concluída (Stripe BYOK)
+### Migrations
 
-Todas as etapas do plano foram executadas. Falta apenas o usuário adicionar as **secrets** do Stripe (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` e os 6 `STRIPE_PRICE_*`) e configurar o webhook em `https://<domínio>/api/public/stripe-webhook` para o fluxo ficar 100% operacional.
+Uma única migration cria: tabelas, GRANTs, RLS, funções e triggers; e um bootstrap que popula `notification_settings` + templates default para todos os tenants existentes copiando os textos hoje em `whatsapp_config.template_*`.
 
-- ✅ Migração: colunas de billing em `tenants` + trigger `handle_new_user` lendo `plan`/`plan_period`/`is_trial`.
-- ✅ `/signup` → stub que redireciona para `/precos`. Login, sitemap e llms.txt atualizados.
-- ✅ `src/lib/stripe.server.ts` + `src/lib/billing.functions.ts` (createCheckoutSession, completeOnboarding, getMyTenantStatus).
-- ✅ Webhook `src/routes/api/public/stripe-webhook.ts` com HMAC e os 4 eventos do escopo.
-- ✅ `/precos` pública com header, hero, trial CTA, toggle mensal/anual, 3 cards (Pro destacado), banners custom dark/vermelhos e modal de 3 steps.
-- ✅ `/login` com checkbox "Lembrar de mim", link "Ver planos →" e roteamento pós-login por status.
-- ✅ `/bem-vindo` (sob `_app`) com mensagem dinâmica por plano/trial.
-- ✅ Guard em `_app.tsx` redireciona pending/trial_expired para `/precos`.
+### Arquivos a criar / alterar
+
+**Criar**
+- `supabase/migrations/<ts>_notifications_v2.sql`
+- `src/routes/api/public/hooks/dispatch-notifications.ts`
+- `src/components/notifications/TabWhatsapp.tsx`
+- `src/components/notifications/TabAutomacao.tsx`
+- `src/components/notifications/TabModelos.tsx`
+- `src/components/notifications/TabComunicados.tsx`
+- `src/components/notifications/TabHistorico.tsx`
+
+**Alterar**
+- `src/lib/notifications.functions.ts` (reescrito)
+- `src/lib/whatsapp.server.ts` (novo `renderTemplate` com variáveis extras)
+- `src/routes/_app/notificacoes.tsx` (5 abas)
+- `src/components/AppLayout.tsx` (remover Acessos)
+- `src/routes/api/public/hooks/notify-mensalidades.ts` (reduzir escopo para só marcar vencidas + gerar futuras)
+- Agendar novo cron via `supabase--insert` após migration.
+
+### O que NÃO será tocado
+
+RLS de alunos/professores/recepção/financeiro, rota `/acessos` (só some do menu), Stripe/billing, layout dark/vermelho.
+
+### Ao final
+
+Vou entregar um resumo de tabelas/funções/triggers criadas e do fluxo de recálculo para você documentar.
