@@ -1,9 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Send, RefreshCw, Play, Save, MessageSquare, QrCode, Smartphone, Wifi, WifiOff, Loader2, Megaphone } from "lucide-react";
+import {
+  Send, RefreshCw, Play, Save, MessageSquare, QrCode, Smartphone, Wifi, WifiOff,
+  Loader2, Megaphone, Plus, Trash2, Settings2, FileText, History, X,
+} from "lucide-react";
 
 import { useAuth } from "@/hooks/use-auth";
 import { PageHeader } from "@/components/PageHeader";
@@ -15,12 +18,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { translateError } from "@/lib/errors";
 import {
-  getWhatsappTemplates, saveWhatsappTemplates,
-  listNotifications, resendNotification, runNotificationsNow,
+  getNotificationSettings, saveNotificationSettings,
+  listTemplates, upsertTemplate, deleteTemplate,
+  listNotifications, resendNotification, runDispatchNow,
 } from "@/lib/notifications.functions";
 import {
   getWhatsappConnection, connectWhatsapp, refreshWhatsappStatus,
@@ -33,15 +38,27 @@ export const Route = createFileRoute("/_app/notificacoes")({
   head: () => ({
     meta: [
       { title: "Notificações | Axus Kombat" },
-      { name: "description", content: "Conexão WhatsApp e avisos automáticos de mensalidade." },
+      { name: "description", content: "Automação de mensagens, conexão WhatsApp e histórico de envios." },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
 });
 
 const TIPO_LABEL: Record<string, string> = {
-  AVISO_7_DIAS: "7 dias antes", AVISO_3_DIAS: "3 dias antes", AVISO_VENCIMENTO: "Vencimento", COMUNICADO: "Comunicado",
+  lembrete: "Lembrete", vencimento: "Vencimento", atraso: "Atraso",
+  boas_vindas: "Boas-vindas", manual: "Manual", COMUNICADO: "Comunicado",
 };
+
+const VARIAVEIS = [
+  "primeiro_nome", "nome", "academia", "vencimento", "valor",
+  "telefone", "modalidade", "plano", "pix", "dias_restantes",
+  "professor", "link_pagamento", "assinatura",
+];
+
+const TIMEZONES = [
+  "America/Sao_Paulo", "America/Fortaleza", "America/Manaus",
+  "America/Rio_Branco", "America/Belem", "America/Noronha",
+];
 
 function NotificacoesPage() {
   const { isAdmin, loading } = useAuth();
@@ -49,25 +66,505 @@ function NotificacoesPage() {
   const qc = useQueryClient();
 
   useEffect(() => { if (!loading && !isAdmin) navigate({ to: "/" }); }, [loading, isAdmin, navigate]);
+  if (!isAdmin) return null;
 
+  return (
+    <div>
+      <PageHeader
+        title="Notificações"
+        description="Automação de mensagens, conexão WhatsApp e histórico de envios"
+      />
+      <Tabs defaultValue="whatsapp" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="whatsapp"><Wifi className="h-3.5 w-3.5 mr-1"/>WhatsApp</TabsTrigger>
+          <TabsTrigger value="automacao"><Settings2 className="h-3.5 w-3.5 mr-1"/>Automação</TabsTrigger>
+          <TabsTrigger value="modelos"><FileText className="h-3.5 w-3.5 mr-1"/>Modelos</TabsTrigger>
+          <TabsTrigger value="comunicados"><Megaphone className="h-3.5 w-3.5 mr-1"/>Comunicados</TabsTrigger>
+          <TabsTrigger value="historico"><History className="h-3.5 w-3.5 mr-1"/>Histórico</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="whatsapp"><TabWhatsapp /></TabsContent>
+        <TabsContent value="automacao"><TabAutomacao qc={qc} /></TabsContent>
+        <TabsContent value="modelos"><TabModelos qc={qc} /></TabsContent>
+        <TabsContent value="comunicados"><TabComunicados /></TabsContent>
+        <TabsContent value="historico"><TabHistorico qc={qc} /></TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+// ============================ WHATSAPP ============================
+function TabWhatsapp() {
+  const qc = useQueryClient();
   const getConn = useServerFn(getWhatsappConnection);
   const connect = useServerFn(connectWhatsapp);
   const refresh = useServerFn(refreshWhatsappStatus);
   const disconnect = useServerFn(disconnectWhatsapp);
   const sendTest = useServerFn(sendWhatsappTest);
 
-  const getTpl = useServerFn(getWhatsappTemplates);
-  const saveTpl = useServerFn(saveWhatsappTemplates);
+  const connQuery = useQuery({ queryKey: ["whatsapp_connection"], queryFn: () => getConn() });
+  const [qrOpen, setQrOpen] = useState(false);
+  const [qr, setQr] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(false);
+  const [testTo, setTestTo] = useState("");
+  const [sendingTest, setSendingTest] = useState(false);
+  const pollRef = useRef<number | null>(null);
+  function stopPolling() { if (pollRef.current) { window.clearInterval(pollRef.current); pollRef.current = null; } }
+  useEffect(() => () => stopPolling(), []);
+
+  async function handleConnect() {
+    setConnecting(true);
+    try {
+      const r: any = await connect();
+      setQr(r.qr); setQrOpen(true); stopPolling();
+      pollRef.current = window.setInterval(async () => {
+        try {
+          const s: any = await refresh();
+          qc.setQueryData(["whatsapp_connection"], s);
+          if (s.connected) { stopPolling(); setQrOpen(false); toast.success(`WhatsApp conectado${s.phone_display ? ` (${s.phone_display})` : ""}`); }
+        } catch { /* retry */ }
+      }, 3000);
+    } catch (e: any) { toast.error(translateError(e)); }
+    finally { setConnecting(false); }
+  }
+  async function handleDisconnect() {
+    if (!confirm("Desconectar o WhatsApp desta academia?")) return;
+    try { await disconnect(); toast.success("WhatsApp desconectado"); qc.invalidateQueries({ queryKey: ["whatsapp_connection"] }); }
+    catch (e: any) { toast.error(translateError(e)); }
+  }
+  async function handleRefresh() { try { const s: any = await refresh(); qc.setQueryData(["whatsapp_connection"], s); } catch (e: any) { toast.error(translateError(e)); } }
+  async function handleSendTest() {
+    if (!testTo.trim()) return toast.error("Informe um número para teste");
+    setSendingTest(true);
+    try {
+      const r: any = await sendTest({ data: { to: testTo.trim() } });
+      if (r.ok) toast.success("Mensagem enviada com sucesso"); else toast.error(r.error ?? "Falha ao enviar mensagem");
+    } catch (e: any) { toast.error(translateError(e)); } finally { setSendingTest(false); }
+  }
+
+  const conn = connQuery.data as any;
+  const status: "conectado" | "conectando" | "desconectado" = conn?.status ?? "desconectado";
+  const statusLabel = status === "conectado" ? "Conectado" : status === "conectando" ? "Conectando" : "Desconectado";
+
+  return (
+    <div className="space-y-4">
+      <Card className="p-6 max-w-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              {status === "conectado" ? <Wifi className="h-5 w-5 text-emerald-500" /> :
+                status === "conectando" ? <Loader2 className="h-5 w-5 animate-spin text-amber-500" /> :
+                <WifiOff className="h-5 w-5 text-muted-foreground" />}
+              <h3 className="font-display uppercase tracking-wider text-metal-light">WhatsApp da academia</h3>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Status: <strong className={status === "conectado" ? "text-emerald-500" : status === "conectando" ? "text-amber-500" : "text-muted-foreground"}>{statusLabel}</strong>
+            </p>
+            {conn?.phone_display && <p className="text-sm">Número conectado: <strong>{conn.phone_display}</strong></p>}
+            {conn?.last_connection && <p className="text-xs text-muted-foreground">Última conexão: {new Date(conn.last_connection).toLocaleString("pt-BR")}</p>}
+            {status === "desconectado" && conn?.last_connection && <p className="text-xs text-destructive">Conexão perdida — reconecte para retomar os envios.</p>}
+          </div>
+          <Button variant="ghost" size="icon" onClick={handleRefresh} title="Atualizar status"><RefreshCw className="h-4 w-4" /></Button>
+        </div>
+        <div className="flex flex-wrap gap-2 mt-6">
+          <Button onClick={handleConnect} disabled={connecting}>
+            <QrCode className="h-4 w-4" /> {connecting ? "Gerando QR…" : status === "conectado" ? "Reconectar WhatsApp" : "Conectar WhatsApp"}
+          </Button>
+          {status === "conectado" && <Button variant="outline" onClick={handleDisconnect}>Desconectar</Button>}
+        </div>
+      </Card>
+
+      <Card className="p-6 max-w-2xl space-y-3">
+        <h3 className="font-display uppercase tracking-wider text-metal-light flex items-center gap-2">
+          <MessageSquare className="h-4 w-4" /> Mensagem de teste
+        </h3>
+        <p className="text-xs text-muted-foreground">Envia uma mensagem de verificação para o número informado.</p>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="space-y-1 flex-1 min-w-48">
+            <Label className="text-xs">Número para teste</Label>
+            <Input value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder="(11) 99999-9999" />
+          </div>
+          <Button onClick={handleSendTest} disabled={sendingTest || status !== "conectado"}>
+            <Send className="h-4 w-4" /> {sendingTest ? "Enviando…" : "Enviar mensagem de teste"}
+          </Button>
+        </div>
+        {status !== "conectado" && <p className="text-xs text-muted-foreground">Conecte o WhatsApp para habilitar o envio.</p>}
+      </Card>
+
+      <Dialog open={qrOpen} onOpenChange={(o) => { setQrOpen(o); if (!o) stopPolling(); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><QrCode className="h-5 w-5" /> Escaneie o QR Code</DialogTitle>
+            <DialogDescription>Use o WhatsApp do celular para conectar.</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-4">
+            {qr ? <img src={qr} alt="QR Code WhatsApp" className="w-64 h-64 bg-white p-2 rounded" />
+              : <div className="w-64 h-64 flex items-center justify-center text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}
+            <div className="text-xs text-muted-foreground space-y-2 w-full">
+              <p className="flex items-center gap-1 font-semibold text-foreground"><Smartphone className="h-3 w-3" /> Android</p>
+              <p>WhatsApp → Menu (⋮) → Dispositivos conectados → Conectar dispositivo</p>
+              <p className="flex items-center gap-1 font-semibold text-foreground mt-2"><Smartphone className="h-3 w-3" /> iPhone</p>
+              <p>WhatsApp → Configurações → Dispositivos conectados → Conectar dispositivo</p>
+            </div>
+            <p className="text-xs text-amber-500 flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Aguardando conexão…</p>
+            <Button variant="outline" size="sm" onClick={handleConnect} disabled={connecting}><RefreshCw className="h-3 w-3" /> Gerar novo QR</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ============================ AUTOMACAO ============================
+function DaysChips({ value, onChange, placeholder }: { value: number[]; onChange: (v: number[]) => void; placeholder: string }) {
+  const [input, setInput] = useState("");
+  function add() {
+    const n = parseInt(input.trim(), 10);
+    if (!isNaN(n) && n > 0 && n <= 30 && !value.includes(n)) onChange([...value, n].sort((a, b) => a - b));
+    setInput("");
+  }
+  return (
+    <div className="flex flex-wrap gap-2 items-center">
+      {value.map((d) => (
+        <span key={d} className="flex items-center gap-1 px-2 py-1 rounded text-xs" style={{ background: "rgba(181,0,0,0.15)", border: "1px solid rgba(181,0,0,0.35)" }}>
+          {d} {d === 1 ? "dia" : "dias"}
+          <button onClick={() => onChange(value.filter((x) => x !== d))} className="hover:text-destructive"><X className="h-3 w-3" /></button>
+        </span>
+      ))}
+      <div className="flex gap-1">
+        <Input value={input} onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
+          placeholder={placeholder} className="w-24 h-8 text-xs" />
+        <Button size="sm" variant="outline" onClick={add} className="h-8"><Plus className="h-3 w-3" /></Button>
+      </div>
+    </div>
+  );
+}
+
+function TabAutomacao({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
+  const getSettings = useServerFn(getNotificationSettings);
+  const saveSettings = useServerFn(saveNotificationSettings);
+  const runNow = useServerFn(runDispatchNow);
+  const settingsQuery = useQuery({ queryKey: ["notification_settings"], queryFn: () => getSettings() });
+  const [form, setForm] = useState<any>(null);
+  useEffect(() => { if (settingsQuery.data) setForm({ ...settingsQuery.data }); }, [settingsQuery.data]);
+  const [saving, setSaving] = useState(false);
+  const [running, setRunning] = useState(false);
+
+  async function handleSave() {
+    if (!form) return;
+    setSaving(true);
+    try {
+      const r: any = await saveSettings({ data: {
+        dias_antes_lembrete: form.dias_antes_lembrete ?? [],
+        enviar_no_vencimento: !!form.enviar_no_vencimento,
+        dias_apos_vencimento: form.dias_apos_vencimento ?? [],
+        hora_inicio: (form.hora_inicio ?? "08:00").slice(0, 5),
+        hora_fim: (form.hora_fim ?? "20:00").slice(0, 5),
+        hora_preferencial: (form.hora_preferencial ?? "09:00").slice(0, 5),
+        timezone: form.timezone ?? "America/Sao_Paulo",
+        pix_chave: form.pix_chave ?? null,
+        assinatura: form.assinatura ?? null,
+      }});
+      toast.success(`Configurações salvas. ${r.reagendadas ?? 0} mensalidade(s) reagendadas.`);
+      qc.invalidateQueries({ queryKey: ["notification_settings"] });
+      qc.invalidateQueries({ queryKey: ["notificacoes"] });
+    } catch (e: any) { toast.error(translateError(e)); } finally { setSaving(false); }
+  }
+
+  async function handleRunNow() {
+    setRunning(true);
+    try {
+      const r: any = await runNow();
+      const s = r?.summary ?? {};
+      toast.success(`Verificação concluída — enviadas: ${s.sent ?? 0} · falhas: ${s.failed ?? 0} · fora da janela: ${s.skipped_window ?? 0}`);
+      qc.invalidateQueries({ queryKey: ["notificacoes"] });
+    } catch (e: any) { toast.error(translateError(e)); } finally { setRunning(false); }
+  }
+
+  if (!form) return <Card className="p-8 text-center text-muted-foreground">Carregando…</Card>;
+
+  return (
+    <div className="space-y-4 max-w-3xl">
+      <Card className="p-6 space-y-6">
+        <div>
+          <h3 className="font-display uppercase tracking-wider text-metal-light mb-3">Regras de envio</h3>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-xs">Enviar lembrete N dias ANTES do vencimento</Label>
+              <div className="mt-2"><DaysChips value={form.dias_antes_lembrete ?? []} onChange={(v) => setForm({ ...form, dias_antes_lembrete: v })} placeholder="ex: 2" /></div>
+            </div>
+            <div className="flex items-center justify-between border-t pt-4">
+              <div>
+                <Label>Enviar no dia do vencimento</Label>
+                <p className="text-xs text-muted-foreground">Dispara automaticamente na data exata.</p>
+              </div>
+              <Switch checked={!!form.enviar_no_vencimento} onCheckedChange={(v) => setForm({ ...form, enviar_no_vencimento: v })} />
+            </div>
+            <div className="border-t pt-4">
+              <Label className="text-xs">Enviar cobrança N dias APÓS o vencimento</Label>
+              <p className="text-[10px] text-muted-foreground mb-2">Deixe vazio para não enviar.</p>
+              <DaysChips value={form.dias_apos_vencimento ?? []} onChange={(v) => setForm({ ...form, dias_apos_vencimento: v })} placeholder="ex: 1" />
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t pt-4">
+          <h3 className="font-display uppercase tracking-wider text-metal-light mb-3">Janela de horário</h3>
+          <p className="text-xs text-muted-foreground mb-3">Nunca envia mensagens fora deste intervalo, em nenhuma hipótese.</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <Label className="text-xs">Horário permitido — início</Label>
+              <Input type="time" value={(form.hora_inicio ?? "08:00").slice(0,5)} onChange={(e) => setForm({ ...form, hora_inicio: e.target.value })} />
+            </div>
+            <div>
+              <Label className="text-xs">Horário permitido — fim</Label>
+              <Input type="time" value={(form.hora_fim ?? "20:00").slice(0,5)} onChange={(e) => setForm({ ...form, hora_fim: e.target.value })} />
+            </div>
+            <div>
+              <Label className="text-xs">Horário preferencial</Label>
+              <Input type="time" value={(form.hora_preferencial ?? "09:00").slice(0,5)} onChange={(e) => setForm({ ...form, hora_preferencial: e.target.value })} />
+            </div>
+          </div>
+          <div className="mt-3">
+            <Label className="text-xs">Fuso horário</Label>
+            <Select value={form.timezone ?? "America/Sao_Paulo"} onValueChange={(v) => setForm({ ...form, timezone: v })}>
+              <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+              <SelectContent>{TIMEZONES.map((tz) => <SelectItem key={tz} value={tz}>{tz}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="border-t pt-4 space-y-3">
+          <h3 className="font-display uppercase tracking-wider text-metal-light">Personalização</h3>
+          <div>
+            <Label className="text-xs">Chave PIX (variável {"{pix}"})</Label>
+            <Input value={form.pix_chave ?? ""} onChange={(e) => setForm({ ...form, pix_chave: e.target.value })} placeholder="CPF, CNPJ, e-mail ou chave aleatória" />
+          </div>
+          <div>
+            <Label className="text-xs">Assinatura padrão (variável {"{assinatura}"})</Label>
+            <Textarea rows={2} value={form.assinatura ?? ""} onChange={(e) => setForm({ ...form, assinatura: e.target.value })} placeholder="Ex: Equipe Axus Kombat" />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 border-t pt-4">
+          <Button onClick={handleSave} disabled={saving}><Save className="h-4 w-4" /> {saving ? "Salvando…" : "Salvar configurações"}</Button>
+          <Button variant="outline" onClick={handleRunNow} disabled={running}>
+            <Play className="h-4 w-4" /> {running ? "Executando…" : "Executar verificações agora"}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">Verifica todos os alunos e envia imediatamente todas as mensagens programadas para hoje.</p>
+      </Card>
+    </div>
+  );
+}
+
+// ============================ MODELOS ============================
+function TabModelos({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
+  const list = useServerFn(listTemplates);
+  const upsert = useServerFn(upsertTemplate);
+  const del = useServerFn(deleteTemplate);
+  const tplQuery = useQuery({ queryKey: ["notification_templates"], queryFn: () => list() });
+
+  const [editing, setEditing] = useState<any | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  function open(t?: any) { setEditing(t ?? { tipo: "lembrete", dias_offset: -2, mensagem: "", ativo: true }); }
+  function insertVar(v: string) {
+    if (!editing) return;
+    const ta = textareaRef.current;
+    const insert = `{${v}}`;
+    if (ta) {
+      const start = ta.selectionStart, end = ta.selectionEnd, val = editing.mensagem ?? "";
+      const next = val.slice(0, start) + insert + val.slice(end);
+      setEditing({ ...editing, mensagem: next });
+      setTimeout(() => { ta.focus(); ta.setSelectionRange(start + insert.length, start + insert.length); }, 0);
+    } else {
+      setEditing({ ...editing, mensagem: (editing.mensagem ?? "") + insert });
+    }
+  }
+  async function save() {
+    try {
+      await upsert({ data: {
+        id: editing.id ?? null, tipo: editing.tipo, dias_offset: Number(editing.dias_offset),
+        mensagem: editing.mensagem, ativo: !!editing.ativo,
+      }});
+      toast.success("Modelo salvo");
+      setEditing(null);
+      qc.invalidateQueries({ queryKey: ["notification_templates"] });
+    } catch (e: any) { toast.error(translateError(e)); }
+  }
+  async function remove(id: string) {
+    if (!confirm("Remover este modelo?")) return;
+    try { await del({ data: { id } }); toast.success("Modelo removido"); qc.invalidateQueries({ queryKey: ["notification_templates"] }); }
+    catch (e: any) { toast.error(translateError(e)); }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-between items-center">
+        <p className="text-xs text-muted-foreground">Modelos por academia. Use variáveis {`{...}`} — substituídas no envio.</p>
+        <Button onClick={() => open()}><Plus className="h-4 w-4" /> Novo modelo</Button>
+      </div>
+      <Card className="overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Tipo</TableHead>
+              <TableHead>Deslocamento</TableHead>
+              <TableHead>Mensagem</TableHead>
+              <TableHead>Ativo</TableHead>
+              <TableHead className="text-right">Ações</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {tplQuery.isLoading && <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Carregando…</TableCell></TableRow>}
+            {!tplQuery.isLoading && (tplQuery.data?.length ?? 0) === 0 && (
+              <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Nenhum modelo cadastrado.</TableCell></TableRow>
+            )}
+            {(tplQuery.data ?? []).map((t: any) => (
+              <TableRow key={t.id}>
+                <TableCell className="text-xs uppercase font-semibold">{TIPO_LABEL[t.tipo] ?? t.tipo}</TableCell>
+                <TableCell className="text-xs">{t.dias_offset === 0 ? "No dia" : t.dias_offset < 0 ? `${-t.dias_offset} dia(s) antes` : `${t.dias_offset} dia(s) depois`}</TableCell>
+                <TableCell className="text-xs max-w-md truncate" title={t.mensagem}>{t.mensagem}</TableCell>
+                <TableCell><StatusBadge status={t.ativo ? "ativo" : "vencida"} /></TableCell>
+                <TableCell className="text-right">
+                  <Button size="sm" variant="ghost" onClick={() => open(t)}>Editar</Button>
+                  <Button size="sm" variant="ghost" onClick={() => remove(t.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Card>
+
+      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{editing?.id ? "Editar modelo" : "Novo modelo"}</DialogTitle>
+            <DialogDescription>O modelo é selecionado pelo tipo + deslocamento.</DialogDescription>
+          </DialogHeader>
+          {editing && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Tipo</Label>
+                  <Select value={editing.tipo} onValueChange={(v) => setEditing({ ...editing, tipo: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="lembrete">Lembrete (antes do vencimento)</SelectItem>
+                      <SelectItem value="vencimento">Vencimento (no dia)</SelectItem>
+                      <SelectItem value="atraso">Atraso (após vencimento)</SelectItem>
+                      <SelectItem value="boas_vindas">Boas-vindas</SelectItem>
+                      <SelectItem value="manual">Manual</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Dias de deslocamento</Label>
+                  <Input type="number" value={editing.dias_offset} onChange={(e) => setEditing({ ...editing, dias_offset: Number(e.target.value) })} />
+                  <p className="text-[10px] text-muted-foreground mt-1">Negativo = antes, 0 = vencimento, positivo = depois.</p>
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">Mensagem</Label>
+                <Textarea ref={textareaRef} rows={5} value={editing.mensagem ?? ""} onChange={(e) => setEditing({ ...editing, mensagem: e.target.value })} />
+              </div>
+              <div>
+                <Label className="text-xs">Variáveis (clique para inserir)</Label>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {VARIAVEIS.map((v) => (
+                    <button key={v} type="button" onClick={() => insertVar(v)}
+                      className="px-2 py-1 rounded text-[10px] font-mono hover:opacity-80"
+                      style={{ background: "rgba(181,0,0,0.1)", border: "1px solid rgba(181,0,0,0.3)" }}>
+                      {`{${v}}`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={!!editing.ativo} onCheckedChange={(v) => setEditing({ ...editing, ativo: v })} />
+                <Label className="text-xs">Ativo</Label>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)}>Cancelar</Button>
+            <Button onClick={save}><Save className="h-4 w-4" /> Salvar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ============================ COMUNICADOS ============================
+function TabComunicados() {
+  const qc = useQueryClient();
+  const enviar = useServerFn(enviarComunicado);
+  const getConn = useServerFn(getWhatsappConnection);
+  const connQuery = useQuery({ queryKey: ["whatsapp_connection"], queryFn: () => getConn() });
+  const status = (connQuery.data as any)?.status ?? "desconectado";
+  const [comunicado, setComunicado] = useState({ mensagem: "", categoria: "todos" as "todos"|"adulto"|"kids", apenas_ativos: true });
+  const [sending, setSending] = useState(false);
+
+  async function handleEnviar() {
+    if (!comunicado.mensagem.trim()) return toast.error("Digite uma mensagem");
+    if (!confirm(`Enviar comunicado para ${comunicado.categoria === "todos" ? "todos" : comunicado.categoria} alunos${comunicado.apenas_ativos ? " ativos" : ""}?`)) return;
+    setSending(true);
+    try {
+      const r: any = await enviar({ data: comunicado });
+      toast.success(`Comunicado enviado: ${r.sent} de ${r.total} (${r.failed} falhas, ${r.skipped} sem telefone)`);
+      setComunicado({ ...comunicado, mensagem: "" });
+      qc.invalidateQueries({ queryKey: ["notificacoes"] });
+    } catch (e: any) { toast.error(translateError(e)); } finally { setSending(false); }
+  }
+
+  return (
+    <Card className="p-6 max-w-2xl space-y-4">
+      <div className="flex items-center gap-2">
+        <Megaphone className="h-4 w-4 text-primary"/>
+        <h3 className="font-display uppercase tracking-wider text-metal-light">Enviar comunicado em massa</h3>
+      </div>
+      <p className="text-xs text-muted-foreground">Envia uma mensagem única via WhatsApp para um grupo de alunos.</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <Label>Para</Label>
+          <Select value={comunicado.categoria} onValueChange={(v: any) => setComunicado({...comunicado, categoria: v})}>
+            <SelectTrigger className="mt-1.5"><SelectValue/></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos os alunos</SelectItem>
+              <SelectItem value="adulto">Apenas adulto</SelectItem>
+              <SelectItem value="kids">Apenas kids</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-end">
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={comunicado.apenas_ativos} onChange={(e) => setComunicado({...comunicado, apenas_ativos: e.target.checked})}/>
+            Apenas alunos ativos
+          </label>
+        </div>
+      </div>
+      <div>
+        <Label>Mensagem</Label>
+        <Textarea rows={5} placeholder="Olá! Avisamos que..." value={comunicado.mensagem}
+          onChange={(e) => setComunicado({...comunicado, mensagem: e.target.value})} className="mt-1.5" />
+        <p className="text-[10px] text-muted-foreground mt-1">{comunicado.mensagem.length}/2000 caracteres</p>
+      </div>
+      <Button onClick={handleEnviar} disabled={sending || status !== "conectado" || !comunicado.mensagem.trim()}
+        className="gradient-primary text-primary-foreground">
+        <Send className="h-4 w-4 mr-2"/>{sending ? "Enviando…" : "Enviar comunicado"}
+      </Button>
+      {status !== "conectado" && <p className="text-xs text-destructive">Conecte o WhatsApp primeiro na aba "WhatsApp".</p>}
+    </Card>
+  );
+}
+
+// ============================ HISTORICO ============================
+function TabHistorico({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
   const list = useServerFn(listNotifications);
   const resend = useServerFn(resendNotification);
-  const runNow = useServerFn(runNotificationsNow);
-  const enviarComunicadoFn = useServerFn(enviarComunicado);
-
-  const connQuery = useQuery({ queryKey: ["whatsapp_connection"], queryFn: () => getConn(), enabled: isAdmin });
-  const tplQuery = useQuery({ queryKey: ["whatsapp_templates"], queryFn: () => getTpl(), enabled: isAdmin });
-  const [tpl, setTpl] = useState<any>(null);
-  useEffect(() => { if (tplQuery.data) setTpl({ ...tplQuery.data }); }, [tplQuery.data]);
-
   const [filters, setFilters] = useState<{ status: string; tipo: string }>({ status: "", tipo: "" });
   const notifQuery = useQuery({
     queryKey: ["notificacoes", filters],
@@ -76,395 +573,125 @@ function NotificacoesPage() {
       tipo: filters.tipo || null,
       limit: 200,
     }}),
-    enabled: isAdmin,
   });
-
-  // QR modal + polling
-  const [qrOpen, setQrOpen] = useState(false);
-  const [qr, setQr] = useState<string | null>(null);
-  const [connecting, setConnecting] = useState(false);
-  const pollRef = useRef<number | null>(null);
-  const [testTo, setTestTo] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [sendingTest, setSendingTest] = useState(false);
-  const [comunicado, setComunicado] = useState({ mensagem: "", categoria: "todos" as "todos"|"adulto"|"kids", apenas_ativos: true });
-  const [enviandoComunicado, setEnviandoComunicado] = useState(false);
-
-  function stopPolling() {
-    if (pollRef.current) { window.clearInterval(pollRef.current); pollRef.current = null; }
-  }
-  useEffect(() => () => stopPolling(), []);
-
-  async function handleConnect() {
-    setConnecting(true);
-    try {
-      const r: any = await connect();
-      setQr(r.qr);
-      setQrOpen(true);
-      stopPolling();
-      pollRef.current = window.setInterval(async () => {
-        try {
-          const s: any = await refresh();
-          qc.setQueryData(["whatsapp_connection"], s);
-          if (s.connected) {
-            stopPolling();
-            setQrOpen(false);
-            toast.success(`WhatsApp conectado${s.phone_display ? ` (${s.phone_display})` : ""}`);
-          }
-        } catch { /* silently retry */ }
-      }, 3000);
-    } catch (e: any) {
-      toast.error(translateError(e));
-    } finally {
-      setConnecting(false);
-    }
-  }
-
-  async function handleDisconnect() {
-    if (!confirm("Desconectar o WhatsApp desta academia?")) return;
-    try {
-      await disconnect();
-      toast.success("WhatsApp desconectado");
-      qc.invalidateQueries({ queryKey: ["whatsapp_connection"] });
-    } catch (e: any) { toast.error(translateError(e)); }
-  }
-
-  async function handleRefresh() {
-    try {
-      const s: any = await refresh();
-      qc.setQueryData(["whatsapp_connection"], s);
-    } catch (e: any) { toast.error(translateError(e)); }
-  }
-
-  async function handleSendTest() {
-    if (!testTo.trim()) return toast.error("Informe um número para teste");
-    setSendingTest(true);
-    try {
-      const r: any = await sendTest({ data: { to: testTo.trim() } });
-      if (r.ok) toast.success("Mensagem enviada com sucesso");
-      else toast.error(r.error ?? "Falha ao enviar mensagem");
-    } catch (e: any) { toast.error(translateError(e)); }
-    finally { setSendingTest(false); }
-  }
-
-  async function handleSaveTpl() {
-    if (!tpl) return;
-    setSaving(true);
-    try {
-      await saveTpl({ data: {
-        template_7_dias: tpl.template_7_dias,
-        template_3_dias: tpl.template_3_dias,
-        template_vencimento: tpl.template_vencimento,
-      }});
-      toast.success("Mensagens salvas");
-      qc.invalidateQueries({ queryKey: ["whatsapp_templates"] });
-    } catch (e: any) { toast.error(translateError(e)); }
-    finally { setSaving(false); }
-  }
+  const [preview, setPreview] = useState<any | null>(null);
 
   async function handleResend(id: string) {
     try {
-      const r = await resend({ data: { notification_id: id } });
-      if (r.ok) toast.success("Notificação reenviada");
-      else toast.error(r.error ?? "Falha ao reenviar");
+      const r: any = await resend({ data: { notification_id: id } });
+      if (r.ok) toast.success("Notificação reenviada"); else toast.error(r.error ?? "Falha ao reenviar");
       qc.invalidateQueries({ queryKey: ["notificacoes"] });
     } catch (e: any) { toast.error(translateError(e)); }
   }
 
-  async function handleRunNow() {
-    try {
-      const r: any = await runNow();
-      toast.success(`Rotina executada: ${r?.summary?.sent ?? 0} enviadas, ${r?.summary?.failed ?? 0} falhas`);
-      qc.invalidateQueries({ queryKey: ["notificacoes"] });
-    } catch (e: any) { toast.error(translateError(e)); }
-  }
-
-  async function handleEnviarComunicado() {
-    if (!comunicado.mensagem.trim()) return toast.error("Digite uma mensagem");
-    if (!confirm(`Enviar comunicado para ${comunicado.categoria === "todos" ? "todos" : comunicado.categoria} alunos${comunicado.apenas_ativos ? " ativos" : ""}?`)) return;
-    setEnviandoComunicado(true);
-    try {
-      const r: any = await enviarComunicadoFn({ data: comunicado });
-      toast.success(`Comunicado enviado: ${r.sent} de ${r.total} (${r.failed} falhas, ${r.skipped} sem telefone)`);
-      setComunicado({ ...comunicado, mensagem: "" });
-      qc.invalidateQueries({ queryKey: ["notificacoes"] });
-    } catch (e: any) { toast.error(translateError(e)); }
-    finally { setEnviandoComunicado(false); }
-  }
-
-  if (!isAdmin) return null;
-
-  const conn = connQuery.data as any;
-  const status: "conectado" | "conectando" | "desconectado" = conn?.status ?? "desconectado";
-  const statusLabel = status === "conectado" ? "Conectado" : status === "conectando" ? "Conectando" : "Desconectado";
+  const rows = useMemo(() => (notifQuery.data ?? []) as any[], [notifQuery.data]);
 
   return (
-    <div>
-      <PageHeader
-        title="Notificações"
-        description="Conexão WhatsApp e avisos automáticos de mensalidade"
-        actions={
-          <Button variant="outline" onClick={handleRunNow}>
-            <Play className="h-4 w-4" /> Executar agora
-          </Button>
-        }
-      />
+    <div className="space-y-4">
+      <Card className="p-4 flex flex-wrap gap-3 items-end">
+        <div className="space-y-1">
+          <Label className="text-xs">Status</Label>
+          <Select value={filters.status || "all"} onValueChange={(v) => setFilters((f) => ({ ...f, status: v === "all" ? "" : v }))}>
+            <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="agendada">Agendada</SelectItem>
+              <SelectItem value="enviada">Enviada</SelectItem>
+              <SelectItem value="falhou">Falhou</SelectItem>
+              <SelectItem value="cancelada">Cancelada</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Tipo</Label>
+          <Select value={filters.tipo || "all"} onValueChange={(v) => setFilters((f) => ({ ...f, tipo: v === "all" ? "" : v }))}>
+            <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="lembrete">Lembrete</SelectItem>
+              <SelectItem value="vencimento">Vencimento</SelectItem>
+              <SelectItem value="atraso">Atraso</SelectItem>
+              <SelectItem value="boas_vindas">Boas-vindas</SelectItem>
+              <SelectItem value="manual">Manual</SelectItem>
+              <SelectItem value="COMUNICADO">Comunicado</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <Button variant="ghost" onClick={() => qc.invalidateQueries({ queryKey: ["notificacoes"] })}>
+          <RefreshCw className="h-4 w-4" /> Atualizar
+        </Button>
+      </Card>
 
-      <Tabs defaultValue="whatsapp" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
-          <TabsTrigger value="templates">Mensagens</TabsTrigger>
-          <TabsTrigger value="comunicado"><Megaphone className="h-3.5 w-3.5 mr-1"/>Comunicado</TabsTrigger>
-          <TabsTrigger value="historico">Histórico</TabsTrigger>
-        </TabsList>
-
-        {/* ---------------- WhatsApp connection ---------------- */}
-        <TabsContent value="whatsapp" className="space-y-4">
-          <Card className="p-6 max-w-2xl">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  {status === "conectado" ? <Wifi className="h-5 w-5 text-emerald-500" /> :
-                    status === "conectando" ? <Loader2 className="h-5 w-5 animate-spin text-amber-500" /> :
-                    <WifiOff className="h-5 w-5 text-muted-foreground" />}
-                  <h3 className="font-display uppercase tracking-wider text-metal-light">WhatsApp da academia</h3>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Status: <strong className={
-                    status === "conectado" ? "text-emerald-500" :
-                    status === "conectando" ? "text-amber-500" : "text-muted-foreground"
-                  }>{statusLabel}</strong>
-                </p>
-                {conn?.phone_display && (
-                  <p className="text-sm">Número conectado: <strong>{conn.phone_display}</strong></p>
-                )}
-                {conn?.last_connection && (
-                  <p className="text-xs text-muted-foreground">
-                    Última conexão: {new Date(conn.last_connection).toLocaleString("pt-BR")}
-                  </p>
-                )}
-                {status === "desconectado" && conn?.last_connection && (
-                  <p className="text-xs text-destructive">Conexão perdida — reconecte para retomar os envios.</p>
-                )}
-              </div>
-              <Button variant="ghost" size="icon" onClick={handleRefresh} title="Atualizar status">
-                <RefreshCw className="h-4 w-4" />
-              </Button>
-            </div>
-
-            <div className="flex flex-wrap gap-2 mt-6">
-              <Button onClick={handleConnect} disabled={connecting}>
-                <QrCode className="h-4 w-4" />
-                {connecting ? "Gerando QR…" : status === "conectado" ? "Reconectar WhatsApp" : "Conectar WhatsApp"}
-              </Button>
-              {status === "conectado" && (
-                <Button variant="outline" onClick={handleDisconnect}>Desconectar</Button>
-              )}
-            </div>
-          </Card>
-
-          <Card className="p-6 max-w-2xl space-y-3">
-            <h3 className="font-display uppercase tracking-wider text-metal-light flex items-center gap-2">
-              <MessageSquare className="h-4 w-4" /> Mensagem de teste
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              Envia uma mensagem de verificação para o número informado.
-            </p>
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="space-y-1 flex-1 min-w-48">
-                <Label className="text-xs">Número para teste</Label>
-                <Input value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder="(11) 99999-9999" />
-              </div>
-              <Button onClick={handleSendTest} disabled={sendingTest || status !== "conectado"}>
-                <Send className="h-4 w-4" /> {sendingTest ? "Enviando…" : "Enviar mensagem de teste"}
-              </Button>
-            </div>
-            {status !== "conectado" && (
-              <p className="text-xs text-muted-foreground">Conecte o WhatsApp para habilitar o envio.</p>
+      <Card className="overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Agendada</TableHead>
+              <TableHead>Enviada</TableHead>
+              <TableHead>Aluno</TableHead>
+              <TableHead>Telefone</TableHead>
+              <TableHead>Tipo</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Detalhe</TableHead>
+              <TableHead className="text-right">Ações</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {notifQuery.isLoading && <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Carregando…</TableCell></TableRow>}
+            {!notifQuery.isLoading && rows.length === 0 && (
+              <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhuma notificação encontrada.</TableCell></TableRow>
             )}
-          </Card>
-        </TabsContent>
+            {rows.map((n) => (
+              <TableRow key={n.id}>
+                <TableCell className="text-xs">{n.agendada_para ? new Date(n.agendada_para).toLocaleString("pt-BR") : "—"}</TableCell>
+                <TableCell className="text-xs">{n.enviada_em ? new Date(n.enviada_em).toLocaleString("pt-BR") : "—"}</TableCell>
+                <TableCell className="font-medium">{n.aluno?.nome_completo ?? "—"}</TableCell>
+                <TableCell className="text-muted-foreground text-xs">{n.destinatario ?? "—"}</TableCell>
+                <TableCell className="text-xs">{TIPO_LABEL[n.tipo] ?? n.tipo}</TableCell>
+                <TableCell>
+                  <StatusBadge status={
+                    n.status === "enviada" ? "ativo" :
+                    n.status === "falhou" ? "vencida" :
+                    n.status === "cancelada" ? "inativo" : "pendente"
+                  } />
+                </TableCell>
+                <TableCell className="text-xs max-w-xs truncate text-muted-foreground"
+                  title={n.erro || n.motivo_cancelamento || n.mensagem || ""}>
+                  {n.erro ? <span className="text-destructive">{n.erro}</span>
+                    : n.motivo_cancelamento ? <span className="text-amber-500">{n.motivo_cancelamento}</span>
+                    : (n.mensagem ?? "—")}
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button size="sm" variant="ghost" onClick={() => setPreview(n)}>Ver</Button>
+                  {n.status === "falhou" && n.destinatario && (
+                    <Button size="sm" variant="ghost" onClick={() => handleResend(n.id)} title="Reenviar"><Send className="h-4 w-4" /></Button>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Card>
 
-        {/* ---------------- Templates ---------------- */}
-        <TabsContent value="templates">
-          {!tpl ? <Card className="p-8 text-center text-muted-foreground">Carregando…</Card> : (
-            <Card className="p-6 space-y-5 max-w-3xl">
-              <p className="text-xs text-muted-foreground">
-                Variáveis: <code>{"{nome}"}</code>, <code>{"{academia}"}</code>, <code>{"{vencimento}"}</code>, <code>{"{valor}"}</code>
-              </p>
-              {[
-                { key: "template_7_dias", label: "Aviso 7 dias antes" },
-                { key: "template_3_dias", label: "Aviso 3 dias antes" },
-                { key: "template_vencimento", label: "Aviso no dia do vencimento" },
-              ].map((f) => (
-                <div key={f.key} className="space-y-1">
-                  <Label>{f.label}</Label>
-                  <Textarea
-                    rows={3}
-                    value={tpl[f.key] ?? ""}
-                    onChange={(e) => setTpl({ ...tpl, [f.key]: e.target.value })}
-                  />
-                </div>
-              ))}
-              <Button onClick={handleSaveTpl} disabled={saving}>
-                <Save className="h-4 w-4" /> {saving ? "Salvando…" : "Salvar mensagens"}
-              </Button>
-            </Card>
+      <Dialog open={!!preview} onOpenChange={(o) => !o && setPreview(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Detalhes da notificação</DialogTitle></DialogHeader>
+          {preview && (
+            <div className="space-y-2 text-sm">
+              <p><strong>Aluno:</strong> {preview.aluno?.nome_completo ?? "—"}</p>
+              <p><strong>Telefone:</strong> {preview.destinatario ?? "—"}</p>
+              <p><strong>Tipo:</strong> {TIPO_LABEL[preview.tipo] ?? preview.tipo}</p>
+              <p><strong>Agendada para:</strong> {preview.agendada_para ? new Date(preview.agendada_para).toLocaleString("pt-BR") : "—"}</p>
+              <p><strong>Enviada em:</strong> {preview.enviada_em ? new Date(preview.enviada_em).toLocaleString("pt-BR") : "—"}</p>
+              <p><strong>Status:</strong> {preview.status}</p>
+              {preview.erro && <p className="text-destructive"><strong>Erro:</strong> {preview.erro}</p>}
+              {preview.motivo_cancelamento && <p className="text-amber-500"><strong>Motivo do cancelamento:</strong> {preview.motivo_cancelamento}</p>}
+              <div className="border-t pt-2">
+                <p className="text-xs uppercase tracking-widest text-muted-foreground mb-1">Mensagem</p>
+                <pre className="text-xs whitespace-pre-wrap font-mono bg-muted/30 p-3 rounded">{preview.mensagem || "—"}</pre>
+              </div>
+            </div>
           )}
-        </TabsContent>
-
-        {/* ---------------- Comunicado geral ---------------- */}
-        <TabsContent value="comunicado">
-          <Card className="p-6 max-w-2xl space-y-4">
-            <div className="flex items-center gap-2">
-              <Megaphone className="h-4 w-4 text-primary"/>
-              <h3 className="font-display uppercase tracking-wider text-metal-light">Enviar comunicado em massa</h3>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Envia uma mensagem única via WhatsApp para um grupo de alunos. Use para feriados, eventos, mudanças de horário.
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <Label>Para</Label>
-                <Select value={comunicado.categoria} onValueChange={(v: any) => setComunicado({...comunicado, categoria: v})}>
-                  <SelectTrigger className="mt-1.5"><SelectValue/></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos os alunos</SelectItem>
-                    <SelectItem value="adulto">Apenas adulto</SelectItem>
-                    <SelectItem value="kids">Apenas kids</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-end">
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" checked={comunicado.apenas_ativos} onChange={(e) => setComunicado({...comunicado, apenas_ativos: e.target.checked})}/>
-                  Apenas alunos ativos
-                </label>
-              </div>
-            </div>
-            <div>
-              <Label>Mensagem</Label>
-              <Textarea
-                rows={5}
-                placeholder="Olá! Avisamos que..."
-                value={comunicado.mensagem}
-                onChange={(e) => setComunicado({...comunicado, mensagem: e.target.value})}
-                className="mt-1.5"
-              />
-              <p className="text-[10px] text-muted-foreground mt-1">{comunicado.mensagem.length}/2000 caracteres</p>
-            </div>
-            <Button
-              onClick={handleEnviarComunicado}
-              disabled={enviandoComunicado || status !== "conectado" || !comunicado.mensagem.trim()}
-              className="gradient-primary text-primary-foreground"
-            >
-              <Send className="h-4 w-4 mr-2"/>{enviandoComunicado ? "Enviando…" : "Enviar comunicado"}
-            </Button>
-            {status !== "conectado" && (
-              <p className="text-xs text-destructive">Conecte o WhatsApp primeiro na aba "WhatsApp".</p>
-            )}
-          </Card>
-        </TabsContent>
-
-        {/* ---------------- Histórico ---------------- */}
-        <TabsContent value="historico" className="space-y-4">
-          <Card className="p-4 flex flex-wrap gap-3 items-end">
-            <div className="space-y-1">
-              <Label className="text-xs">Status</Label>
-              <Select value={filters.status || "all"} onValueChange={(v) => setFilters((f) => ({ ...f, status: v === "all" ? "" : v }))}>
-                <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="enviada">Enviada</SelectItem>
-                  <SelectItem value="falhou">Falhou</SelectItem>
-                  <SelectItem value="agendada">Agendada</SelectItem>
-                  <SelectItem value="cancelada">Cancelada</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Tipo</Label>
-              <Select value={filters.tipo || "all"} onValueChange={(v) => setFilters((f) => ({ ...f, tipo: v === "all" ? "" : v }))}>
-                <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="AVISO_7_DIAS">7 dias antes</SelectItem>
-                  <SelectItem value="AVISO_3_DIAS">3 dias antes</SelectItem>
-                  <SelectItem value="AVISO_VENCIMENTO">Vencimento</SelectItem>
-                  <SelectItem value="COMUNICADO">Comunicado</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <Button variant="ghost" onClick={() => qc.invalidateQueries({ queryKey: ["notificacoes"] })}>
-              <RefreshCw className="h-4 w-4" /> Atualizar
-            </Button>
-          </Card>
-
-          <Card className="overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Aluno</TableHead>
-                  <TableHead>Telefone</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Erro</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {notifQuery.isLoading && <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Carregando…</TableCell></TableRow>}
-                {!notifQuery.isLoading && (notifQuery.data?.length ?? 0) === 0 && (
-                  <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhuma notificação encontrada.</TableCell></TableRow>
-                )}
-                {(notifQuery.data ?? []).map((n: any) => (
-                  <TableRow key={n.id}>
-                    <TableCell className="text-xs">{new Date(n.created_at).toLocaleString("pt-BR")}</TableCell>
-                    <TableCell className="font-medium">{n.aluno?.nome_completo ?? "—"}</TableCell>
-                    <TableCell className="text-muted-foreground text-xs">{n.destinatario ?? "—"}</TableCell>
-                    <TableCell className="text-xs">{TIPO_LABEL[n.tipo] ?? n.tipo}</TableCell>
-                    <TableCell><StatusBadge status={n.status === "enviada" ? "ativo" : n.status === "falhou" ? "vencida" : "pendente"} /></TableCell>
-                    <TableCell className="text-xs text-destructive max-w-xs truncate" title={n.erro ?? ""}>{n.erro ?? "—"}</TableCell>
-                    <TableCell className="text-right">
-                      <Button size="sm" variant="ghost" onClick={() => handleResend(n.id)} title="Reenviar">
-                        <Send className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
-        </TabsContent>
-      </Tabs>
-
-      {/* ---------------- QR Modal ---------------- */}
-      <Dialog open={qrOpen} onOpenChange={(o) => { setQrOpen(o); if (!o) stopPolling(); }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><QrCode className="h-5 w-5" /> Escaneie o QR Code</DialogTitle>
-            <DialogDescription>Use o WhatsApp do celular para conectar.</DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col items-center gap-4">
-            {qr ? (
-              <img src={qr} alt="QR Code WhatsApp" className="w-64 h-64 bg-white p-2 rounded" />
-            ) : (
-              <div className="w-64 h-64 flex items-center justify-center text-muted-foreground">
-                <Loader2 className="h-6 w-6 animate-spin" />
-              </div>
-            )}
-            <div className="text-xs text-muted-foreground space-y-2 w-full">
-              <p className="flex items-center gap-1 font-semibold text-foreground"><Smartphone className="h-3 w-3" /> Android</p>
-              <p>WhatsApp → Menu (⋮) → Dispositivos conectados → Conectar dispositivo</p>
-              <p className="flex items-center gap-1 font-semibold text-foreground mt-2"><Smartphone className="h-3 w-3" /> iPhone</p>
-              <p>WhatsApp → Configurações → Dispositivos conectados → Conectar dispositivo</p>
-            </div>
-            <p className="text-xs text-amber-500 flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Aguardando conexão…</p>
-            <Button variant="outline" size="sm" onClick={handleConnect} disabled={connecting}>
-              <RefreshCw className="h-3 w-3" /> Gerar novo QR
-            </Button>
-          </div>
         </DialogContent>
       </Dialog>
     </div>
