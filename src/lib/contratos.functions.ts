@@ -31,7 +31,7 @@ export const upsertContratoAtivo = createServerFn({ method: "POST" })
     const tenantId = await getTenantId(ctx);
 
     const { data: existing } = await ctx.supabase
-      .from("contratos").select("id")
+      .from("contratos").select("id, dia_vencimento, valor_mensalidade")
       .eq("aluno_id", data.aluno_id).eq("status", "ativo").maybeSingle();
 
     let contratoId: string;
@@ -46,6 +46,36 @@ export const upsertContratoAtivo = createServerFn({ method: "POST" })
       }).eq("id", existing.id);
       if (error) throw new Error(error.message);
       contratoId = existing.id;
+
+      // Propaga alterações de vencimento/valor para as mensalidades em aberto
+      // (mês corrente em diante). Sem isso, a aba Financeiro continua exibindo
+      // o vencimento antigo já gerado.
+      const diaMudou = Number(existing.dia_vencimento) !== Number(data.dia_vencimento);
+      const valorMudou = Number(existing.valor_mensalidade) !== Number(data.valor_mensalidade);
+      if (diaMudou || valorMudou) {
+        const inicioMes = new Date().toISOString().slice(0, 7) + "-01";
+        const { data: abertas } = await ctx.supabase
+          .from("mensalidades")
+          .select("id, competencia, desconto")
+          .eq("contrato_id", contratoId)
+          .in("status", ["pendente", "vencido"])
+          .gte("competencia", inicioMes);
+
+        for (const m of abertas ?? []) {
+          const [ano, mes] = String(m.competencia).split("-").map(Number);
+          const ultimoDia = new Date(Date.UTC(ano, mes, 0)).getUTCDate();
+          const dia = Math.min(data.dia_vencimento, ultimoDia);
+          const venc = `${ano}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
+          const hoje = new Date().toISOString().slice(0, 10);
+          const patch: Record<string, unknown> = {
+            data_vencimento: venc,
+            status: venc < hoje ? "vencido" : "pendente",
+          };
+          if (valorMudou) patch.valor = data.valor_mensalidade;
+          await ctx.supabase.from("mensalidades").update(patch).eq("id", m.id);
+        }
+      }
+
     } else {
       const { data: novo, error } = await ctx.supabase.from("contratos").insert({
         tenant_id: tenantId,
