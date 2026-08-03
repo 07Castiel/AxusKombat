@@ -198,6 +198,7 @@ export const retryAllFailed = createServerFn({ method: "POST" })
       .update({ tentativas: 0, proxima_tentativa: new Date().toISOString() })
       .eq("tenant_id", tenantId).eq("status", "falhou");
     if (error) throw new Error(error.message);
+    const { runDispatch } = await import("@/lib/notifications-dispatch.server");
     return await runDispatch();
   });
 
