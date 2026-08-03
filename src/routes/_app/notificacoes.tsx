@@ -77,7 +77,8 @@ function NotificacoesPage() {
         title="Notificações"
         description="Automação de mensagens, conexão WhatsApp e histórico de envios"
       />
-      <Tabs defaultValue="whatsapp" className="space-y-4">
+      <ServiceStatus qc={qc} />
+      <Tabs defaultValue="whatsapp" className="space-y-4">-PLACEHOLDER-
         <TabsList>
           <TabsTrigger value="whatsapp"><Wifi className="h-3.5 w-3.5 mr-1"/>WhatsApp</TabsTrigger>
           <TabsTrigger value="automacao"><Settings2 className="h-3.5 w-3.5 mr-1"/>Automação</TabsTrigger>
