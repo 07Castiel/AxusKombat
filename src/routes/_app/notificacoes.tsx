@@ -565,7 +565,9 @@ function TabComunicados() {
 function TabHistorico({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
   const list = useServerFn(listNotifications);
   const resend = useServerFn(resendNotification);
+  const retryAll = useServerFn(retryAllFailed);
   const [filters, setFilters] = useState<{ status: string; tipo: string }>({ status: "", tipo: "" });
+  const [retrying, setRetrying] = useState(false);
   const notifQuery = useQuery({
     queryKey: ["notificacoes", filters],
     queryFn: () => list({ data: {
@@ -581,7 +583,19 @@ function TabHistorico({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
       const r: any = await resend({ data: { notification_id: id } });
       if (r.ok) toast.success("Notificação reenviada"); else toast.error(r.error ?? "Falha ao reenviar");
       qc.invalidateQueries({ queryKey: ["notificacoes"] });
+      qc.invalidateQueries({ queryKey: ["notifications_health"] });
     } catch (e: any) { toast.error(translateError(e)); }
+  }
+
+  async function handleRetryAll() {
+    setRetrying(true);
+    try {
+      const r: any = await retryAll();
+      toast.success(`Reenvio executado: ${r?.summary?.sent ?? 0} enviada(s), ${r?.summary?.failed ?? 0} falha(s)`);
+      qc.invalidateQueries({ queryKey: ["notificacoes"] });
+      qc.invalidateQueries({ queryKey: ["notifications_health"] });
+    } catch (e: any) { toast.error(translateError(e)); }
+    finally { setRetrying(false); }
   }
 
   const rows = useMemo(() => (notifQuery.data ?? []) as any[], [notifQuery.data]);
