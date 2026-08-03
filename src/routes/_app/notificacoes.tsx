@@ -783,11 +783,21 @@ function TabHistorico({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
                     n.status === "cancelada" ? "inativo" : "pendente"
                   } />
                 </TableCell>
-                <TableCell className="text-xs max-w-xs truncate text-muted-foreground"
+                <TableCell className="text-xs max-w-xs text-muted-foreground"
                   title={n.erro || n.motivo_cancelamento || n.mensagem || ""}>
-                  {n.erro ? <span className="text-destructive">{n.erro}</span>
-                    : n.motivo_cancelamento ? <span className="text-amber-500">{n.motivo_cancelamento}</span>
-                    : (n.mensagem ?? "—")}
+                  {n.status === "falhou" ? (
+                    <div className="space-y-0.5">
+                      <span className="text-destructive block truncate">{erroLabel(n.erro_codigo)}</span>
+                      <span className="block truncate">{erroAcao(n.erro_codigo)}</span>
+                      {n.proxima_tentativa && (
+                        <span className="block">
+                          Próxima tentativa: {new Date(n.proxima_tentativa).toLocaleString("pt-BR")}
+                          {n.tentativas ? ` (${n.tentativas}ª)` : ""}
+                        </span>
+                      )}
+                    </div>
+                  ) : n.motivo_cancelamento ? <span className="text-amber-500 truncate block">{n.motivo_cancelamento}</span>
+                    : <span className="truncate block">{n.mensagem ?? "—"}</span>}
                 </TableCell>
                 <TableCell className="text-right">
                   <Button size="sm" variant="ghost" onClick={() => setPreview(n)}>Ver</Button>
