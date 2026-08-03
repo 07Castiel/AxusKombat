@@ -264,19 +264,10 @@ export const getNotificationsHealth = createServerFn({ method: "POST" })
   });
 
 // ============ EXECUTAR VERIFICAÇÕES AGORA ============
-async function runDispatch() {
-  const handler = await import("@/routes/api/public/hooks/dispatch-notifications");
-  const req = new Request("https://internal/api/public/hooks/dispatch-notifications", {
-    method: "POST",
-    headers: { apikey: process.env.SUPABASE_PUBLISHABLE_KEY ?? "" },
-  });
-  const res = await (handler.Route as any).options.server.handlers.POST({ request: req });
-  return await res.json();
-}
-
 export const runDispatchNow = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await getTenantAdmin(context as any);
+    const { runDispatch } = await import("@/lib/notifications-dispatch.server");
     return await runDispatch();
   });
