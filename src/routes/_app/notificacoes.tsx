@@ -744,6 +744,10 @@ function TabHistorico({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
         <Button variant="ghost" onClick={() => qc.invalidateQueries({ queryKey: ["notificacoes"] })}>
           <RefreshCw className="h-4 w-4" /> Atualizar
         </Button>
+        <Button variant="outline" onClick={handleRetryAll} disabled={retrying}>
+          {retrying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          Reenviar falhas
+        </Button>
       </Card>
 
       <Card className="overflow-hidden">
