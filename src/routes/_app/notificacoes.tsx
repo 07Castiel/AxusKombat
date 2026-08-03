@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import {
   Send, RefreshCw, Play, Save, MessageSquare, QrCode, Smartphone, Wifi, WifiOff,
   Loader2, Megaphone, Plus, Trash2, Settings2, FileText, History, X,
-  AlertTriangle, CheckCircle2, Activity,
+  AlertTriangle, CheckCircle2,
 } from "lucide-react";
 
 import { useAuth } from "@/hooks/use-auth";
