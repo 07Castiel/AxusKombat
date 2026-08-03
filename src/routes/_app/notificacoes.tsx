@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   Send, RefreshCw, Play, Save, MessageSquare, QrCode, Smartphone, Wifi, WifiOff,
   Loader2, Megaphone, Plus, Trash2, Settings2, FileText, History, X,
+  AlertTriangle, CheckCircle2, Activity,
 } from "lucide-react";
 
 import { useAuth } from "@/hooks/use-auth";
@@ -22,10 +23,12 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { translateError } from "@/lib/errors";
+import { erroLabel, erroAcao } from "@/lib/notification-errors";
 import {
   getNotificationSettings, saveNotificationSettings,
   listTemplates, upsertTemplate, deleteTemplate,
   listNotifications, resendNotification, runDispatchNow,
+  getNotificationsHealth, retryAllFailed,
 } from "@/lib/notifications.functions";
 import {
   getWhatsappConnection, connectWhatsapp, refreshWhatsappStatus,
