@@ -97,6 +97,112 @@ function NotificacoesPage() {
   );
 }
 
+// ==================== STATUS DO SERVIÇO ====================
+function ServiceStatus({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
+  const health = useServerFn(getNotificationsHealth);
+  const retryAll = useServerFn(retryAllFailed);
+  const [retrying, setRetrying] = useState(false);
+
+  const hq = useQuery({
+    queryKey: ["notifications_health"],
+    queryFn: () => health(),
+    refetchInterval: 60_000,
+  });
+  const h: any = hq.data;
+
+  async function handleRetryAll() {
+    setRetrying(true);
+    try {
+      const r: any = await retryAll();
+      toast.success(`Reenvio executado: ${r?.summary?.sent ?? 0} enviada(s), ${r?.summary?.failed ?? 0} falha(s)`);
+      qc.invalidateQueries({ queryKey: ["notificacoes"] });
+      qc.invalidateQueries({ queryKey: ["notifications_health"] });
+    } catch (e: any) { toast.error(translateError(e)); }
+    finally { setRetrying(false); }
+  }
+
+  if (!h) return null;
+
+  const cor = h.estado === "ativo" ? "text-emerald-500"
+    : h.estado === "instavel" ? "text-amber-500" : "text-destructive";
+  const rotulo = h.estado === "ativo" ? "Servidor ativo"
+    : h.estado === "instavel" ? "Servidor ativo com pendências" : "Servidor inativo";
+
+  return (
+    <div className="space-y-3 mb-4">
+      <Card className="p-4 flex flex-wrap items-center gap-x-8 gap-y-3">
+        <div className="flex items-center gap-2">
+          <span className={`relative flex h-2.5 w-2.5`}>
+            <span className={`absolute inline-flex h-full w-full rounded-full opacity-60 animate-ping ${h.estado === "ativo" ? "bg-emerald-500" : h.estado === "instavel" ? "bg-amber-500" : "bg-destructive"}`} />
+            <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${h.estado === "ativo" ? "bg-emerald-500" : h.estado === "instavel" ? "bg-amber-500" : "bg-destructive"}`} />
+          </span>
+          <div>
+            <p className={`text-sm font-semibold uppercase tracking-wider ${cor}`}>{rotulo}</p>
+            <p className="text-xs text-muted-foreground">
+              {h.ultima_execucao
+                ? `Última verificação há ${h.minutos_desde_ultima} min`
+                : "Nenhuma verificação registrada ainda"}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 text-sm">
+          {h.whatsapp.conectado
+            ? <><Wifi className="h-4 w-4 text-emerald-500" /><span>WhatsApp conectado</span></>
+            : <><WifiOff className="h-4 w-4 text-destructive" /><span>WhatsApp desconectado</span></>}
+        </div>
+
+        <div className="flex items-center gap-6 text-sm">
+          <span><strong>{h.fila.agendadas}</strong> <span className="text-muted-foreground">na fila</span></span>
+          <span><strong>{h.fila.atrasadas}</strong> <span className="text-muted-foreground">aguardando envio</span></span>
+          <span className={h.fila.falhas > 0 ? "text-destructive" : ""}>
+            <strong>{h.fila.falhas}</strong> <span className="text-muted-foreground">com falha</span>
+          </span>
+        </div>
+
+        <div className="ml-auto flex items-center gap-2">
+          <Button size="sm" variant="ghost" onClick={() => hq.refetch()}>
+            <RefreshCw className="h-4 w-4" /> Atualizar
+          </Button>
+          {h.fila.falhas > 0 && (
+            <Button size="sm" onClick={handleRetryAll} disabled={retrying}>
+              {retrying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              Reenviar falhas
+            </Button>
+          )}
+        </div>
+      </Card>
+
+      {h.falhas_por_motivo.length > 0 && (
+        <Card className="p-4 border-destructive/40 bg-destructive/5 space-y-2">
+          <div className="flex items-center gap-2 text-destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <p className="text-sm font-semibold uppercase tracking-wider">
+              Mensagens automáticas não enviadas
+            </p>
+          </div>
+          <ul className="space-y-1 text-sm">
+            {h.falhas_por_motivo.map((f: any) => (
+              <li key={f.codigo} className="flex flex-wrap gap-x-2">
+                <span className="font-medium">{f.total}×</span>
+                <span>{erroLabel(f.codigo)}</span>
+                <span className="text-muted-foreground">— {erroAcao(f.codigo)}</span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      {h.estado === "ativo" && h.fila.falhas === 0 && h.fila.atrasadas === 0 && (
+        <p className="text-xs text-muted-foreground flex items-center gap-1">
+          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+          Todas as mensagens automáticas estão em dia.
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ============================ WHATSAPP ============================
 function TabWhatsapp() {
   const qc = useQueryClient();
