@@ -3,11 +3,15 @@
  * Chamado por pg_cron a cada 15 minutos.
  *
  * Regras:
- *  - envia apenas notificações com status='agendada' e agendada_para<=now()
+ *  - envia notificações com status='agendada' e agendada_para<=now()
+ *  - reenvia falhas retentáveis cuja proxima_tentativa já venceu
  *  - respeita janela [hora_inicio, hora_fim] no timezone do tenant
- *  - renderiza template mais adequado (mesmo tipo + dias_offset) por tenant
+ *  - registra cada execução em notification_worker_runs
  */
 import { createFileRoute } from "@tanstack/react-router";
+import {
+  classifyErro, isRetentavel, proximaTentativaISO, MAX_TENTATIVAS,
+} from "@/lib/notification-errors";
 
 const TZ_HOUR_FMT = new Map<string, Intl.DateTimeFormat>();
 function currentTimeInTz(tz: string): { hh: number; mm: number } {
@@ -34,6 +38,15 @@ function withinWindow(tz: string, start: string, end: string): boolean {
   return nowMin >= sMin && nowMin <= eMin;
 }
 
+const SELECT_COLS = `
+  id, tenant_id, aluno_id, mensalidade_id, tipo, dias_offset, agendada_para, tentativas,
+  aluno:alunos!inner ( id, nome_completo, telefone, responsavel_telefone, categoria ),
+  mensalidade:mensalidades ( id, data_vencimento, valor_final, valor,
+    contrato:contratos ( plano:planos ( nome ) )
+  ),
+  tenant:tenants!inner ( id, nome )
+`;
+
 export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")({
   server: {
     handlers: {
@@ -49,33 +62,69 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { sendWhatsappByTenant, renderTemplate } = await import("@/lib/whatsapp.server");
 
-        // fetch a batch of due notifications
-        const { data: notifs, error } = await supabaseAdmin
+        const startedAt = new Date().toISOString();
+        const { data: runRow } = await supabaseAdmin
+          .from("notification_worker_runs")
+          .insert({ started_at: startedAt })
+          .select("id").single();
+        const runId = (runRow as any)?.id as string | undefined;
+
+        const nowIso = new Date().toISOString();
+
+        // 1) agendadas devidas
+        const { data: agendadas, error } = await supabaseAdmin
           .from("notificacoes")
-          .select(`
-            id, tenant_id, aluno_id, mensalidade_id, tipo, dias_offset, agendada_para,
-            aluno:alunos!inner ( id, nome_completo, telefone, responsavel_telefone, categoria ),
-            mensalidade:mensalidades ( id, data_vencimento, valor_final, valor,
-              contrato:contratos ( plano:planos ( nome ) )
-            ),
-            tenant:tenants!inner ( id, nome )
-          `)
+          .select(SELECT_COLS)
           .eq("status", "agendada")
-          .lte("agendada_para", new Date().toISOString())
-          .limit(500);
+          .lte("agendada_para", nowIso)
+          .limit(400);
+
+        // 2) falhas retentáveis
+        const { data: retries } = await supabaseAdmin
+          .from("notificacoes")
+          .select(SELECT_COLS)
+          .eq("status", "falhou")
+          .lt("tentativas", MAX_TENTATIVAS)
+          .not("proxima_tentativa", "is", null)
+          .lte("proxima_tentativa", nowIso)
+          .limit(200);
 
         if (error) {
+          if (runId) {
+            await supabaseAdmin.from("notification_worker_runs").update({
+              finished_at: new Date().toISOString(), erro: error.message,
+            }).eq("id", runId);
+          }
           return new Response(JSON.stringify({ error: error.message }), {
             status: 500, headers: { "Content-Type": "application/json" },
           });
         }
 
-        const summary = { scanned: notifs?.length ?? 0, sent: 0, failed: 0, skipped_window: 0, skipped_config: 0 };
-        // per-tenant caches
+        const notifs = [...((agendadas ?? []) as any[]), ...((retries ?? []) as any[])];
+        const summary = {
+          scanned: notifs.length, sent: 0, failed: 0,
+          retried: (retries ?? []).length, skipped_window: 0, skipped_config: 0,
+        };
         const settingsCache = new Map<string, any>();
         const templatesCache = new Map<string, any[]>();
 
-        for (const n of (notifs ?? []) as any[]) {
+        async function marcarFalha(n: any, mensagem: string | null, motivo: string, phone?: string | null) {
+          const codigo = classifyErro(motivo);
+          const tentativas = (n.tentativas ?? 0) + 1;
+          const retentavel = isRetentavel(codigo);
+          await supabaseAdmin.from("notificacoes").update({
+            status: "falhou",
+            erro: motivo,
+            erro_codigo: codigo,
+            tentativas,
+            proxima_tentativa: retentavel ? proximaTentativaISO(tentativas) : null,
+            ...(mensagem ? { mensagem } : {}),
+            ...(phone ? { destinatario: phone } : {}),
+            updated_at: new Date().toISOString(),
+          }).eq("id", n.id);
+        }
+
+        for (const n of notifs) {
           // settings
           let s = settingsCache.get(n.tenant_id);
           if (!s) {
@@ -107,9 +156,7 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
           const tpl = tpls.find((t) => t.tipo === n.tipo && t.dias_offset === n.dias_offset)
                   ?? tpls.find((t) => t.tipo === n.tipo);
           if (!tpl) {
-            await supabaseAdmin.from("notificacoes").update({
-              status: "falhou", erro: "Modelo de mensagem não configurado", updated_at: new Date().toISOString(),
-            }).eq("id", n.id);
+            await marcarFalha(n, null, "Modelo de mensagem não configurado");
             summary.skipped_config++;
             continue;
           }
@@ -129,6 +176,7 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
             : "";
           const plano = mens?.contrato?.plano?.nome ?? "";
 
+          // sempre renderiza com a versão ATUAL do modelo
           const mensagem = renderTemplate(tpl.mensagem, {
             nome, primeiro_nome: primeiroNome,
             academia: n.tenant?.nome ?? "",
@@ -144,24 +192,39 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
           });
 
           if (!phone) {
-            await supabaseAdmin.from("notificacoes").update({
-              status: "falhou", erro: "Aluno sem telefone cadastrado",
-              mensagem, updated_at: new Date().toISOString(),
-            }).eq("id", n.id);
+            await marcarFalha(n, mensagem, "Aluno sem telefone cadastrado");
             summary.failed++;
             continue;
           }
 
           const result = await sendWhatsappByTenant(n.tenant_id, phone, mensagem);
-          await supabaseAdmin.from("notificacoes").update({
-            status: result.ok ? "enviada" : "falhou",
-            enviada_em: result.ok ? new Date().toISOString() : null,
-            destinatario: phone,
-            mensagem,
-            erro: result.ok ? null : (result.error ?? "Erro desconhecido"),
-            updated_at: new Date().toISOString(),
-          }).eq("id", n.id);
-          if (result.ok) summary.sent++; else summary.failed++;
+          if (result.ok) {
+            await supabaseAdmin.from("notificacoes").update({
+              status: "enviada",
+              enviada_em: new Date().toISOString(),
+              destinatario: phone,
+              mensagem,
+              erro: null,
+              erro_codigo: null,
+              proxima_tentativa: null,
+              tentativas: (n.tentativas ?? 0) + 1,
+              updated_at: new Date().toISOString(),
+            }).eq("id", n.id);
+            summary.sent++;
+          } else {
+            await marcarFalha(n, mensagem, result.error ?? "Erro desconhecido", phone);
+            summary.failed++;
+          }
+        }
+
+        if (runId) {
+          await supabaseAdmin.from("notification_worker_runs").update({
+            finished_at: new Date().toISOString(),
+            scanned: summary.scanned,
+            sent: summary.sent,
+            failed: summary.failed,
+            skipped: summary.skipped_window + summary.skipped_config,
+          }).eq("id", runId);
         }
 
         return new Response(JSON.stringify({ ok: true, summary, ranAt: new Date().toISOString() }), {
