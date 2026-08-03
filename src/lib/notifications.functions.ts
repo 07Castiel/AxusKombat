@@ -88,17 +88,29 @@ export const upsertTemplate = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const tenantId = await getTenantAdmin(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const payload: any = {
-      tenant_id: tenantId,
+    const campos = {
       tipo: data.tipo,
       dias_offset: data.dias_offset,
       mensagem: data.mensagem,
       ativo: data.ativo,
     };
-    if (data.id) payload.id = data.id;
-    const { error } = await supabaseAdmin.from("notification_templates")
-      .upsert(payload, { onConflict: "tenant_id,tipo,dias_offset" });
-    if (error) throw new Error(error.message);
+
+    // Garante uma única versão por tipo + deslocamento: descarta a versão antiga.
+    let del = supabaseAdmin.from("notification_templates")
+      .delete().eq("tenant_id", tenantId)
+      .eq("tipo", data.tipo).eq("dias_offset", data.dias_offset);
+    if (data.id) del = del.neq("id", data.id);
+    await del;
+
+    if (data.id) {
+      const { error } = await supabaseAdmin.from("notification_templates")
+        .update(campos).eq("id", data.id).eq("tenant_id", tenantId);
+      if (error) throw new Error(error.message);
+    } else {
+      const { error } = await supabaseAdmin.from("notification_templates")
+        .insert({ tenant_id: tenantId, ...campos });
+      if (error) throw new Error(error.message);
+    }
     return { ok: true };
   });
 
@@ -131,7 +143,8 @@ export const listNotifications = createServerFn({ method: "POST" })
       .from("notificacoes")
       .select(`
         id, tipo, canal, destinatario, mensagem, status, dias_offset,
-        agendada_para, enviada_em, erro, motivo_cancelamento, created_at,
+        agendada_para, enviada_em, erro, erro_codigo, tentativas, proxima_tentativa,
+        motivo_cancelamento, created_at,
         mensalidade_id, aluno:alunos ( id, nome_completo )
       `)
       .eq("tenant_id", tenantId)
@@ -163,12 +176,92 @@ export const resendNotification = createServerFn({ method: "POST" })
     if (!(n as any).destinatario) throw new Error("Notificação sem telefone destinatário");
 
     const r = await sendWhatsappByTenant(tenantId, (n as any).destinatario, (n as any).mensagem);
+    const { classifyErro } = await import("@/lib/notification-errors");
     await supabaseAdmin.from("notificacoes").update({
       status: r.ok ? "enviada" : "falhou",
       enviada_em: r.ok ? new Date().toISOString() : (n as any).enviada_em,
       erro: r.ok ? null : (r.error ?? "Erro desconhecido"),
+      erro_codigo: r.ok ? null : classifyErro(r.error),
+      proxima_tentativa: null,
+      tentativas: ((n as any).tentativas ?? 0) + 1,
     }).eq("id", (n as any).id);
     return { ok: r.ok, error: r.error };
+  });
+
+// ============ REENVIAR TODAS AS FALHAS ============
+export const retryAllFailed = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const tenantId = await getTenantAdmin(context as any);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("notificacoes")
+      .update({ tentativas: 0, proxima_tentativa: new Date().toISOString() })
+      .eq("tenant_id", tenantId).eq("status", "falhou");
+    if (error) throw new Error(error.message);
+    const { runDispatch } = await import("@/lib/notifications-dispatch.server");
+    return await runDispatch();
+  });
+
+// ============ STATUS DO SERVIÇO ============
+export const getNotificationsHealth = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const tenantId = await getTenantAdmin(context as any);
+    const supabase = (context as any).supabase;
+
+    const { data: lastRun } = await supabase
+      .from("notification_worker_runs")
+      .select("started_at, finished_at, sent, failed, scanned, erro")
+      .order("started_at", { ascending: false }).limit(1).maybeSingle();
+
+    const nowIso = new Date().toISOString();
+    const [agendadas, atrasadas, falhas, conn] = await Promise.all([
+      supabase.from("notificacoes").select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenantId).eq("status", "agendada"),
+      supabase.from("notificacoes").select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenantId).eq("status", "agendada").lte("agendada_para", nowIso),
+      supabase.from("notificacoes")
+        .select("id, erro, erro_codigo, proxima_tentativa, tentativas")
+        .eq("tenant_id", tenantId).eq("status", "falhou").limit(500),
+      supabase.from("whatsapp_connections").select("connected, status, phone_number")
+        .eq("tenant_id", tenantId).maybeSingle(),
+    ]);
+
+    const falhasRows = (falhas.data ?? []) as any[];
+    const porMotivo = new Map<string, number>();
+    for (const f of falhasRows) {
+      const k = f.erro_codigo ?? "desconhecido";
+      porMotivo.set(k, (porMotivo.get(k) ?? 0) + 1);
+    }
+
+    const lastStarted = (lastRun as any)?.started_at as string | undefined;
+    const minutosDesdeUltima = lastStarted
+      ? Math.round((Date.now() - new Date(lastStarted).getTime()) / 60000)
+      : null;
+
+    const whatsappConectado = !!(conn.data as any)?.connected;
+    const workerAtivo = minutosDesdeUltima !== null && minutosDesdeUltima <= 30;
+    const estado: "ativo" | "instavel" | "inativo" =
+      !workerAtivo ? "inativo" : (!whatsappConectado || falhasRows.length > 0) ? "instavel" : "ativo";
+
+    return {
+      estado,
+      worker_ativo: workerAtivo,
+      ultima_execucao: lastStarted ?? null,
+      minutos_desde_ultima: minutosDesdeUltima,
+      ultimo_erro: (lastRun as any)?.erro ?? null,
+      whatsapp: {
+        conectado: whatsappConectado,
+        status: (conn.data as any)?.status ?? "desconectado",
+        phone_number: (conn.data as any)?.phone_number ?? null,
+      },
+      fila: {
+        agendadas: agendadas.count ?? 0,
+        atrasadas: atrasadas.count ?? 0,
+        falhas: falhasRows.length,
+      },
+      falhas_por_motivo: [...porMotivo.entries()].map(([codigo, total]) => ({ codigo, total })),
+    };
   });
 
 // ============ EXECUTAR VERIFICAÇÕES AGORA ============
@@ -176,11 +269,6 @@ export const runDispatchNow = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await getTenantAdmin(context as any);
-    const handler = await import("@/routes/api/public/hooks/dispatch-notifications");
-    const req = new Request("https://internal/api/public/hooks/dispatch-notifications", {
-      method: "POST",
-      headers: { apikey: process.env.SUPABASE_PUBLISHABLE_KEY ?? "" },
-    });
-    const res = await (handler.Route as any).options.server.handlers.POST({ request: req });
-    return await res.json();
+    const { runDispatch } = await import("@/lib/notifications-dispatch.server");
+    return await runDispatch();
   });

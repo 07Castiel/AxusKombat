@@ -136,6 +136,20 @@ export const refreshWhatsappStatus = createServerFn({ method: "POST" })
     }
     await supabaseAdmin.from("whatsapp_connections").update(update).eq("tenant_id", tenantId);
 
+    // Ao reconectar, reprograma imediatamente as mensagens que falharam por desconexão
+    // e dispara o worker para reenviá-las.
+    if (mapped === "conectado" && !(row as any).connected) {
+      const { data: pendentes } = await supabaseAdmin.from("notificacoes")
+        .update({ tentativas: 0, proxima_tentativa: new Date().toISOString() })
+        .eq("tenant_id", tenantId).eq("status", "falhou")
+        .in("erro_codigo", ["whatsapp_desconectado", "servico_indisponivel", "desconhecido"])
+        .select("id");
+      if ((pendentes?.length ?? 0) > 0) {
+        const { runDispatch } = await import("@/lib/notifications-dispatch.server");
+        await runDispatch().catch(() => null);
+      }
+    }
+
     return {
       status: mapped,
       connected: mapped === "conectado",

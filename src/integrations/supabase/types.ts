@@ -530,12 +530,15 @@ export type Database = {
           dias_offset: number | null
           enviada_em: string | null
           erro: string | null
+          erro_codigo: string | null
           id: string
           mensagem: string
           mensalidade_id: string | null
           motivo_cancelamento: string | null
+          proxima_tentativa: string | null
           status: Database["public"]["Enums"]["status_notificacao"]
           tenant_id: string
+          tentativas: number
           tipo: string
           updated_at: string
         }
@@ -548,12 +551,15 @@ export type Database = {
           dias_offset?: number | null
           enviada_em?: string | null
           erro?: string | null
+          erro_codigo?: string | null
           id?: string
           mensagem: string
           mensalidade_id?: string | null
           motivo_cancelamento?: string | null
+          proxima_tentativa?: string | null
           status?: Database["public"]["Enums"]["status_notificacao"]
           tenant_id: string
+          tentativas?: number
           tipo: string
           updated_at?: string
         }
@@ -566,12 +572,15 @@ export type Database = {
           dias_offset?: number | null
           enviada_em?: string | null
           erro?: string | null
+          erro_codigo?: string | null
           id?: string
           mensagem?: string
           mensalidade_id?: string | null
           motivo_cancelamento?: string | null
+          proxima_tentativa?: string | null
           status?: Database["public"]["Enums"]["status_notificacao"]
           tenant_id?: string
+          tentativas?: number
           tipo?: string
           updated_at?: string
         }
@@ -695,6 +704,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      notification_worker_runs: {
+        Row: {
+          created_at: string
+          erro: string | null
+          failed: number
+          finished_at: string | null
+          id: string
+          scanned: number
+          sent: number
+          skipped: number
+          started_at: string
+        }
+        Insert: {
+          created_at?: string
+          erro?: string | null
+          failed?: number
+          finished_at?: string | null
+          id?: string
+          scanned?: number
+          sent?: number
+          skipped?: number
+          started_at?: string
+        }
+        Update: {
+          created_at?: string
+          erro?: string | null
+          failed?: number
+          finished_at?: string | null
+          id?: string
+          scanned?: number
+          sent?: number
+          skipped?: number
+          started_at?: string
+        }
+        Relationships: []
       }
       planos: {
         Row: {

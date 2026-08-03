@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   Send, RefreshCw, Play, Save, MessageSquare, QrCode, Smartphone, Wifi, WifiOff,
   Loader2, Megaphone, Plus, Trash2, Settings2, FileText, History, X,
+  AlertTriangle, CheckCircle2,
 } from "lucide-react";
 
 import { useAuth } from "@/hooks/use-auth";
@@ -22,10 +23,12 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { translateError } from "@/lib/errors";
+import { erroLabel, erroAcao } from "@/lib/notification-errors";
 import {
   getNotificationSettings, saveNotificationSettings,
   listTemplates, upsertTemplate, deleteTemplate,
   listNotifications, resendNotification, runDispatchNow,
+  getNotificationsHealth, retryAllFailed,
 } from "@/lib/notifications.functions";
 import {
   getWhatsappConnection, connectWhatsapp, refreshWhatsappStatus,
@@ -74,6 +77,7 @@ function NotificacoesPage() {
         title="Notificações"
         description="Automação de mensagens, conexão WhatsApp e histórico de envios"
       />
+      <ServiceStatus qc={qc} />
       <Tabs defaultValue="whatsapp" className="space-y-4">
         <TabsList>
           <TabsTrigger value="whatsapp"><Wifi className="h-3.5 w-3.5 mr-1"/>WhatsApp</TabsTrigger>
@@ -89,6 +93,112 @@ function NotificacoesPage() {
         <TabsContent value="comunicados"><TabComunicados /></TabsContent>
         <TabsContent value="historico"><TabHistorico qc={qc} /></TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+// ==================== STATUS DO SERVIÇO ====================
+function ServiceStatus({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
+  const health = useServerFn(getNotificationsHealth);
+  const retryAll = useServerFn(retryAllFailed);
+  const [retrying, setRetrying] = useState(false);
+
+  const hq = useQuery({
+    queryKey: ["notifications_health"],
+    queryFn: () => health(),
+    refetchInterval: 60_000,
+  });
+  const h: any = hq.data;
+
+  async function handleRetryAll() {
+    setRetrying(true);
+    try {
+      const r: any = await retryAll();
+      toast.success(`Reenvio executado: ${r?.summary?.sent ?? 0} enviada(s), ${r?.summary?.failed ?? 0} falha(s)`);
+      qc.invalidateQueries({ queryKey: ["notificacoes"] });
+      qc.invalidateQueries({ queryKey: ["notifications_health"] });
+    } catch (e: any) { toast.error(translateError(e)); }
+    finally { setRetrying(false); }
+  }
+
+  if (!h) return null;
+
+  const cor = h.estado === "ativo" ? "text-emerald-500"
+    : h.estado === "instavel" ? "text-amber-500" : "text-destructive";
+  const rotulo = h.estado === "ativo" ? "Servidor ativo"
+    : h.estado === "instavel" ? "Servidor ativo com pendências" : "Servidor inativo";
+
+  return (
+    <div className="space-y-3 mb-4">
+      <Card className="p-4 flex flex-wrap items-center gap-x-8 gap-y-3">
+        <div className="flex items-center gap-2">
+          <span className={`relative flex h-2.5 w-2.5`}>
+            <span className={`absolute inline-flex h-full w-full rounded-full opacity-60 animate-ping ${h.estado === "ativo" ? "bg-emerald-500" : h.estado === "instavel" ? "bg-amber-500" : "bg-destructive"}`} />
+            <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${h.estado === "ativo" ? "bg-emerald-500" : h.estado === "instavel" ? "bg-amber-500" : "bg-destructive"}`} />
+          </span>
+          <div>
+            <p className={`text-sm font-semibold uppercase tracking-wider ${cor}`}>{rotulo}</p>
+            <p className="text-xs text-muted-foreground">
+              {h.ultima_execucao
+                ? `Última verificação há ${h.minutos_desde_ultima} min`
+                : "Nenhuma verificação registrada ainda"}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 text-sm">
+          {h.whatsapp.conectado
+            ? <><Wifi className="h-4 w-4 text-emerald-500" /><span>WhatsApp conectado</span></>
+            : <><WifiOff className="h-4 w-4 text-destructive" /><span>WhatsApp desconectado</span></>}
+        </div>
+
+        <div className="flex items-center gap-6 text-sm">
+          <span><strong>{h.fila.agendadas}</strong> <span className="text-muted-foreground">na fila</span></span>
+          <span><strong>{h.fila.atrasadas}</strong> <span className="text-muted-foreground">aguardando envio</span></span>
+          <span className={h.fila.falhas > 0 ? "text-destructive" : ""}>
+            <strong>{h.fila.falhas}</strong> <span className="text-muted-foreground">com falha</span>
+          </span>
+        </div>
+
+        <div className="ml-auto flex items-center gap-2">
+          <Button size="sm" variant="ghost" onClick={() => hq.refetch()}>
+            <RefreshCw className="h-4 w-4" /> Atualizar
+          </Button>
+          {h.fila.falhas > 0 && (
+            <Button size="sm" onClick={handleRetryAll} disabled={retrying}>
+              {retrying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              Reenviar falhas
+            </Button>
+          )}
+        </div>
+      </Card>
+
+      {h.falhas_por_motivo.length > 0 && (
+        <Card className="p-4 border-destructive/40 bg-destructive/5 space-y-2">
+          <div className="flex items-center gap-2 text-destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <p className="text-sm font-semibold uppercase tracking-wider">
+              Mensagens automáticas não enviadas
+            </p>
+          </div>
+          <ul className="space-y-1 text-sm">
+            {h.falhas_por_motivo.map((f: any) => (
+              <li key={f.codigo} className="flex flex-wrap gap-x-2">
+                <span className="font-medium">{f.total}×</span>
+                <span>{erroLabel(f.codigo)}</span>
+                <span className="text-muted-foreground">— {erroAcao(f.codigo)}</span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      {h.estado === "ativo" && h.fila.falhas === 0 && h.fila.atrasadas === 0 && (
+        <p className="text-xs text-muted-foreground flex items-center gap-1">
+          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+          Todas as mensagens automáticas estão em dia.
+        </p>
+      )}
     </div>
   );
 }
@@ -565,7 +675,9 @@ function TabComunicados() {
 function TabHistorico({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
   const list = useServerFn(listNotifications);
   const resend = useServerFn(resendNotification);
+  const retryAll = useServerFn(retryAllFailed);
   const [filters, setFilters] = useState<{ status: string; tipo: string }>({ status: "", tipo: "" });
+  const [retrying, setRetrying] = useState(false);
   const notifQuery = useQuery({
     queryKey: ["notificacoes", filters],
     queryFn: () => list({ data: {
@@ -581,7 +693,19 @@ function TabHistorico({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
       const r: any = await resend({ data: { notification_id: id } });
       if (r.ok) toast.success("Notificação reenviada"); else toast.error(r.error ?? "Falha ao reenviar");
       qc.invalidateQueries({ queryKey: ["notificacoes"] });
+      qc.invalidateQueries({ queryKey: ["notifications_health"] });
     } catch (e: any) { toast.error(translateError(e)); }
+  }
+
+  async function handleRetryAll() {
+    setRetrying(true);
+    try {
+      const r: any = await retryAll();
+      toast.success(`Reenvio executado: ${r?.summary?.sent ?? 0} enviada(s), ${r?.summary?.failed ?? 0} falha(s)`);
+      qc.invalidateQueries({ queryKey: ["notificacoes"] });
+      qc.invalidateQueries({ queryKey: ["notifications_health"] });
+    } catch (e: any) { toast.error(translateError(e)); }
+    finally { setRetrying(false); }
   }
 
   const rows = useMemo(() => (notifQuery.data ?? []) as any[], [notifQuery.data]);
@@ -620,6 +744,10 @@ function TabHistorico({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
         <Button variant="ghost" onClick={() => qc.invalidateQueries({ queryKey: ["notificacoes"] })}>
           <RefreshCw className="h-4 w-4" /> Atualizar
         </Button>
+        <Button variant="outline" onClick={handleRetryAll} disabled={retrying}>
+          {retrying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          Reenviar falhas
+        </Button>
       </Card>
 
       <Card className="overflow-hidden">
@@ -655,11 +783,21 @@ function TabHistorico({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
                     n.status === "cancelada" ? "inativo" : "pendente"
                   } />
                 </TableCell>
-                <TableCell className="text-xs max-w-xs truncate text-muted-foreground"
+                <TableCell className="text-xs max-w-xs text-muted-foreground"
                   title={n.erro || n.motivo_cancelamento || n.mensagem || ""}>
-                  {n.erro ? <span className="text-destructive">{n.erro}</span>
-                    : n.motivo_cancelamento ? <span className="text-amber-500">{n.motivo_cancelamento}</span>
-                    : (n.mensagem ?? "—")}
+                  {n.status === "falhou" ? (
+                    <div className="space-y-0.5">
+                      <span className="text-destructive block truncate">{erroLabel(n.erro_codigo)}</span>
+                      <span className="block truncate">{erroAcao(n.erro_codigo)}</span>
+                      {n.proxima_tentativa && (
+                        <span className="block">
+                          Próxima tentativa: {new Date(n.proxima_tentativa).toLocaleString("pt-BR")}
+                          {n.tentativas ? ` (${n.tentativas}ª)` : ""}
+                        </span>
+                      )}
+                    </div>
+                  ) : n.motivo_cancelamento ? <span className="text-amber-500 truncate block">{n.motivo_cancelamento}</span>
+                    : <span className="truncate block">{n.mensagem ?? "—"}</span>}
                 </TableCell>
                 <TableCell className="text-right">
                   <Button size="sm" variant="ghost" onClick={() => setPreview(n)}>Ver</Button>
