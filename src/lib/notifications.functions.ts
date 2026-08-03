@@ -88,17 +88,29 @@ export const upsertTemplate = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const tenantId = await getTenantAdmin(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const payload: any = {
-      tenant_id: tenantId,
+    const campos = {
       tipo: data.tipo,
       dias_offset: data.dias_offset,
       mensagem: data.mensagem,
       ativo: data.ativo,
     };
-    if (data.id) payload.id = data.id;
-    const { error } = await supabaseAdmin.from("notification_templates")
-      .upsert(payload, { onConflict: "tenant_id,tipo,dias_offset" });
-    if (error) throw new Error(error.message);
+
+    // Garante uma única versão por tipo + deslocamento: descarta a versão antiga.
+    let del = supabaseAdmin.from("notification_templates")
+      .delete().eq("tenant_id", tenantId)
+      .eq("tipo", data.tipo).eq("dias_offset", data.dias_offset);
+    if (data.id) del = del.neq("id", data.id);
+    await del;
+
+    if (data.id) {
+      const { error } = await supabaseAdmin.from("notification_templates")
+        .update(campos).eq("id", data.id).eq("tenant_id", tenantId);
+      if (error) throw new Error(error.message);
+    } else {
+      const { error } = await supabaseAdmin.from("notification_templates")
+        .insert({ tenant_id: tenantId, ...campos });
+      if (error) throw new Error(error.message);
+    }
     return { ok: true };
   });
 
