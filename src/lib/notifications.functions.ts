@@ -143,7 +143,8 @@ export const listNotifications = createServerFn({ method: "POST" })
       .from("notificacoes")
       .select(`
         id, tipo, canal, destinatario, mensagem, status, dias_offset,
-        agendada_para, enviada_em, erro, motivo_cancelamento, created_at,
+        agendada_para, enviada_em, erro, erro_codigo, tentativas, proxima_tentativa,
+        motivo_cancelamento, created_at,
         mensalidade_id, aluno:alunos ( id, nome_completo )
       `)
       .eq("tenant_id", tenantId)
