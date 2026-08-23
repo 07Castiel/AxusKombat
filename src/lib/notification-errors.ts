@@ -16,8 +16,14 @@ export const MAX_TENTATIVAS = 5;
 /** Espera antes da próxima tentativa, em minutos, por número de tentativas já feitas. */
 export const BACKOFF_MINUTOS = [5, 30, 120, 360, 1440];
 
-/** Erros que exigem correção manual — não adianta retentar sozinho. */
-const NAO_RETENTAVEIS: ErroCodigo[] = ["sem_telefone", "telefone_invalido", "sem_modelo"];
+/**
+ * Erros que exigem correção manual — não adianta retentar sozinho.
+ * `whatsapp_desconectado` NÃO é retentável automaticamente: após a reconexão
+ * o reenvio só acontece se o usuário autorizar no diálogo de reconexão.
+ */
+const NAO_RETENTAVEIS: ErroCodigo[] = [
+  "sem_telefone", "telefone_invalido", "sem_modelo", "whatsapp_desconectado",
+];
 
 export function isRetentavel(codigo: string | null | undefined): boolean {
   return !NAO_RETENTAVEIS.includes((codigo ?? "desconhecido") as ErroCodigo);
