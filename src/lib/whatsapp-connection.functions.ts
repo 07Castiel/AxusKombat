@@ -31,6 +31,14 @@ export const getWhatsappConnection = createServerFn({ method: "POST" })
     const { data, error } = await supabase
       .from("whatsapp_connections").select("*").eq("tenant_id", tenantId).maybeSingle();
     if (error) throw new Error(error.message);
+    let pendentes = 0;
+    if (data?.connected) {
+      const { count } = await supabase.from("notificacoes")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenantId).eq("status", "falhou")
+        .eq("erro_codigo", "whatsapp_desconectado");
+      pendentes = count ?? 0;
+    }
     return {
       exists: !!data,
       status: (data?.status as string) ?? "desconectado",
@@ -38,6 +46,7 @@ export const getWhatsappConnection = createServerFn({ method: "POST" })
       phone_number: data?.phone_number ?? null,
       phone_display: formatBrPhone(data?.phone_number ?? null),
       last_connection: data?.last_connection ?? null,
+      pendentes_reconexao: pendentes,
     };
   });
 
