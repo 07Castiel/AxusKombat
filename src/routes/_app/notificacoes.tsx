@@ -363,6 +363,23 @@ function TabWhatsapp() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={pendingOpen} onOpenChange={(o) => { if (!pendingBusy) setPendingOpen(o); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Wifi className="h-5 w-5 text-emerald-500" /> WhatsApp reconectado</DialogTitle>
+            <DialogDescription>
+              Existem <strong>{pendentes} mensagem(ns) não enviada(s)</strong> durante a desconexão. Deseja reenviá-las?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleDiscardPending} disabled={pendingBusy}>Não reenviar</Button>
+            <Button onClick={handleResendPending} disabled={pendingBusy}>
+              {pendingBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Reenviar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -656,7 +673,6 @@ function TabComunicados() {
   const enviar = useServerFn(enviarComunicado);
   const getConn = useServerFn(getWhatsappConnection);
   const connQuery = useQuery({ queryKey: ["whatsapp_connection"], queryFn: () => getConn() });
-  useEffect(() => { maybeAskPending(connQuery.data); }, [connQuery.data]);
   const status = (connQuery.data as any)?.status ?? "desconectado";
   const [comunicado, setComunicado] = useState({ mensagem: "", categoria: "todos" as "todos"|"adulto"|"kids", apenas_ativos: true });
   const [sending, setSending] = useState(false);
