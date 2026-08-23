@@ -55,7 +55,7 @@ export const ERRO_LABEL: Record<ErroCodigo, string> = {
 };
 
 export const ERRO_ACAO: Record<ErroCodigo, string> = {
-  whatsapp_desconectado: "Reconecte o WhatsApp na aba WhatsApp — o reenvio é automático.",
+  whatsapp_desconectado: "Reconecte o WhatsApp na aba WhatsApp — ao reconectar você poderá autorizar o reenvio.",
   sem_telefone: "Cadastre o telefone do aluno e reenvie manualmente.",
   telefone_invalido: "Corrija o telefone do aluno e reenvie manualmente.",
   sem_modelo: "Crie o modelo correspondente na aba Modelos.",
