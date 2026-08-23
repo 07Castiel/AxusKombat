@@ -29,6 +29,7 @@ import {
   listTemplates, upsertTemplate, deleteTemplate,
   listNotifications, resendNotification, runDispatchNow,
   getNotificationsHealth, retryAllFailed,
+  resendPendingAfterReconnect, discardPendingAfterReconnect,
 } from "@/lib/notifications.functions";
 import {
   getWhatsappConnection, connectWhatsapp, refreshWhatsappStatus,
@@ -211,8 +212,49 @@ function TabWhatsapp() {
   const refresh = useServerFn(refreshWhatsappStatus);
   const disconnect = useServerFn(disconnectWhatsapp);
   const sendTest = useServerFn(sendWhatsappTest);
+  const resendPending = useServerFn(resendPendingAfterReconnect);
+  const discardPending = useServerFn(discardPendingAfterReconnect);
+  const [pendentes, setPendentes] = useState(0);
+  const [pendingOpen, setPendingOpen] = useState(false);
+  const [pendingBusy, setPendingBusy] = useState(false);
+  const askedRef = useRef(false);
+
+  function maybeAskPending(s: any) {
+    if (s?.connected && (s?.pendentes_reconexao ?? 0) > 0 && !askedRef.current) {
+      askedRef.current = true;
+      setPendentes(s.pendentes_reconexao);
+      setPendingOpen(true);
+    }
+  }
+
+  async function handleResendPending() {
+    setPendingBusy(true);
+    try {
+      const r: any = await resendPending();
+      toast.success(`${r.enviadas} mensagem(ns) reenviada(s)${r.falhas ? `, ${r.falhas} com falha` : ""}`);
+      setPendingOpen(false);
+      qc.invalidateQueries({ queryKey: ["notificacoes"] });
+      qc.invalidateQueries({ queryKey: ["notifications_health"] });
+      qc.invalidateQueries({ queryKey: ["whatsapp_connection"] });
+    } catch (e: any) { toast.error(translateError(e)); }
+    finally { setPendingBusy(false); }
+  }
+
+  async function handleDiscardPending() {
+    setPendingBusy(true);
+    try {
+      const r: any = await discardPending();
+      toast.success(`${r.total} mensagem(ns) marcada(s) como não reenviada(s)`);
+      setPendingOpen(false);
+      qc.invalidateQueries({ queryKey: ["notificacoes"] });
+      qc.invalidateQueries({ queryKey: ["notifications_health"] });
+      qc.invalidateQueries({ queryKey: ["whatsapp_connection"] });
+    } catch (e: any) { toast.error(translateError(e)); }
+    finally { setPendingBusy(false); }
+  }
 
   const connQuery = useQuery({ queryKey: ["whatsapp_connection"], queryFn: () => getConn() });
+  useEffect(() => { maybeAskPending(connQuery.data); }, [connQuery.data]);
   const [qrOpen, setQrOpen] = useState(false);
   const [qr, setQr] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
@@ -231,7 +273,7 @@ function TabWhatsapp() {
         try {
           const s: any = await refresh();
           qc.setQueryData(["whatsapp_connection"], s);
-          if (s.connected) { stopPolling(); setQrOpen(false); toast.success(`WhatsApp conectado${s.phone_display ? ` (${s.phone_display})` : ""}`); }
+          if (s.connected) { stopPolling(); setQrOpen(false); toast.success(`WhatsApp conectado${s.phone_display ? ` (${s.phone_display})` : ""}`); maybeAskPending(s); }
         } catch { /* retry */ }
       }, 3000);
     } catch (e: any) { toast.error(translateError(e)); }
@@ -242,7 +284,7 @@ function TabWhatsapp() {
     try { await disconnect(); toast.success("WhatsApp desconectado"); qc.invalidateQueries({ queryKey: ["whatsapp_connection"] }); }
     catch (e: any) { toast.error(translateError(e)); }
   }
-  async function handleRefresh() { try { const s: any = await refresh(); qc.setQueryData(["whatsapp_connection"], s); } catch (e: any) { toast.error(translateError(e)); } }
+  async function handleRefresh() { try { const s: any = await refresh(); qc.setQueryData(["whatsapp_connection"], s); maybeAskPending(s); } catch (e: any) { toast.error(translateError(e)); } }
   async function handleSendTest() {
     if (!testTo.trim()) return toast.error("Informe um número para teste");
     setSendingTest(true);
@@ -319,6 +361,23 @@ function TabWhatsapp() {
             <p className="text-xs text-amber-500 flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Aguardando conexão…</p>
             <Button variant="outline" size="sm" onClick={handleConnect} disabled={connecting}><RefreshCw className="h-3 w-3" /> Gerar novo QR</Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={pendingOpen} onOpenChange={(o) => { if (!pendingBusy) setPendingOpen(o); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Wifi className="h-5 w-5 text-emerald-500" /> WhatsApp reconectado</DialogTitle>
+            <DialogDescription>
+              Existem <strong>{pendentes} mensagem(ns) não enviada(s)</strong> durante a desconexão. Deseja reenviá-las?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleDiscardPending} disabled={pendingBusy}>Não reenviar</Button>
+            <Button onClick={handleResendPending} disabled={pendingBusy}>
+              {pendingBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Reenviar
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

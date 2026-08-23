@@ -16,8 +16,14 @@ export const MAX_TENTATIVAS = 5;
 /** Espera antes da próxima tentativa, em minutos, por número de tentativas já feitas. */
 export const BACKOFF_MINUTOS = [5, 30, 120, 360, 1440];
 
-/** Erros que exigem correção manual — não adianta retentar sozinho. */
-const NAO_RETENTAVEIS: ErroCodigo[] = ["sem_telefone", "telefone_invalido", "sem_modelo"];
+/**
+ * Erros que exigem correção manual — não adianta retentar sozinho.
+ * `whatsapp_desconectado` NÃO é retentável automaticamente: após a reconexão
+ * o reenvio só acontece se o usuário autorizar no diálogo de reconexão.
+ */
+const NAO_RETENTAVEIS: ErroCodigo[] = [
+  "sem_telefone", "telefone_invalido", "sem_modelo", "whatsapp_desconectado",
+];
 
 export function isRetentavel(codigo: string | null | undefined): boolean {
   return !NAO_RETENTAVEIS.includes((codigo ?? "desconhecido") as ErroCodigo);
@@ -49,7 +55,7 @@ export const ERRO_LABEL: Record<ErroCodigo, string> = {
 };
 
 export const ERRO_ACAO: Record<ErroCodigo, string> = {
-  whatsapp_desconectado: "Reconecte o WhatsApp na aba WhatsApp — o reenvio é automático.",
+  whatsapp_desconectado: "Reconecte o WhatsApp na aba WhatsApp — ao reconectar você poderá autorizar o reenvio.",
   sem_telefone: "Cadastre o telefone do aluno e reenvie manualmente.",
   telefone_invalido: "Corrija o telefone do aluno e reenvie manualmente.",
   sem_modelo: "Crie o modelo correspondente na aba Modelos.",

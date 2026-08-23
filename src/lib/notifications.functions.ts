@@ -202,6 +202,87 @@ export const retryAllFailed = createServerFn({ method: "POST" })
     return await runDispatch();
   });
 
+// ============ PENDENTES APÓS RECONEXÃO (decisão do usuário) ============
+/** Mensagens que falharam enquanto o WhatsApp esteve desconectado. */
+export const countPendingAfterReconnect = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const tenantId = await getTenantAdmin(context as any);
+    const { count, error } = await (context as any).supabase
+      .from("notificacoes").select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenantId).eq("status", "falhou")
+      .eq("erro_codigo", "whatsapp_desconectado");
+    if (error) throw new Error(error.message);
+    return { total: count ?? 0 };
+  });
+
+/**
+ * Reenvia, na ordem original, as mensagens que falharam durante a desconexão.
+ * As linhas são "reivindicadas" antes do envio (erro_codigo -> 'reenviando'),
+ * evitando duplicidade se a reconexão disparar mais de uma vez.
+ */
+export const resendPendingAfterReconnect = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const tenantId = await getTenantAdmin(context as any);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { sendWhatsappByTenant } = await import("@/lib/whatsapp.server");
+    const { classifyErro } = await import("@/lib/notification-errors");
+
+    const { data: claimed, error } = await supabaseAdmin.from("notificacoes")
+      .update({ erro_codigo: "reenviando", proxima_tentativa: null })
+      .eq("tenant_id", tenantId).eq("status", "falhou")
+      .eq("erro_codigo", "whatsapp_desconectado")
+      .select("id, destinatario, mensagem, tentativas, agendada_para, created_at");
+    if (error) throw new Error(error.message);
+
+    const rows = ((claimed ?? []) as any[]).sort((a, b) =>
+      String(a.agendada_para ?? a.created_at).localeCompare(String(b.agendada_para ?? b.created_at)),
+    );
+
+    let enviadas = 0, falhas = 0;
+    for (const n of rows) {
+      if (!n.destinatario) {
+        falhas++;
+        await supabaseAdmin.from("notificacoes").update({
+          status: "falhou", erro: "Aluno sem telefone", erro_codigo: "sem_telefone",
+          proxima_tentativa: null,
+        }).eq("id", n.id);
+        continue;
+      }
+      const r = await sendWhatsappByTenant(tenantId, n.destinatario, n.mensagem);
+      if (r.ok) enviadas++; else falhas++;
+      await supabaseAdmin.from("notificacoes").update({
+        status: r.ok ? "enviada" : "falhou",
+        enviada_em: r.ok ? new Date().toISOString() : null,
+        erro: r.ok ? null : (r.error ?? "Erro desconhecido"),
+        erro_codigo: r.ok ? null : classifyErro(r.error),
+        tentativas: (n.tentativas ?? 0) + 1,
+        proxima_tentativa: null,
+      }).eq("id", n.id);
+    }
+    return { total: rows.length, enviadas, falhas };
+  });
+
+/** Descarta as mensagens pendentes: não serão reenviadas. */
+export const discardPendingAfterReconnect = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const tenantId = await getTenantAdmin(context as any);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin.from("notificacoes")
+      .update({
+        status: "cancelada",
+        motivo_cancelamento: "Não reenviada após a reconexão do WhatsApp (decisão do usuário).",
+        proxima_tentativa: null,
+      })
+      .eq("tenant_id", tenantId).eq("status", "falhou")
+      .eq("erro_codigo", "whatsapp_desconectado")
+      .select("id");
+    if (error) throw new Error(error.message);
+    return { total: data?.length ?? 0 };
+  });
+
 // ============ STATUS DO SERVIÇO ============
 export const getNotificationsHealth = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

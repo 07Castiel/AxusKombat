@@ -31,6 +31,14 @@ export const getWhatsappConnection = createServerFn({ method: "POST" })
     const { data, error } = await supabase
       .from("whatsapp_connections").select("*").eq("tenant_id", tenantId).maybeSingle();
     if (error) throw new Error(error.message);
+    let pendentes = 0;
+    if (data?.connected) {
+      const { count } = await supabase.from("notificacoes")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenantId).eq("status", "falhou")
+        .eq("erro_codigo", "whatsapp_desconectado");
+      pendentes = count ?? 0;
+    }
     return {
       exists: !!data,
       status: (data?.status as string) ?? "desconectado",
@@ -38,6 +46,7 @@ export const getWhatsappConnection = createServerFn({ method: "POST" })
       phone_number: data?.phone_number ?? null,
       phone_display: formatBrPhone(data?.phone_number ?? null),
       last_connection: data?.last_connection ?? null,
+      pendentes_reconexao: pendentes,
     };
   });
 
@@ -136,18 +145,15 @@ export const refreshWhatsappStatus = createServerFn({ method: "POST" })
     }
     await supabaseAdmin.from("whatsapp_connections").update(update).eq("tenant_id", tenantId);
 
-    // Ao reconectar, reprograma imediatamente as mensagens que falharam por desconexão
-    // e dispara o worker para reenviá-las.
-    if (mapped === "conectado" && !(row as any).connected) {
-      const { data: pendentes } = await supabaseAdmin.from("notificacoes")
-        .update({ tentativas: 0, proxima_tentativa: new Date().toISOString() })
+    // NÃO reenviamos automaticamente. Apenas contamos as mensagens que falharam
+    // durante a desconexão para que o usuário decida no diálogo de reconexão.
+    let pendentes = 0;
+    if (mapped === "conectado") {
+      const { count } = await supabaseAdmin.from("notificacoes")
+        .select("id", { count: "exact", head: true })
         .eq("tenant_id", tenantId).eq("status", "falhou")
-        .in("erro_codigo", ["whatsapp_desconectado", "servico_indisponivel", "desconhecido"])
-        .select("id");
-      if ((pendentes?.length ?? 0) > 0) {
-        const { runDispatch } = await import("@/lib/notifications-dispatch.server");
-        await runDispatch().catch(() => null);
-      }
+        .eq("erro_codigo", "whatsapp_desconectado");
+      pendentes = count ?? 0;
     }
 
     return {
@@ -156,6 +162,7 @@ export const refreshWhatsappStatus = createServerFn({ method: "POST" })
       phone_number: phone ?? null,
       phone_display: formatBrPhone(phone ?? null),
       last_connection: update.last_connection ?? (row as any).last_connection ?? null,
+      pendentes_reconexao: pendentes,
     };
   });
 
