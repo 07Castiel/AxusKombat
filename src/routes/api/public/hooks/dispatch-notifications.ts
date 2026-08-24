@@ -155,16 +155,25 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
             const { data } = await supabaseAdmin
               .from("notification_templates").select("*")
               .eq("tenant_id", n.tenant_id).eq("ativo", true);
-            tpls = (data ?? []) as any[];
+            tpls = ((data ?? []) as any[]).sort((a, b) =>
+              String(b.updated_at ?? b.created_at ?? "").localeCompare(String(a.updated_at ?? a.created_at ?? "")));
             templatesCache.set(n.tenant_id, tpls);
           }
+          // sempre a versão ativa mais recente do modelo
           const tpl = tpls.find((t) => t.tipo === n.tipo && t.dias_offset === n.dias_offset)
                   ?? tpls.find((t) => t.tipo === n.tipo);
           if (!tpl) {
-            await marcarFalha(n, null, "Modelo de mensagem não configurado");
+            // modelo inativo/removido: a mensagem não deve ser enviada
+            await supabaseAdmin.from("notificacoes").update({
+              status: "cancelada",
+              motivo_cancelamento: "Modelo de mensagem inativo ou não configurado",
+              proxima_tentativa: null,
+              updated_at: new Date().toISOString(),
+            }).eq("id", n.id);
             summary.skipped_config++;
             continue;
           }
+
 
           const aluno = n.aluno ?? {};
           const mens = n.mensalidade ?? {};
