@@ -100,11 +100,16 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
           });
         }
 
-        const notifs = [...((agendadas ?? []) as any[]), ...((retries ?? []) as any[])];
+        const { filtrarFila } = await import("@/lib/notification-queue");
+        const brutas = [...((agendadas ?? []) as any[]), ...((retries ?? []) as any[])];
+        // Descarta versões antigas duplicadas; a janela não se aplica aqui
+        // (o worker envia o que já venceu), mas a ordem é cronológica.
+        const notifs = filtrarFila(brutas, [], { aplicarJanela: false });
         const summary = {
           scanned: notifs.length, sent: 0, failed: 0,
           retried: (retries ?? []).length, skipped_window: 0, skipped_config: 0,
         };
+
         const settingsCache = new Map<string, any>();
         const templatesCache = new Map<string, any[]>();
 
