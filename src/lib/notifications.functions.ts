@@ -344,7 +344,10 @@ export const getNotificationsHealth = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const tenantId = await getTenantAdmin(context as any);
+    // manutenção: remove inativas e o que passa de 1 mês à frente
+    await limparNotificacoesTenant(tenantId);
     const supabase = (context as any).supabase;
+
 
     const { data: lastRun } = await supabase
       .from("notification_worker_runs")
