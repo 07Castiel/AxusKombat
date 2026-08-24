@@ -166,12 +166,19 @@ function ServiceStatus({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
             <RefreshCw className="h-4 w-4" /> Atualizar
           </Button>
           {h.fila.falhas > 0 && (
-            <Button size="sm" onClick={handleRetryAll} disabled={retrying}>
-              {retrying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              Reenviar falhas
-            </Button>
+            <>
+              <Button size="sm" variant="outline" onClick={() => setDiscardOpen(true)} disabled={discarding}>
+                {discarding ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
+                Não enviar
+              </Button>
+              <Button size="sm" onClick={handleRetryAll} disabled={retrying}>
+                {retrying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                Reenviar falhas
+              </Button>
+            </>
           )}
         </div>
+
       </Card>
 
       {h.falhas_por_motivo.length > 0 && (
