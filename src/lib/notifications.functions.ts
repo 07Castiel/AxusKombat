@@ -217,6 +217,47 @@ export const retryAllFailed = createServerFn({ method: "POST" })
     return await runDispatch();
   });
 
+// ============ DESCARTAR TODAS AS FALHAS (não enviar) ============
+/** Remove definitivamente as mensagens com falha: não serão reenviadas nem exibidas. */
+export const discardAllFailed = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const tenantId = await getTenantAdmin(context as any);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin.from("notificacoes")
+      .delete().eq("tenant_id", tenantId).eq("status", "falhou").select("id");
+    if (error) throw new Error(error.message);
+    return { total: data?.length ?? 0 };
+  });
+
+// ============ LIMPEZA: INATIVAS + JANELA DE 1 MÊS ============
+/**
+ * Remove mensagens inativas (canceladas) e mensagens agendadas para além de
+ * exatamente 1 mês à frente, mantendo o sistema apenas com o próximo mês.
+ */
+async function limparNotificacoesTenant(tenantId: string) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { janelaFim } = await import("@/lib/notification-queue");
+  const fim = janelaFim(new Date()).toISOString();
+
+  const { data: inativas } = await supabaseAdmin.from("notificacoes")
+    .delete().eq("tenant_id", tenantId).eq("status", "cancelada").select("id");
+
+  const { data: fora } = await supabaseAdmin.from("notificacoes")
+    .delete().eq("tenant_id", tenantId).eq("status", "agendada")
+    .gt("agendada_para", fim).select("id");
+
+  return { inativas: inativas?.length ?? 0, fora_da_janela: fora?.length ?? 0 };
+}
+
+export const limparNotificacoes = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const tenantId = await getTenantAdmin(context as any);
+    return await limparNotificacoesTenant(tenantId);
+  });
+
+
 // ============ PENDENTES APÓS RECONEXÃO (decisão do usuário) ============
 /** Mensagens que falharam enquanto o WhatsApp esteve desconectado. */
 export const countPendingAfterReconnect = createServerFn({ method: "POST" })
@@ -303,7 +344,10 @@ export const getNotificationsHealth = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const tenantId = await getTenantAdmin(context as any);
+    // manutenção: remove inativas e o que passa de 1 mês à frente
+    await limparNotificacoesTenant(tenantId);
     const supabase = (context as any).supabase;
+
 
     const { data: lastRun } = await supabase
       .from("notification_worker_runs")

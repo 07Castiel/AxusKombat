@@ -102,7 +102,10 @@ function NotificacoesPage() {
 function ServiceStatus({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
   const health = useServerFn(getNotificationsHealth);
   const retryAll = useServerFn(retryAllFailed);
+  const discardAll = useServerFn(discardAllFailed);
   const [retrying, setRetrying] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
 
   const hq = useQuery({
     queryKey: ["notifications_health"],
@@ -121,6 +124,19 @@ function ServiceStatus({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
     } catch (e: any) { toast.error(translateError(e)); }
     finally { setRetrying(false); }
   }
+
+  async function handleDiscardAll() {
+    setDiscarding(true);
+    try {
+      const r: any = await discardAll();
+      toast.success(`${r?.total ?? 0} mensagem(ns) com falha descartada(s)`);
+      setDiscardOpen(false);
+      qc.invalidateQueries({ queryKey: ["notificacoes"] });
+      qc.invalidateQueries({ queryKey: ["notifications_health"] });
+    } catch (e: any) { toast.error(translateError(e)); }
+    finally { setDiscarding(false); }
+  }
+
 
   if (!h) return null;
 
@@ -166,12 +182,19 @@ function ServiceStatus({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
             <RefreshCw className="h-4 w-4" /> Atualizar
           </Button>
           {h.fila.falhas > 0 && (
-            <Button size="sm" onClick={handleRetryAll} disabled={retrying}>
-              {retrying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              Reenviar falhas
-            </Button>
+            <>
+              <Button size="sm" variant="outline" onClick={() => setDiscardOpen(true)} disabled={discarding}>
+                {discarding ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
+                Não enviar
+              </Button>
+              <Button size="sm" onClick={handleRetryAll} disabled={retrying}>
+                {retrying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                Reenviar falhas
+              </Button>
+            </>
           )}
         </div>
+
       </Card>
 
       {h.falhas_por_motivo.length > 0 && (
