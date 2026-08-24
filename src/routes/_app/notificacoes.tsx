@@ -102,7 +102,10 @@ function NotificacoesPage() {
 function ServiceStatus({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
   const health = useServerFn(getNotificationsHealth);
   const retryAll = useServerFn(retryAllFailed);
+  const discardAll = useServerFn(discardAllFailed);
   const [retrying, setRetrying] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
 
   const hq = useQuery({
     queryKey: ["notifications_health"],
@@ -121,6 +124,19 @@ function ServiceStatus({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
     } catch (e: any) { toast.error(translateError(e)); }
     finally { setRetrying(false); }
   }
+
+  async function handleDiscardAll() {
+    setDiscarding(true);
+    try {
+      const r: any = await discardAll();
+      toast.success(`${r?.total ?? 0} mensagem(ns) com falha descartada(s)`);
+      setDiscardOpen(false);
+      qc.invalidateQueries({ queryKey: ["notificacoes"] });
+      qc.invalidateQueries({ queryKey: ["notifications_health"] });
+    } catch (e: any) { toast.error(translateError(e)); }
+    finally { setDiscarding(false); }
+  }
+
 
   if (!h) return null;
 
