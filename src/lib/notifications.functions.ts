@@ -158,8 +158,23 @@ export const listNotifications = createServerFn({ method: "POST" })
     if (data.to) q = q.lte("created_at", data.to);
     const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
-    return rows ?? [];
+    const all = (rows ?? []) as any[];
+
+    // Fila (agendadas): só modelos ativos, janela de hoje até +1 mês,
+    // sem versões antigas duplicadas e em ordem cronológica crescente.
+    const pendentes = all.filter((r) => r.status === "agendada");
+    const restantes = all.filter((r) => r.status !== "agendada");
+    if (pendentes.length === 0) return all;
+
+    const { filtrarFila } = await import("@/lib/notification-queue");
+    const { data: tpls } = await (context as any).supabase
+      .from("notification_templates")
+      .select("tipo, dias_offset, ativo")
+      .eq("tenant_id", tenantId);
+    const fila = filtrarFila(pendentes, (tpls ?? []) as any[]);
+    return [...fila, ...restantes];
   });
+
 
 export const resendNotification = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
