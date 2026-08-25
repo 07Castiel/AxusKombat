@@ -139,33 +139,53 @@ export const listNotifications = createServerFn({ method: "POST" })
   }).parse(i))
   .handler(async ({ data, context }) => {
     const tenantId = await getTenantAdmin(context as any);
-    let q = (context as any).supabase
-      .from("notificacoes")
-      .select(`
+    const COLS = `
         id, tipo, canal, destinatario, mensagem, status, dias_offset,
         agendada_para, enviada_em, erro, erro_codigo, tentativas, proxima_tentativa,
         motivo_cancelamento, created_at,
         mensalidade_id, aluno:alunos ( id, nome_completo )
-      `)
-      .eq("tenant_id", tenantId)
-      .order("agendada_para", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false })
-      .limit(data.limit);
-    if (data.aluno_id) q = q.eq("aluno_id", data.aluno_id);
-    if (data.status) q = q.eq("status", data.status);
-    if (data.tipo) q = q.eq("tipo", data.tipo);
-    if (data.from) q = q.gte("created_at", data.from);
-    if (data.to) q = q.lte("created_at", data.to);
-    const { data: rows, error } = await q;
-    if (error) throw new Error(error.message);
-    const all = (rows ?? []) as any[];
+      `;
+    const base = () => {
+      let q = (context as any).supabase
+        .from("notificacoes")
+        .select(COLS)
+        .eq("tenant_id", tenantId);
+      if (data.aluno_id) q = q.eq("aluno_id", data.aluno_id);
+      if (data.tipo) q = q.eq("tipo", data.tipo);
+      if (data.from) q = q.gte("created_at", data.from);
+      if (data.to) q = q.lte("created_at", data.to);
+      return q;
+    };
+
+    // Agendadas: ordem cronológica CRESCENTE (a próxima a ser enviada primeiro).
+    // Buscadas separadamente para que o limite não corte as datas mais próximas.
+    let pendentes: any[] = [];
+    if (!data.status || data.status === "agendada") {
+      const { data: rows, error } = await base()
+        .eq("status", "agendada")
+        .order("agendada_para", { ascending: true, nullsFirst: false })
+        .order("created_at", { ascending: true })
+        .limit(data.limit);
+      if (error) throw new Error(error.message);
+      pendentes = (rows ?? []) as any[];
+    }
+
+    // Demais (enviadas/falhas/canceladas): mais recentes primeiro, abaixo da fila.
+    let restantes: any[] = [];
+    if (!data.status || data.status !== "agendada") {
+      let q = base().order("agendada_para", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false })
+        .limit(data.limit);
+      q = data.status ? q.eq("status", data.status) : q.neq("status", "agendada");
+      const { data: rows, error } = await q;
+      if (error) throw new Error(error.message);
+      restantes = (rows ?? []) as any[];
+    }
+
+    if (pendentes.length === 0) return restantes;
 
     // Fila (agendadas): só modelos ativos, janela de hoje até +1 mês,
     // sem versões antigas duplicadas e em ordem cronológica crescente.
-    const pendentes = all.filter((r) => r.status === "agendada");
-    const restantes = all.filter((r) => r.status !== "agendada");
-    if (pendentes.length === 0) return all;
-
     const { filtrarFila } = await import("@/lib/notification-queue");
     const { data: tpls } = await (context as any).supabase
       .from("notification_templates")
@@ -174,6 +194,7 @@ export const listNotifications = createServerFn({ method: "POST" })
     const fila = filtrarFila(pendentes, (tpls ?? []) as any[]);
     return [...fila, ...restantes];
   });
+
 
 
 export const resendNotification = createServerFn({ method: "POST" })
