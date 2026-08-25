@@ -86,6 +86,7 @@ export function filtrarFila<T extends QueueRow>(
     });
   }
   out = apenasVersaoMaisRecente(out);
-  out.sort((a, b) => ts(a) - ts(b));
+  // Ordem decrescente: a última mensagem a ser enviada aparece no topo.
+  out.sort((a, b) => ts(b) - ts(a));
   return out;
 }
