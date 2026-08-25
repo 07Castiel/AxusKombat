@@ -224,6 +224,15 @@ function ServiceStatus({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
           Todas as mensagens automáticas estão em dia.
         </p>
       )}
+
+      <ConfirmDialog
+        open={discardOpen}
+        onOpenChange={setDiscardOpen}
+        title="Descartar mensagens com falha"
+        description={`Existem ${h.fila.falhas} mensagem(ns) com falha. Ao descartar, elas serão removidas definitivamente e não serão reenviadas nem exibidas. Deseja continuar?`}
+        confirmLabel="Descartar mensagens"
+        onConfirm={handleDiscardAll}
+      />
     </div>
   );
 }
