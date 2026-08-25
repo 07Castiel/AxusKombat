@@ -28,9 +28,10 @@ import {
   getNotificationSettings, saveNotificationSettings,
   listTemplates, upsertTemplate, deleteTemplate,
   listNotifications, resendNotification, runDispatchNow,
-  getNotificationsHealth, retryAllFailed,
+  getNotificationsHealth, retryAllFailed, discardAllFailed,
   resendPendingAfterReconnect, discardPendingAfterReconnect,
 } from "@/lib/notifications.functions";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import {
   getWhatsappConnection, connectWhatsapp, refreshWhatsappStatus,
   disconnectWhatsapp, sendWhatsappTest,
