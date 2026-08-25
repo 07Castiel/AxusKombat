@@ -157,7 +157,7 @@ export const listNotifications = createServerFn({ method: "POST" })
       return q;
     };
 
-    // Agendadas: ordem cronológica CRESCENTE (a próxima a ser enviada primeiro).
+    // Agendadas: buscadas em ordem crescente para respeitar a janela,
     // Buscadas separadamente para que o limite não corte as datas mais próximas.
     let pendentes: any[] = [];
     if (!data.status || data.status === "agendada") {
@@ -185,7 +185,8 @@ export const listNotifications = createServerFn({ method: "POST" })
     if (pendentes.length === 0) return restantes;
 
     // Fila (agendadas): só modelos ativos, janela de hoje até +1 mês,
-    // sem versões antigas duplicadas e em ordem cronológica crescente.
+    // sem versões antigas duplicadas, exibidas em ordem decrescente
+    // (a última mensagem a ser enviada aparece no topo).
     const { filtrarFila } = await import("@/lib/notification-queue");
     const { data: tpls } = await (context as any).supabase
       .from("notification_templates")
