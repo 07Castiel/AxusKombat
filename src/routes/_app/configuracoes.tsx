@@ -1,4 +1,4 @@
-import { RequireAdmin } from "@/components/RequireRole";
+import { RequireTela } from "@/components/RequireRole";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
@@ -218,8 +218,8 @@ function ConfigPage() {
 
 function ConfigPageProtegido() {
   return (
-    <RequireAdmin>
+    <RequireTela tela="/configuracoes">
       <ConfigPage />
-    </RequireAdmin>
+    </RequireTela>
   );
 }

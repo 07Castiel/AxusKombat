@@ -92,6 +92,8 @@ export const processarMensalidadesAgora = createServerFn({ method: "POST" })
       .select("id");
     if (eVenc) throw new Error(eVenc.message);
 
+    // A lista de contratos sai do client do usuário, então o RLS garante que
+    // só vêm os da própria academia.
     const { data: contratos, error: eCon } = await ctx.supabase
       .from("contratos")
       .select("id")
@@ -99,10 +101,16 @@ export const processarMensalidadesAgora = createServerFn({ method: "POST" })
       .eq("status", "ativo");
     if (eCon) throw new Error(eCon.message);
 
+    // Mas a RPC precisa do service_role: a migration 20260709021654 revogou
+    // EXECUTE de `authenticated`, então chamá-la pelo client do usuário falharia
+    // com "permission denied". Os ids já vieram filtrados por RLS acima, então
+    // não há ampliação de escopo aqui.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
     let geradas = 0;
     for (const c of (contratos ?? []) as { id: string }[]) {
-      const { data, error } = await ctx.supabase
-        .rpc("gerar_mensalidades_contrato", { p_contrato_id: c.id });
+      const { data, error } = await supabaseAdmin
+        .rpc("gerar_mensalidades_contrato" as never, { p_contrato_id: c.id } as never);
       if (error) throw new Error(error.message);
       geradas += Number(data ?? 0);
     }

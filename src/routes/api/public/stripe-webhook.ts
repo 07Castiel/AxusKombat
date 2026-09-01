@@ -163,6 +163,25 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
           }
         } catch (err) {
           console.error("[stripe-webhook] handler error:", err);
+          // Libera o registro de idempotência antes de devolver 500.
+          //
+          // O registro é gravado ANTES do processamento, para que duas entregas
+          // simultâneas não processem o mesmo evento. Mas se o processamento
+          // falha e o registro fica, a reentrega do Stripe bate no de-dupe,
+          // responde 200 e o evento se perde para sempre — uma falha temporária
+          // do banco viraria assinatura que nunca ativa.
+          const { error: delErr } = await dbPendente
+            .from("stripe_webhook_events")
+            .delete()
+            .eq("event_id", event.id);
+          if (delErr) {
+            console.error(
+              `[stripe-webhook] evento ${event.id} falhou e o registro de ` +
+                `idempotência não pôde ser removido. A reentrega do Stripe será ` +
+                `descartada como duplicada — reprocesse manualmente.`,
+              delErr,
+            );
+          }
           return new Response("Handler error", { status: 500 });
         }
 

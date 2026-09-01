@@ -46,6 +46,12 @@ export function temTemplateAtivo(row: QueueRow, templates: TemplateLike[]): bool
 }
 
 function dedupeKey(r: QueueRow): string {
+  // Envio avulso não tem "versão anterior" para descartar: cada linha é uma
+  // mensagem distinta, escrita à mão. Sem esta ressalva, dois comunicados para
+  // o mesmo aluno na mesma janela cairiam na mesma chave
+  // (aluno_id|COMUNICADO|0) e um deles sumiria da fila em silêncio — nunca
+  // enviado, nunca cancelado, filtrado a cada rodada do worker.
+  if (TIPOS_SEM_TEMPLATE.has(r.tipo)) return r.id;
   return [r.mensalidade_id ?? r.aluno_id ?? r.id, r.tipo, r.dias_offset ?? 0].join("|");
 }
 

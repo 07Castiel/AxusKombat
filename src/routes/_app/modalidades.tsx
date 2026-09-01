@@ -1,4 +1,4 @@
-import { RequireAdmin } from "@/components/RequireRole";
+import { RequireTela } from "@/components/RequireRole";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -190,8 +190,8 @@ function ModalidadesPage() {
 
 function ModalidadesPageProtegido() {
   return (
-    <RequireAdmin>
+    <RequireTela tela="/modalidades">
       <ModalidadesPage />
-    </RequireAdmin>
+    </RequireTela>
   );
 }

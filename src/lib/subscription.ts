@@ -37,25 +37,36 @@ export type TenantSituacao = {
   liberado: boolean;
 };
 
-/** Lê a situação da academia do usuário. Não lança. */
+/**
+ * Lê a situação da academia do usuário.
+ *
+ * Lança quando não consegue determinar a situação (perfil ausente, academia
+ * ausente, erro de leitura). Assinatura vencida NÃO lança aqui — devolve
+ * `liberado: false`, para quem chama decidir a mensagem.
+ */
 export async function lerSituacaoTenant(ctx: {
   supabase: any;
   userId: string;
-}): Promise<TenantSituacao | null> {
-  const { data: perfil } = await ctx.supabase
+}): Promise<TenantSituacao> {
+  const { data: perfil, error: erroPerfil } = await ctx.supabase
     .from("profiles")
     .select("tenant_id")
     .eq("id", ctx.userId)
     .maybeSingle();
+  if (erroPerfil) throw new Error(`Falha ao ler o perfil: ${erroPerfil.message}`);
   const tenantId = perfil?.tenant_id as string | undefined;
-  if (!tenantId) return null;
+  if (!tenantId) throw new Error("Perfil não encontrado");
 
-  const { data: tenant } = await ctx.supabase
+  const { data: tenant, error: erroTenant } = await ctx.supabase
     .from("tenants")
     .select("id, status, ativo")
     .eq("id", tenantId)
     .maybeSingle();
-  if (!tenant) return null;
+  // Falha de leitura não é o mesmo que assinatura vencida. Sem esta distinção,
+  // um erro transitório do banco bloquearia toda escrita com a mensagem
+  // "seu período de teste terminou" — e o usuário não teria como descobrir.
+  if (erroTenant) throw new Error(`Falha ao verificar a assinatura: ${erroTenant.message}`);
+  if (!tenant) throw new Error("Academia não encontrada");
 
   const status = (tenant.status as string) ?? "active";
   const ativo = tenant.ativo !== false;
@@ -80,7 +91,6 @@ export const requireActiveSubscription = createMiddleware({ type: "function" })
   .middleware([requireSupabaseAuth])
   .server(async ({ next, context }) => {
     const situacao = await lerSituacaoTenant(context as any);
-    if (!situacao) throw new Error("Perfil não encontrado");
     if (!situacao.liberado) throw new Error(mensagemBloqueio(situacao));
     return next({ context: { tenantSituacao: situacao } });
   });

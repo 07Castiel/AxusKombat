@@ -1,4 +1,4 @@
-import { RequireAdmin } from "@/components/RequireRole";
+import { RequireTela } from "@/components/RequireRole";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -278,8 +278,8 @@ function Mini({ label, value, cls }: { label: string; value: string; cls: string
 
 function FinanceiroPageProtegido() {
   return (
-    <RequireAdmin>
+    <RequireTela tela="/financeiro">
       <FinanceiroPage />
-    </RequireAdmin>
+    </RequireTela>
   );
 }

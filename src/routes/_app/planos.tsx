@@ -1,4 +1,4 @@
-import { RequireAdmin } from "@/components/RequireRole";
+import { RequireTela } from "@/components/RequireRole";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -252,8 +252,8 @@ function PlanosPage() {
 
 function PlanosPageProtegido() {
   return (
-    <RequireAdmin>
+    <RequireTela tela="/planos">
       <PlanosPage />
-    </RequireAdmin>
+    </RequireTela>
   );
 }

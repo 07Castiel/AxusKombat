@@ -1,4 +1,4 @@
-import { RequireAdmin } from "@/components/RequireRole";
+import { RequireTela } from "@/components/RequireRole";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -279,8 +279,8 @@ function RelatoriosPage() {
 
 function RelatoriosPageProtegido() {
   return (
-    <RequireAdmin>
+    <RequireTela tela="/relatorios">
       <RelatoriosPage />
-    </RequireAdmin>
+    </RequireTela>
   );
 }

@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { ShieldOff } from "lucide-react";
 import { useAuth, type AppRole } from "@/hooks/use-auth";
+import { papeisDaTela, type TelaProtegida } from "@/lib/acesso-telas";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -45,7 +46,16 @@ export function RequireRole({
   );
 }
 
-/** Atalho para as telas que só o admin abre. */
-export function RequireAdmin({ children }: { children: React.ReactNode }) {
-  return <RequireRole papeis={["admin"]}>{children}</RequireRole>;
+/**
+ * Guarda pela tabela de acesso, para menu e rota nunca divergirem.
+ * Preferir esta forma a listar papéis à mão em cada tela.
+ */
+export function RequireTela({
+  tela,
+  children,
+}: {
+  tela: TelaProtegida;
+  children: React.ReactNode;
+}) {
+  return <RequireRole papeis={papeisDaTela(tela)}>{children}</RequireRole>;
 }

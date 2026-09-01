@@ -1,4 +1,4 @@
-import { RequireAdmin } from "@/components/RequireRole";
+import { RequireTela } from "@/components/RequireRole";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
@@ -297,8 +297,8 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
 
 function AcessosPageProtegido() {
   return (
-    <RequireAdmin>
+    <RequireTela tela="/acessos">
       <AcessosPage />
-    </RequireAdmin>
+    </RequireTela>
   );
 }

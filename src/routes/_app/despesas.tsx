@@ -1,4 +1,4 @@
-import { RequireAdmin } from "@/components/RequireRole";
+import { RequireTela } from "@/components/RequireRole";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -221,8 +221,8 @@ function DespesasPage() {
 
 function DespesasPageProtegido() {
   return (
-    <RequireAdmin>
+    <RequireTela tela="/despesas">
       <DespesasPage />
-    </RequireAdmin>
+    </RequireTela>
   );
 }

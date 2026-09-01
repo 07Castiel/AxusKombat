@@ -1,4 +1,4 @@
-import { RequireAdmin } from "@/components/RequireRole";
+import { RequireTela } from "@/components/RequireRole";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -937,8 +937,8 @@ function TabHistorico({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
 
 function NotificacoesPageProtegido() {
   return (
-    <RequireAdmin>
+    <RequireTela tela="/notificacoes">
       <NotificacoesPage />
-    </RequireAdmin>
+    </RequireTela>
   );
 }

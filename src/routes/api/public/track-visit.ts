@@ -27,7 +27,9 @@ const payloadSchema = z.object({
   session_id: z.string().max(100).optional(),
   // Só aceita UUID. Antes qualquer string entrava e ia direto para uma coluna
   // uuid, o que virava erro de banco gravado em system_logs a cada chamada.
-  user_id: z.string().regex(UUID_RE).nullable().optional(),
+  // `catch` em vez de rejeitar: um id malformado vira visita anônima, em vez de
+  // descartar o registro inteiro e perder a telemetria da página.
+  user_id: z.string().regex(UUID_RE).nullable().optional().catch(null),
 });
 
 const CORPO_MAXIMO = 8 * 1024;
