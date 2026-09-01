@@ -1,4 +1,3 @@
-import { RequireTela } from "@/components/RequireRole";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
@@ -6,7 +5,6 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Download, Search, Trash2, Users, UserCheck, UserX, Globe2 } from "lucide-react";
 
-import { useAuth } from "@/hooks/use-auth";
 import { PageHeader } from "@/components/PageHeader";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,8 +14,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { translateError } from "@/lib/errors";
 import { listVisitorLogs, visitorStats, exportVisitorLogs, deleteVisitorLog } from "@/lib/acessos.functions";
 
-export const Route = createFileRoute("/_app/acessos")({
-  component: AcessosPageProtegido,
+export const Route = createFileRoute("/admin-master/acessos")({
+  component: AcessosPage,
   head: () => ({
     meta: [
       { title: "Acessos | Axus Kombat" },
@@ -76,7 +74,6 @@ function Bar({ data }: { data: { label: string; value: number }[] }) {
 }
 
 function AcessosPage() {
-  const { isAdmin, loading } = useAuth();
   const navigate = useNavigate();
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -85,9 +82,14 @@ function AcessosPage() {
   const [page, setPage] = useState(1);
   const pageSize = 50;
 
+  // Mesmo guarda do resto do /admin-master: sem token de sessão mestre, volta
+  // para o login do painel. Esta tela deixou de ser da academia (C5).
+  const [token, setToken] = useState<string | null>(null);
   useEffect(() => {
-    if (!loading && !isAdmin) navigate({ to: "/" });
-  }, [loading, isAdmin, navigate]);
+    const t = sessionStorage.getItem("master_token");
+    if (!t) { navigate({ to: "/admin-master" }); return; }
+    setToken(t);
+  }, [navigate]);
 
   const listFn = useServerFn(listVisitorLogs);
   const statsFn = useServerFn(visitorStats);
@@ -105,19 +107,19 @@ function AcessosPage() {
 
   const stats = useQuery({
     queryKey: ["visitor-stats", filters],
-    queryFn: () => statsFn({ data: { from: filters.from, to: filters.to } }),
-    enabled: isAdmin,
+    queryFn: () => statsFn({ data: { token: token!, from: filters.from, to: filters.to } }),
+    enabled: !!token,
   });
 
   const list = useQuery({
     queryKey: ["visitor-list", filters, page],
-    queryFn: () => listFn({ data: { ...filters, page, pageSize } }),
-    enabled: isAdmin,
+    queryFn: () => listFn({ data: { token: token!, ...filters, page, pageSize } }),
+    enabled: !!token,
   });
 
   const handleExport = async () => {
     try {
-      const res = await exportFn({ data: filters });
+      const res = await exportFn({ data: { token: token!, ...filters } });
       const csv = toCsv(res.rows as Record<string, unknown>[]);
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);
@@ -135,7 +137,7 @@ function AcessosPage() {
   const handleDelete = async (id: string) => {
     if (!confirm("Excluir este registro?")) return;
     try {
-      await deleteFn({ data: { id } });
+      await deleteFn({ data: { token: token!, id } });
       toast.success("Registro excluído");
       list.refetch();
       stats.refetch();
@@ -144,7 +146,7 @@ function AcessosPage() {
     }
   };
 
-  if (!isAdmin) return null;
+  if (!token) return null;
 
   const t = stats.data?.totals;
   const totalPages = Math.max(1, Math.ceil((list.data?.total ?? 0) / pageSize));
@@ -295,10 +297,3 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
   );
 }
 
-function AcessosPageProtegido() {
-  return (
-    <RequireTela tela="/acessos">
-      <AcessosPage />
-    </RequireTela>
-  );
-}

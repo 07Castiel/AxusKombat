@@ -3,65 +3,23 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireActiveSubscription } from "@/lib/subscription";
 import { requireAdmin } from "@/lib/tenant-guard";
+import { PERMISSION_MODULES, STAFF_ROLES } from "@/lib/permissoes";
 
-export const STAFF_ROLES = [
-  "admin",
-  "recepcao",
-  "financeiro",
-  "professor_adulto",
-  "professor_kids",
-] as const;
-export type StaffRole = (typeof STAFF_ROLES)[number];
-
-export const PERMISSION_MODULES = [
-  "alunos",
-  "pagamentos",
-  "planos",
-  "modalidades",
-  "horarios",
-  "graduacoes",
-  "relatorios",
-  "configuracoes",
-] as const;
-export type PermissionModule = (typeof PERMISSION_MODULES)[number];
-
-export type ModulePerms = { ver: boolean; editar: boolean };
-export type PermissionsMap = Record<PermissionModule, ModulePerms>;
-
-export const ROLE_LABELS: Record<StaffRole, string> = {
-  admin: "Administrador",
-  recepcao: "Recepção",
-  financeiro: "Financeiro",
-  professor_adulto: "Professor Adulto",
-  professor_kids: "Professor Kids",
-};
-
-const all: ModulePerms = { ver: true, editar: true };
-const ver: ModulePerms = { ver: true, editar: false };
-const none: ModulePerms = { ver: false, editar: false };
-
-export const ROLE_PRESETS: Record<StaffRole, PermissionsMap> = {
-  admin: {
-    alunos: all, pagamentos: all, planos: all, modalidades: all,
-    horarios: all, graduacoes: all, relatorios: all, configuracoes: all,
-  },
-  recepcao: {
-    alunos: all, pagamentos: ver, planos: ver, modalidades: ver,
-    horarios: all, graduacoes: ver, relatorios: none, configuracoes: none,
-  },
-  financeiro: {
-    alunos: ver, pagamentos: all, planos: all, modalidades: ver,
-    horarios: ver, graduacoes: none, relatorios: all, configuracoes: none,
-  },
-  professor_adulto: {
-    alunos: ver, pagamentos: none, planos: none, modalidades: ver,
-    horarios: all, graduacoes: all, relatorios: none, configuracoes: none,
-  },
-  professor_kids: {
-    alunos: ver, pagamentos: none, planos: none, modalidades: ver,
-    horarios: all, graduacoes: all, relatorios: none, configuracoes: none,
-  },
-};
+// Constantes e presets vivem em @/lib/permissoes: sao usados tambem pela
+// interface, e este arquivo carrega server functions. Reexportados aqui para
+// nao quebrar quem ja importava daqui.
+export {
+  STAFF_ROLES,
+  PERMISSION_MODULES,
+  ROLE_LABELS,
+  ROLE_PRESETS,
+} from "@/lib/permissoes";
+export type {
+  StaffRole,
+  PermissionModule,
+  ModulePerms,
+  PermissionsMap,
+} from "@/lib/permissoes";
 
 const permissionsSchema = z.record(
   z.enum(PERMISSION_MODULES),

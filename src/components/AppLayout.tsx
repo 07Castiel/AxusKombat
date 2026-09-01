@@ -1,7 +1,8 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { LayoutDashboard, Users, CreditCard, Wallet, CalendarDays, Award, BarChart3, Settings, LogOut, Menu, Swords, UserCog, Bell, Receipt, CalendarCheck } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { papeisDaTela, type TelaProtegida } from "@/lib/acesso-telas";
+import { MODULO_DA_TELA, papeisDaTela, type TelaProtegida } from "@/lib/acesso-telas";
+import { podeVer } from "@/lib/permissoes";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 // Toaster mounted globally in __root.tsx
@@ -26,7 +27,7 @@ const NAV = [
 ] as const;
 
 export function AppLayout({ children }: { children: ReactNode }) {
-  const { profile, roles, isAdmin, signOut } = useAuth();
+  const { profile, roles, permissoes, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const [open, setOpen] = useState(false);
@@ -35,9 +36,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
   // não podem divergir. Antes o menu usava um booleano `adminOnly` próprio, que
   // escondia Financeiro e Relatórios de quem o RLS libera (recepção e
   // financeiro) — os dois papéis existiam sem nenhuma tela para usar.
-  const items = NAV.filter((n) =>
-    papeisDaTela(n.to as TelaProtegida).some((p) => roles.includes(p)),
-  );
+  const items = NAV.filter((n) => {
+    const tela = n.to as TelaProtegida;
+    if (!papeisDaTela(tela).some((p) => roles.includes(p))) return false;
+    const modulo = MODULO_DA_TELA[tela];
+    return modulo ? podeVer(permissoes, modulo) : true;
+  });
 
   const handleSignOut = async () => {
     await signOut();

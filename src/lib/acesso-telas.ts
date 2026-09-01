@@ -14,6 +14,7 @@
  *                    edicao: abrir em modo quebrado seria pior que barrar
  */
 import type { AppRole } from "@/hooks/use-auth";
+import type { PermissionModule } from "@/lib/permissoes";
 
 export const TODOS_OS_PAPEIS: readonly AppRole[] = [
   "admin",
@@ -39,7 +40,9 @@ export const ACESSO_TELAS = {
   "/notificacoes": ["admin"],
   "/equipe": ["admin"],
   "/configuracoes": ["admin"],
-  "/acessos": ["admin"],
+  // /acessos saiu daqui: virou tela do /admin-master (C5). Os logs de visita
+  // sao da plataforma inteira e nao tem tenant_id — nao ha como escopar por
+  // academia sem inventar um dono para cada visita anonima.
 } as const satisfies Record<string, readonly AppRole[]>;
 
 export type TelaProtegida = keyof typeof ACESSO_TELAS;
@@ -47,3 +50,24 @@ export type TelaProtegida = keyof typeof ACESSO_TELAS;
 export function papeisDaTela(tela: TelaProtegida): readonly AppRole[] {
   return ACESSO_TELAS[tela];
 }
+
+/**
+ * Modulo de `profiles.permissions` que governa cada tela (A7).
+ *
+ * Telas sem modulo (o painel) nao sao afetadas por permissao — so por papel.
+ * Permissao so restringe: quem nao passa no papel nunca chega aqui.
+ */
+export const MODULO_DA_TELA: Partial<Record<TelaProtegida, PermissionModule>> = {
+  "/alunos": "alunos",
+  "/presencas": "alunos",
+  "/financeiro": "pagamentos",
+  "/despesas": "pagamentos",
+  "/planos": "planos",
+  "/modalidades": "modalidades",
+  "/horarios": "horarios",
+  "/graduacoes": "graduacoes",
+  "/relatorios": "relatorios",
+  "/notificacoes": "configuracoes",
+  "/equipe": "configuracoes",
+  "/configuracoes": "configuracoes",
+};

@@ -1,7 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { ShieldOff } from "lucide-react";
 import { useAuth, type AppRole } from "@/hooks/use-auth";
-import { papeisDaTela, type TelaProtegida } from "@/lib/acesso-telas";
+import { MODULO_DA_TELA, papeisDaTela, type TelaProtegida } from "@/lib/acesso-telas";
+import { podeVer } from "@/lib/permissoes";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -57,5 +58,11 @@ export function RequireTela({
   tela: TelaProtegida;
   children: React.ReactNode;
 }) {
-  return <RequireRole papeis={papeisDaTela(tela)}>{children}</RequireRole>;
+  const { permissoes } = useAuth();
+  const modulo = MODULO_DA_TELA[tela];
+  // Permissao so restringe: se o papel ja barrou, nem chega aqui. Modulo sem
+  // marcacao explicita conta como liberado (perfis nascem com `permissions` {}).
+  const bloqueadoPorPermissao = modulo ? !podeVer(permissoes, modulo) : false;
+  const papeis = bloqueadoPorPermissao ? [] : papeisDaTela(tela);
+  return <RequireRole papeis={papeis}>{children}</RequireRole>;
 }

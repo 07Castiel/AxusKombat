@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireActiveSubscription } from "@/lib/subscription";
-import { requireAdmin } from "@/lib/tenant-guard";
+import { requireAdmin, requirePermissao } from "@/lib/tenant-guard";
 
 export const registrarPagamento = createServerFn({ method: "POST" })
   .middleware([requireActiveSubscription])
@@ -15,6 +15,7 @@ export const registrarPagamento = createServerFn({ method: "POST" })
   }).parse(i))
   .handler(async ({ data, context }) => {
     const ctx = context as any;
+    await requirePermissao(ctx, "pagamentos");
     const { error } = await ctx.supabase.from("mensalidades").update({
       status: "pago",
       data_pagamento: data.data_pagamento,
@@ -38,6 +39,7 @@ export const cancelarMensalidade = createServerFn({ method: "POST" })
   .inputValidator((i) => z.object({ mensalidade_id: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
     const ctx = context as any;
+    await requirePermissao(ctx, "pagamentos");
     const { error } = await ctx.supabase.from("mensalidades")
       .update({ status: "cancelado" })
       .eq("id", data.mensalidade_id);
@@ -50,6 +52,7 @@ export const reabrirMensalidade = createServerFn({ method: "POST" })
   .inputValidator((i) => z.object({ mensalidade_id: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
     const ctx = context as any;
+    await requirePermissao(ctx, "pagamentos");
     const today = new Date().toISOString().slice(0, 10);
     const { data: m } = await ctx.supabase.from("mensalidades")
       .select("data_vencimento").eq("id", data.mensalidade_id).maybeSingle();

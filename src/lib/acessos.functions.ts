@@ -1,15 +1,29 @@
+/**
+ * Logs de acesso da plataforma — painel do SaaS (C5).
+ *
+ * Estas funções liam `visitor_logs` com a chave de serviço e SEM nenhum filtro
+ * de tenant, protegidas apenas por `has_role(uid, 'admin')` — que também não
+ * olhava tenant. Resultado: todo dono de academia listava, exportava (até
+ * 50.000 linhas) e apagava os logs de acesso de TODAS as outras, com IP,
+ * cidade, páginas visitadas e user_id.
+ *
+ * A tabela é da plataforma, não do cliente: não tem tenant_id e nunca teve.
+ * Escopá-la por academia exigiria inventar um dono para cada visita, inclusive
+ * as anônimas na página de preços. Então a tela muda de lado — sai da área do
+ * cliente e passa a viver no /admin-master, com a mesma autenticação de token
+ * do resto do painel.
+ *
+ * A ETAPA 1 já fechou o caminho direto pelo navegador (as policies de
+ * visitor_logs e system_logs foram removidas). Isto fecha o caminho pelas
+ * server functions, que usam service_role e ignoram RLS.
+ */
 import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-
-async function assertAdmin(ctx: { supabase: ReturnType<typeof Object>; userId: string }) {
-  // requireSupabaseAuth provides ctx.supabase (RLS as user) — but we need admin check.
-  const supabase = (ctx as unknown as { supabase: import("@supabase/supabase-js").SupabaseClient }).supabase;
-  const { data, error } = await supabase.rpc("has_role", { _user_id: (ctx as unknown as { userId: string }).userId, _role: "admin" });
-  if (error) throw error;
-  if (!data) throw new Error("Acesso negado: somente administradores.");
-}
+import { z } from "zod";
+// Carregado dentro de cada handler, nao no topo: import estatico traria
+// `node:crypto` para o bundle do navegador — esta tela e uma rota de cliente.
 
 type Filters = {
+  token: string;
   from?: string | null;
   to?: string | null;
   search?: string | null;
@@ -17,11 +31,20 @@ type Filters = {
   pageSize?: number;
 };
 
+const filtrosSchema = z.object({
+  token: z.string().min(1),
+  from: z.string().nullable().optional(),
+  to: z.string().nullable().optional(),
+  search: z.string().max(120).nullable().optional(),
+  page: z.number().int().min(1).max(10_000).optional(),
+  pageSize: z.number().int().min(10).max(200).optional(),
+});
+
 export const listVisitorLogs = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: Filters) => d ?? {})
-  .handler(async ({ data, context }) => {
-    await assertAdmin(context as never);
+  .inputValidator((d) => filtrosSchema.parse(d))
+  .handler(async ({ data }) => {
+    const { assertToken } = await import("@/lib/master-token.server");
+    assertToken(data.token);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const page = Math.max(1, data.page ?? 1);
     const pageSize = Math.min(200, Math.max(10, data.pageSize ?? 50));
@@ -47,10 +70,10 @@ export const listVisitorLogs = createServerFn({ method: "POST" })
   });
 
 export const visitorStats = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: { from?: string | null; to?: string | null }) => d ?? {})
-  .handler(async ({ data, context }) => {
-    await assertAdmin(context as never);
+  .inputValidator((d) => filtrosSchema.pick({ token: true, from: true, to: true }).parse(d))
+  .handler(async ({ data }) => {
+    const { assertToken } = await import("@/lib/master-token.server");
+    assertToken(data.token);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     let q = supabaseAdmin
@@ -108,10 +131,10 @@ export const visitorStats = createServerFn({ method: "POST" })
   });
 
 export const exportVisitorLogs = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: Filters) => d ?? {})
-  .handler(async ({ data, context }) => {
-    await assertAdmin(context as never);
+  .inputValidator((d) => filtrosSchema.parse(d))
+  .handler(async ({ data }) => {
+    const { assertToken } = await import("@/lib/master-token.server");
+    assertToken(data.token);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     let q = supabaseAdmin.from("visitor_logs").select("*").order("created_at", { ascending: false }).limit(50000);
     if (data.from) q = q.gte("created_at", data.from);
@@ -128,10 +151,10 @@ export const exportVisitorLogs = createServerFn({ method: "POST" })
   });
 
 export const deleteVisitorLog = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: { id: string }) => d)
-  .handler(async ({ data, context }) => {
-    await assertAdmin(context as never);
+  .inputValidator((d) => z.object({ token: z.string().min(1), id: z.string().uuid() }).parse(d))
+  .handler(async ({ data }) => {
+    const { assertToken } = await import("@/lib/master-token.server");
+    assertToken(data.token);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.from("visitor_logs").delete().eq("id", data.id);
     if (error) throw error;

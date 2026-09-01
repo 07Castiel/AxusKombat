@@ -16,6 +16,14 @@
  * tenant.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  lerPermissoes,
+  podeEditar,
+  podeVer,
+  MSG_SEM_PERMISSAO,
+  type PermissionModule,
+  type PermissionsMap,
+} from "@/lib/permissoes";
 
 export type AuthedContext = { supabase: SupabaseClient; userId: string };
 
@@ -29,16 +37,43 @@ export const STAFF_ROLE_VALUES = [
 
 export type Role = (typeof STAFF_ROLE_VALUES)[number];
 
-/** Tenant do usuário autenticado, lido do perfil. */
-export async function getTenantId(ctx: AuthedContext): Promise<string> {
+/** Tenant e permissões do usuário autenticado, em uma leitura só. */
+export async function getPerfilAtual(
+  ctx: AuthedContext,
+): Promise<{ tenantId: string; permissoes: PermissionsMap }> {
   const { data, error } = await ctx.supabase
     .from("profiles")
-    .select("tenant_id")
+    .select("tenant_id, permissions")
     .eq("id", ctx.userId)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  const tenantId = (data as { tenant_id?: string } | null)?.tenant_id;
-  if (!tenantId) throw new Error("Perfil não encontrado");
+  const linha = data as { tenant_id?: string; permissions?: unknown } | null;
+  if (!linha?.tenant_id) throw new Error("Perfil não encontrado");
+  return { tenantId: linha.tenant_id, permissoes: lerPermissoes(linha.permissions) };
+}
+
+/** Tenant do usuário autenticado, lido do perfil. */
+export async function getTenantId(ctx: AuthedContext): Promise<string> {
+  return (await getPerfilAtual(ctx)).tenantId;
+}
+
+/**
+ * Exige permissão de módulo além do papel (A7).
+ *
+ * Permissão só RESTRINGE: quem o RLS já barra nunca chega aqui, e módulo sem
+ * marcação explícita conta como liberado — perfis nascem com `permissions` {}.
+ * Aplicar isto nas server functions alcançáveis por recepção, financeiro e
+ * professores é o que faz o ajuste da tela Equipe valer alguma coisa; até aqui
+ * o campo era gravado e nunca lido.
+ */
+export async function requirePermissao(
+  ctx: AuthedContext,
+  modulo: PermissionModule,
+  acao: "ver" | "editar" = "editar",
+): Promise<string> {
+  const { tenantId, permissoes } = await getPerfilAtual(ctx);
+  const liberado = acao === "editar" ? podeEditar(permissoes, modulo) : podeVer(permissoes, modulo);
+  if (!liberado) throw new Error(MSG_SEM_PERMISSAO[acao](modulo));
   return tenantId;
 }
 

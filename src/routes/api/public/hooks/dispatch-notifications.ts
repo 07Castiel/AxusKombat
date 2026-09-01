@@ -13,6 +13,7 @@ import {
   classifyErro, isRetentavel, proximaTentativaISO, MAX_TENTATIVAS,
 } from "@/lib/notification-errors";
 import { authorizeCronRequest } from "@/lib/cron-auth";
+import { comTabelasPendentes } from "@/integrations/supabase/tabelas-pendentes";
 import { TIPOS_SEM_TEMPLATE } from "@/lib/notification-queue";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -85,6 +86,9 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
           tenantFiltro ? q.eq("tenant_id", tenantFiltro) : q;
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        // Escrita em `notificacoes` passa por aqui: reivindicado_em ainda nao
+        // esta no types.ts gerado pelo Lovable.
+        const dbNotif = comTabelasPendentes(supabaseAdmin);
         const { sendWhatsappByTenant, renderTemplate } = await import("@/lib/whatsapp.server");
 
         const startedAt = new Date().toISOString();
@@ -96,25 +100,82 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
 
         const nowIso = new Date().toISOString();
 
-        // 1) agendadas devidas
-        const { data: agendadas, error } = await comEscopo(
-          supabaseAdmin
-            .from("notificacoes")
-            .select(SELECT_COLS)
-            .eq("status", "agendada")
-            .lte("agendada_para", nowIso) as any,
-        ).limit(LOTE_AGENDADAS);
+        // ---- Reivindicação do lote (A3) --------------------------------
+        // Antes o worker selecionava status='agendada' e só gravava o status
+        // novo DEPOIS do envio. Duas execuções sobrepostas — o cron dispara a
+        // cada 15 min e uma rodada faz até 180 chamadas HTTP de 20 s — liam as
+        // mesmas linhas e o aluno recebia a cobrança duas vezes.
+        //
+        // reivindicar_notificacoes marca o lote com FOR UPDATE SKIP LOCKED, o
+        // que faz a segunda execução pular o que a primeira travou.
+        //
+        // Se a função ainda não existe (código publicado antes da ETAPA 4), cai
+        // no caminho antigo em vez de parar de enviar. A janela de duplicidade
+        // volta a existir nesse intervalo, e o aviso no log é proposital.
+        let idsReivindicados: string[] | null = null;
+        const { data: reivindicados, error: erroReivindicar } = await dbNotif.rpc(
+          "reivindicar_notificacoes",
+          {
+            p_tenant: tenantFiltro,
+            p_limite_agendadas: LOTE_AGENDADAS,
+            p_limite_retry: LOTE_RETRIES,
+            p_max_tentativas: MAX_TENTATIVAS,
+          },
+        );
+        if (erroReivindicar) {
+          console.warn(
+            "[dispatch] reivindicar_notificacoes indisponível — rodando sem proteção " +
+              "contra execuções sobrepostas. Aplique a ETAPA 4:",
+            erroReivindicar.message,
+          );
+        } else {
+          idsReivindicados = ((reivindicados ?? []) as unknown[])
+            .map((r) => (typeof r === "string" ? r : (r as { id?: string })?.id))
+            .filter((v): v is string => typeof v === "string");
+        }
 
-        // 2) falhas retentáveis
-        const { data: retries } = await comEscopo(
-          supabaseAdmin
-            .from("notificacoes")
-            .select(SELECT_COLS)
-            .eq("status", "falhou")
-            .lt("tentativas", MAX_TENTATIVAS)
-            .not("proxima_tentativa", "is", null)
-            .lte("proxima_tentativa", nowIso) as any,
-        ).limit(LOTE_RETRIES);
+        let agendadas: unknown[] | null = null;
+        let retries: unknown[] | null = null;
+        let error: { message: string } | null = null;
+
+        if (idsReivindicados) {
+          if (idsReivindicados.length === 0) {
+            agendadas = [];
+          } else {
+            const r = await supabaseAdmin
+              .from("notificacoes")
+              .select(SELECT_COLS)
+              .in("id", idsReivindicados);
+            agendadas = r.data as unknown[] | null;
+            error = r.error;
+          }
+          retries = [];
+        } else {
+          const r1 = await comEscopo(
+            supabaseAdmin
+              .from("notificacoes")
+              .select(SELECT_COLS)
+              .eq("status", "agendada")
+              .lte("agendada_para", nowIso) as any,
+          ).limit(LOTE_AGENDADAS);
+          agendadas = r1.data as unknown[] | null;
+          error = r1.error;
+
+          const r2 = await comEscopo(
+            supabaseAdmin
+              .from("notificacoes")
+              .select(SELECT_COLS)
+              .eq("status", "falhou")
+              .lt("tentativas", MAX_TENTATIVAS)
+              .not("proxima_tentativa", "is", null)
+              .lte("proxima_tentativa", nowIso) as any,
+          ).limit(LOTE_RETRIES);
+          retries = r2.data as unknown[] | null;
+        }
+
+        // Só devolve a marca quando ela existe: a coluna reivindicado_em pode
+        // ainda não ter sido criada.
+        const liberar = idsReivindicados ? { reivindicado_em: null } : {};
 
         if (error) {
           if (runId) {
@@ -150,7 +211,8 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
           const codigo = classifyErro(motivo);
           const tentativas = (n.tentativas ?? 0) + 1;
           const retentavel = isRetentavel(codigo);
-          await supabaseAdmin.from("notificacoes").update({
+          await dbNotif.from("notificacoes").update({
+            ...liberar,
             status: "falhou",
             erro: motivo,
             erro_codigo: codigo,
@@ -178,6 +240,12 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
 
           // janela horária — nunca envia fora dela
           if (!withinWindow(s.timezone, s.hora_inicio, s.hora_fim)) {
+            // Devolve a reivindicação: fora da janela a mensagem não é enviada
+            // agora, e sem isto ela só voltaria à fila após a expiração.
+            if (idsReivindicados) {
+              await dbNotif.from("notificacoes")
+                .update({ reivindicado_em: null }).eq("id", n.id);
+            }
             summary.skipped_window++;
             continue;
           }
@@ -204,7 +272,8 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
                ?? tpls.find((t) => t.tipo === n.tipo));
           if (!avulso && !tpl) {
             // modelo inativo/removido: a mensagem não deve ser enviada
-            await supabaseAdmin.from("notificacoes").update({
+            await dbNotif.from("notificacoes").update({
+              ...liberar,
               status: "cancelada",
               motivo_cancelamento: "Modelo de mensagem inativo ou não configurado",
               proxima_tentativa: null,
@@ -246,7 +315,8 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
           });
 
           if (avulso && !mensagem.trim()) {
-            await supabaseAdmin.from("notificacoes").update({
+            await dbNotif.from("notificacoes").update({
+              ...liberar,
               status: "cancelada",
               motivo_cancelamento: "Mensagem vazia",
               proxima_tentativa: null,
@@ -265,7 +335,8 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
           if (summary.sent > 0 && INTERVALO_ENVIO_MS > 0) await espera(INTERVALO_ENVIO_MS);
           const result = await sendWhatsappByTenant(n.tenant_id, phone, mensagem);
           if (result.ok) {
-            await supabaseAdmin.from("notificacoes").update({
+            await dbNotif.from("notificacoes").update({
+              ...liberar,
               status: "enviada",
               enviada_em: new Date().toISOString(),
               destinatario: phone,

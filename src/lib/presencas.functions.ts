@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireActiveSubscription } from "@/lib/subscription";
-import { getTenantId } from "@/lib/tenant-guard";
+import { getTenantId, requirePermissao } from "@/lib/tenant-guard";
 
 
 export const togglePresenca = createServerFn({ method: "POST" })
@@ -15,7 +15,7 @@ export const togglePresenca = createServerFn({ method: "POST" })
   }).parse(i))
   .handler(async ({ data, context }) => {
     const ctx = context as any;
-    const tenantId = await getTenantId(ctx);
+    const tenantId = await requirePermissao(ctx, "alunos");
     const { error } = await ctx.supabase.from("presencas").upsert({
       tenant_id: tenantId,
       horario_id: data.horario_id,

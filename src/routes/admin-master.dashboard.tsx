@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { Shield, Building2, Users, LogOut, Search, Eye, Plus, Pencil, Power, Trash2, Loader2 } from "lucide-react";
+import { Activity, Building2, Eye, Loader2, LogOut, Pencil, Plus, Power, Search, Shield, Trash2, Users } from "lucide-react";
 import { fmtDate } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -187,6 +187,9 @@ function MasterDashboard() {
               <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Painel do SaaS</p>
             </div>
           </div>
+          <Button asChild variant="ghost" size="sm" title="Logs de acesso da plataforma">
+            <Link to="/admin-master/acessos"><Activity className="h-4 w-4 mr-2" />Acessos</Link>
+          </Button>
           <Button variant="ghost" size="sm" onClick={logout}><LogOut className="h-4 w-4 mr-2" />Sair</Button>
         </div>
       </header>

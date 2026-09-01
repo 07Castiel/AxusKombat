@@ -73,6 +73,25 @@ export type RelatorioPeriodo = {
   composicao_alunos: { adulto: number; kids: number; ativos: number; total: number };
 };
 
+/**
+ * Campos de `notificacoes` que o worker grava, incluindo `reivindicado_em`,
+ * criada na ETAPA 4 e ainda ausente de types.ts. Forma parcial de propósito:
+ * cobre só o que o worker escreve.
+ */
+type NotificacaoEscrita = {
+  status: string;
+  erro: string | null;
+  erro_codigo: string | null;
+  tentativas: number;
+  proxima_tentativa: string | null;
+  motivo_cancelamento: string | null;
+  enviada_em: string | null;
+  destinatario: string | null;
+  mensagem: string;
+  updated_at: string;
+  reivindicado_em: string | null;
+};
+
 /** Retorno de master_excluir_tenant(uuid) — M12. */
 export type ExclusaoTenant = { nome: string; usuarios: string[] };
 
@@ -85,6 +104,7 @@ export type PendingDatabase = {
         MasterLoginAttempt,
         { ip: string; sucesso: boolean; id?: string; criado_em?: string }
       >;
+      notificacoes: Tabela<NotificacaoEscrita & { id: string }, Partial<NotificacaoEscrita>>;
       stripe_webhook_events: Tabela<
         StripeWebhookEvent,
         {
@@ -101,6 +121,15 @@ export type PendingDatabase = {
       dashboard_resumo: Fn<Record<string, never>, DashboardResumo>;
       relatorio_periodo: Fn<{ p_de: string; p_ate: string }, RelatorioPeriodo>;
       master_excluir_tenant: Fn<{ p_tenant_id: string }, ExclusaoTenant>;
+      reivindicar_notificacoes: Fn<
+        {
+          p_tenant: string | null;
+          p_limite_agendadas: number;
+          p_limite_retry: number;
+          p_max_tentativas: number;
+        },
+        string[]
+      >;
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

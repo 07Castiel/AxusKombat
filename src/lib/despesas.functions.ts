@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireActiveSubscription } from "@/lib/subscription";
-import { getTenantId } from "@/lib/tenant-guard";
+import { requirePermissao } from "@/lib/tenant-guard";
 
 
 const despesaInput = z.object({
@@ -19,7 +19,7 @@ export const upsertDespesa = createServerFn({ method: "POST" })
   .inputValidator((i) => despesaInput.parse(i))
   .handler(async ({ data, context }) => {
     const ctx = context as any;
-    const tenantId = await getTenantId(ctx);
+    const tenantId = await requirePermissao(ctx, "pagamentos");
     const payload = {
       tenant_id: tenantId,
       descricao: data.descricao,
@@ -43,7 +43,7 @@ export const deleteDespesa = createServerFn({ method: "POST" })
   .inputValidator((i) => z.object({ id: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
     const ctx = context as any;
-    await getTenantId(ctx);
+    await requirePermissao(ctx, "pagamentos");
     const { error } = await ctx.supabase.from("despesas").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };

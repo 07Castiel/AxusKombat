@@ -1,107 +1,22 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { createHash, createHmac, timingSafeEqual } from "crypto";
-import { getRequest } from "@tanstack/react-start/server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { comTabelasPendentes } from "@/integrations/supabase/tabelas-pendentes";
 
-const TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
-
-/** Tentativas de login erradas toleradas por IP dentro da janela. */
-const MAX_TENTATIVAS_LOGIN = 5;
-const JANELA_LOGIN_MIN = 15;
-
-/**
- * Chave de assinatura do token de sessão mestre (A6).
- *
- * Antes o HMAC era assinado com a própria MASTER_ADMIN_PASSWORD: a senha virava
- * chave criptográfica, então quem conseguisse um token podia atacá-lo offline
- * para recuperar a senha. Agora existe uma chave separada; enquanto ela não for
- * configurada, mantém o comportamento antigo e avisa no log.
- */
-function getSecret() {
-  const dedicada = process.env.MASTER_TOKEN_SECRET;
-  if (dedicada) return dedicada;
-  const s = process.env.MASTER_ADMIN_PASSWORD;
-  if (!s) throw new Error("MASTER_ADMIN_PASSWORD não configurado");
-  console.warn(
-    "[admin-master] MASTER_TOKEN_SECRET não configurada: o token está sendo " +
-      "assinado com a própria senha. Configure uma chave dedicada.",
-  );
-  return s;
-}
-
-/**
- * Compara segredos sem vazar o comprimento.
- *
- * A versão anterior fazia `a.length === b.length && timingSafeEqual(...)`, o que
- * responde na hora quando o tamanho difere e entrega o comprimento da senha.
- * Comparar os digests resolve: sempre 32 bytes, sempre o mesmo custo.
- */
-function segredoConfere(recebido: string, esperado: string): boolean {
-  const a = createHash("sha256").update(recebido, "utf8").digest();
-  const b = createHash("sha256").update(esperado, "utf8").digest();
-  return timingSafeEqual(a, b);
-}
-
-function ipDaRequisicao(): string {
-  const h = getRequest()?.headers;
-  return (
-    h?.get("cf-connecting-ip")?.trim() ||
-    h?.get("x-real-ip")?.trim() ||
-    h?.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    "desconhecido"
-  );
-}
-
-/** Registra toda ação do painel mestre — antes nada ficava gravado. */
-async function auditar(acao: string, detalhe: Record<string, unknown> = {}) {
-  try {
-    await supabaseAdmin.from("system_logs").insert({
-      level: "info",
-      source: "admin-master",
-      message: acao,
-      context: { ...detalhe, ip: ipDaRequisicao() },
-    });
-  } catch {
-    /* auditoria nunca derruba a operação */
-  }
-}
-
-function signToken(): string {
-  const payload = { exp: Date.now() + TOKEN_TTL_MS };
-  const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const sig = createHmac("sha256", getSecret()).update(data).digest("base64url");
-  return `${data}.${sig}`;
-}
-
-function verifyToken(token: string | undefined): boolean {
-  if (!token) return false;
-  const [data, sig] = token.split(".");
-  if (!data || !sig) return false;
-  try {
-    const expected = createHmac("sha256", getSecret()).update(data).digest("base64url");
-    const a = Buffer.from(sig);
-    const b = Buffer.from(expected);
-    if (a.length !== b.length || !timingSafeEqual(a, b)) return false;
-    const payload = JSON.parse(Buffer.from(data, "base64url").toString());
-    return typeof payload.exp === "number" && payload.exp > Date.now();
-  } catch {
-    return false;
-  }
-}
-
-function assertToken(token: string | undefined) {
-  if (!verifyToken(token)) {
-    throw new Error("Sessão de admin mestre inválida ou expirada");
-  }
-}
-
+// Sessao, assinatura e auditoria vivem em master-token.server.ts, carregado com
+// `await import()` dentro de cada handler. Import estatico traria `node:crypto`
+// para o bundle do cliente — foi exatamente o que quebrou o build quando
+// assertToken passou a ser exportado daqui.
 export const masterLogin = createServerFn({ method: "POST" })
   .inputValidator((input) =>
     z.object({ email: z.string().email(), password: z.string().min(1) }).parse(input)
   )
   .handler(async ({ data }) => {
+    const {
+      assertToken: _naoUsado, auditar, ipDaRequisicao, segredoConfere, signToken,
+      MAX_TENTATIVAS_LOGIN, JANELA_LOGIN_MIN,
+    } = await import("@/lib/master-token.server");
+    void _naoUsado;
     const expectedEmail = process.env.MASTER_ADMIN_EMAIL;
     const expectedPassword = process.env.MASTER_ADMIN_PASSWORD;
     if (!expectedEmail || !expectedPassword) {
@@ -146,6 +61,7 @@ export const masterLogin = createServerFn({ method: "POST" })
 export const masterListTenants = createServerFn({ method: "POST" })
   .inputValidator((input) => z.object({ token: z.string() }).parse(input))
   .handler(async ({ data }) => {
+    const { assertToken, auditar } = await import("@/lib/master-token.server");
     assertToken(data.token);
     const { data: tenants, error } = await supabaseAdmin
       .from("tenants")
@@ -174,6 +90,7 @@ export const masterGetTenant = createServerFn({ method: "POST" })
     z.object({ token: z.string(), tenantId: z.string().uuid() }).parse(input)
   )
   .handler(async ({ data }) => {
+    const { assertToken, auditar } = await import("@/lib/master-token.server");
     assertToken(data.token);
     const [tenant, alunos, contratos, mensalidades, horarios, graduacoes] = await Promise.all([
       supabaseAdmin.from("tenants").select("*").eq("id", data.tenantId).maybeSingle(),
@@ -228,6 +145,7 @@ export const masterCreateTenant = createServerFn({ method: "POST" })
     z.object({ token: z.string(), tenant: tenantInputSchema }).parse(input)
   )
   .handler(async ({ data }) => {
+    const { assertToken, auditar } = await import("@/lib/master-token.server");
     assertToken(data.token);
     await auditar("academia criada", { nome: data.tenant.nome });
     const t = data.tenant;
@@ -257,6 +175,7 @@ export const masterUpdateTenant = createServerFn({ method: "POST" })
     z.object({ token: z.string(), tenantId: z.string().uuid(), tenant: tenantInputSchema }).parse(input)
   )
   .handler(async ({ data }) => {
+    const { assertToken, auditar } = await import("@/lib/master-token.server");
     assertToken(data.token);
     await auditar("academia alterada", { tenantId: data.tenantId });
     const t = data.tenant;
@@ -285,6 +204,7 @@ export const masterToggleTenant = createServerFn({ method: "POST" })
     z.object({ token: z.string(), tenantId: z.string().uuid(), ativo: z.boolean() }).parse(input)
   )
   .handler(async ({ data }) => {
+    const { assertToken, auditar } = await import("@/lib/master-token.server");
     assertToken(data.token);
     await auditar(data.ativo ? "academia reativada" : "academia desativada", { tenantId: data.tenantId });
     const { error } = await supabaseAdmin.from("tenants").update({ ativo: data.ativo }).eq("id", data.tenantId);
@@ -297,6 +217,7 @@ export const masterDeleteTenant = createServerFn({ method: "POST" })
     z.object({ token: z.string(), tenantId: z.string().uuid() }).parse(input)
   )
   .handler(async ({ data }) => {
+    const { assertToken, auditar } = await import("@/lib/master-token.server");
     assertToken(data.token);
     const tenantId = data.tenantId;
     // Registrado ANTES: se a exclusão falhar no meio, o rastro fica.
