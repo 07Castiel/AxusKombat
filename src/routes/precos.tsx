@@ -12,6 +12,7 @@ import { PasswordInput } from "@/components/PasswordInput";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { translateError } from "@/lib/errors";
+import { flagDeBusca } from "@/lib/utils";
 import { Check, Loader2, ChevronDown, ChevronUp, ArrowLeft } from "lucide-react";
 import logo from "@/assets/axus-kombat-logo.png";
 
@@ -87,9 +88,12 @@ const PLANS: PlanDef[] = [
   },
 ];
 
+// Tolerante de propósito: ver flagDeBusca em @/lib/utils. O schema anterior
+// exigia a string "true" e derrubava a rota quando o router entregava o
+// booleano true.
 const searchSchema = z.object({
-  retomar: z.union([z.literal("true"), z.literal("1")]).optional(),
-  expirado: z.union([z.literal("true"), z.literal("1")]).optional(),
+  retomar: z.unknown().optional().transform(flagDeBusca),
+  expirado: z.unknown().optional().transform(flagDeBusca),
 });
 
 export const Route = createFileRoute("/precos")({
@@ -100,8 +104,7 @@ export const Route = createFileRoute("/precos")({
       { title: "Planos e preços | Axus Kombat" },
       {
         name: "description",
-        content:
-          "Escolha o plano ideal para sua academia. Comece grátis por 14 dias no plano Pro.",
+        content: "Escolha o plano ideal para sua academia. Comece grátis por 14 dias no plano Pro.",
       },
       { property: "og:title", content: "Planos e preços | Axus Kombat" },
       {
@@ -140,9 +143,11 @@ function PrecosPage() {
   // Carrega status do tenant se autenticado
   useEffect(() => {
     if (!user) return;
-    getStatus().then((s) => {
-      if (s) setTenantStatus(s as typeof tenantStatus);
-    }).catch(() => {});
+    getStatus()
+      .then((s) => {
+        if (s) setTenantStatus(s as typeof tenantStatus);
+      })
+      .catch(() => {});
   }, [user, getStatus]);
 
   // Banner: retomar abre o modal direto no Step 2 com plano salvo
@@ -169,7 +174,10 @@ function PrecosPage() {
     tenantStatus.plan === key;
 
   return (
-    <div className="dark min-h-screen" style={{ background: BG, color: "#fff", fontFamily: "Rajdhani, system-ui, sans-serif" }}>
+    <div
+      className="dark min-h-screen"
+      style={{ background: BG, color: "#fff", fontFamily: "Rajdhani, system-ui, sans-serif" }}
+    >
       {/* Header */}
       <header className="border-b" style={{ borderColor: "rgba(255,255,255,0.05)" }}>
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
@@ -201,8 +209,8 @@ function PrecosPage() {
               fontFamily: "Rajdhani, system-ui, sans-serif",
             }}
           >
-            <strong className="font-semibold">Continue de onde parou.</strong>{" "}
-            Sua academia está cadastrada — falta apenas concluir o pagamento para liberar o acesso.
+            <strong className="font-semibold">Continue de onde parou.</strong> Sua academia está
+            cadastrada — falta apenas concluir o pagamento para liberar o acesso.
           </div>
         )}
         {search.expirado && (
@@ -215,8 +223,8 @@ function PrecosPage() {
               fontFamily: "Rajdhani, system-ui, sans-serif",
             }}
           >
-            <strong className="font-semibold">Sua assinatura está inativa.</strong>{" "}
-            Escolha um plano abaixo para retomar o acesso ao sistema.
+            <strong className="font-semibold">Sua assinatura está inativa.</strong> Escolha um plano
+            abaixo para retomar o acesso ao sistema.
           </div>
         )}
 
@@ -301,7 +309,10 @@ function PrecosPage() {
         </div>
 
         {/* Rodapé */}
-        <footer className="mt-16 pt-8 border-t text-center text-sm text-white/50" style={{ borderColor: "rgba(255,255,255,0.05)" }}>
+        <footer
+          className="mt-16 pt-8 border-t text-center text-sm text-white/50"
+          style={{ borderColor: "rgba(255,255,255,0.05)" }}
+        >
           <p>
             Dúvidas?{" "}
             <a
@@ -456,7 +467,7 @@ function CheckoutModal({
   const checkout = useServerFn(createCheckoutSession);
 
   useEffect(() => {
-    if (open) setStep(user ? Math.max(initialStep, 2) as 2 | 3 : initialStep);
+    if (open) setStep(user ? (Math.max(initialStep, 2) as 2 | 3) : initialStep);
   }, [open, user, initialStep]);
 
   const planDef = useMemo(() => PLANS.find((p) => p.key === plan)!, [plan]);
@@ -532,7 +543,10 @@ function CheckoutModal({
         className="dark max-w-md p-0 gap-0 border-0"
         style={{ background: CARD, color: "#fff", fontFamily: "Rajdhani, system-ui, sans-serif" }}
       >
-        <DialogHeader className="p-6 pb-3 border-b" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+        <DialogHeader
+          className="p-6 pb-3 border-b"
+          style={{ borderColor: "rgba(255,255,255,0.06)" }}
+        >
           <div className="text-xs text-white/50 mb-1">{stepLabel}</div>
           <DialogTitle className="font-display tracking-wider text-xl">
             {step === 1 && "CRIAR CONTA"}
@@ -624,7 +638,10 @@ function CheckoutModal({
                   <span className="text-white/70 text-sm">Período</span>
                   <span className="font-semibold">{period === "monthly" ? "Mensal" : "Anual"}</span>
                 </div>
-                <div className="flex justify-between pt-2 border-t" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+                <div
+                  className="flex justify-between pt-2 border-t"
+                  style={{ borderColor: "rgba(255,255,255,0.06)" }}
+                >
                   <span className="text-white/70 text-sm">Valor</span>
                   <span className="font-bold text-lg">
                     {formatBRL(value)}
@@ -638,8 +655,8 @@ function CheckoutModal({
                   className="p-3 rounded text-sm"
                   style={{ background: "#1a0000", border: "1px solid #8B0000" }}
                 >
-                  <strong>R$ 0,00 hoje.</strong> Cobrança de {formatBRL(value)}{suffix} após 14 dias
-                  de teste. Cancele a qualquer momento antes disso sem custo.
+                  <strong>R$ 0,00 hoje.</strong> Cobrança de {formatBRL(value)}
+                  {suffix} após 14 dias de teste. Cancele a qualquer momento antes disso sem custo.
                 </div>
               )}
 

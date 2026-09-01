@@ -22,9 +22,28 @@ export const addDuracao = (start: Date, duracao: DuracaoPlano, dias?: number | n
     d.setDate(d.getDate() + (dias ?? 30));
     return d;
   }
-  const months = duracao === "mensal" ? 1 : duracao === "trimestral" ? 3 : duracao === "semestral" ? 6 : 12;
+  const months =
+    duracao === "mensal" ? 1 : duracao === "trimestral" ? 3 : duracao === "semestral" ? 6 : 12;
   d.setMonth(d.getMonth() + months);
   return d;
 };
 
 export const toISODate = (d: Date) => d.toISOString().slice(0, 10);
+
+/**
+ * Lê um parâmetro de URL usado como sinalizador (?retomar=true, ?trial=1).
+ *
+ * O TanStack Router faz JSON.parse de cada parâmetro, então `?retomar=true`
+ * chega como o booleano `true` e `?trial=1` como o número `1` — nunca como as
+ * strings "true" e "1".
+ *
+ * Os schemas antigos exigiam exatamente essas strings (`z.literal("true")`,
+ * `z.string()`), então o validateSearch falhava com `invalid_union` e derrubava
+ * a rota inteira antes de renderizar. Era o que quebrava /precos toda vez que o
+ * app redirecionava por assinatura pendente, e o que quebraria /bem-vindo no
+ * retorno do checkout do Stripe.
+ *
+ * Aceita todas as formas e devolve booleano.
+ */
+export const flagDeBusca = (v: unknown): boolean =>
+  v === true || v === "true" || v === "1" || v === 1;
