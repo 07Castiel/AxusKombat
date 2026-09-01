@@ -1,6 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { getRequest } from "@tanstack/react-start/server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const planSchema = z.enum(["start", "pro", "elite"]);
@@ -22,9 +21,15 @@ const checkoutInput = z.object({
  * Agora é decidida no servidor: APP_URL quando configurada, senão a origem da
  * própria requisição. O que o cliente manda é ignorado.
  */
-function resolverOrigem(): string {
+async function resolverOrigem(): Promise<string> {
   const configurada = process.env.APP_URL;
   if (configurada) return configurada.replace(/\/$/, "");
+  // Import dinâmico, dentro da função: `@tanstack/react-start/server` é
+  // server-only, e este arquivo é importado por precos.tsx e bem-vindo.tsx,
+  // que são rotas de cliente. No topo, ele viaja para o bundle do navegador e
+  // quebra a página inteira em runtime — mesmo erro que `node:crypto` causou
+  // em master.functions.ts.
+  const { getRequest } = await import("@tanstack/react-start/server");
   const req = getRequest();
   const origem = req?.headers.get("origin");
   if (origem) return origem.replace(/\/$/, "");
@@ -81,7 +86,7 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
         .eq("id", tenant.id);
     }
 
-    const origem = resolverOrigem();
+    const origem = await resolverOrigem();
     const successUrl = `${origem}/bem-vindo?plano=${data.plan}&trial=${data.isTrial ? "1" : "0"}`;
     const cancelUrl = `${origem}/precos`;
 
