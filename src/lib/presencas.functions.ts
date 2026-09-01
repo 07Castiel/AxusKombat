@@ -1,11 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireActiveSubscription } from "@/lib/subscription";
 import { getTenantId } from "@/lib/tenant-guard";
 
 
 export const togglePresenca = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveSubscription])
   .inputValidator((i) => z.object({
     horario_id: z.string().uuid(),
     aluno_id: z.string().uuid(),

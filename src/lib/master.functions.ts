@@ -1,14 +1,71 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { createHmac, timingSafeEqual } from "crypto";
+import { createHash, createHmac, timingSafeEqual } from "crypto";
+import { getRequest } from "@tanstack/react-start/server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { comTabelasPendentes } from "@/integrations/supabase/tabelas-pendentes";
 
 const TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
 
+/** Tentativas de login erradas toleradas por IP dentro da janela. */
+const MAX_TENTATIVAS_LOGIN = 5;
+const JANELA_LOGIN_MIN = 15;
+
+/**
+ * Chave de assinatura do token de sessão mestre (A6).
+ *
+ * Antes o HMAC era assinado com a própria MASTER_ADMIN_PASSWORD: a senha virava
+ * chave criptográfica, então quem conseguisse um token podia atacá-lo offline
+ * para recuperar a senha. Agora existe uma chave separada; enquanto ela não for
+ * configurada, mantém o comportamento antigo e avisa no log.
+ */
 function getSecret() {
+  const dedicada = process.env.MASTER_TOKEN_SECRET;
+  if (dedicada) return dedicada;
   const s = process.env.MASTER_ADMIN_PASSWORD;
   if (!s) throw new Error("MASTER_ADMIN_PASSWORD não configurado");
+  console.warn(
+    "[admin-master] MASTER_TOKEN_SECRET não configurada: o token está sendo " +
+      "assinado com a própria senha. Configure uma chave dedicada.",
+  );
   return s;
+}
+
+/**
+ * Compara segredos sem vazar o comprimento.
+ *
+ * A versão anterior fazia `a.length === b.length && timingSafeEqual(...)`, o que
+ * responde na hora quando o tamanho difere e entrega o comprimento da senha.
+ * Comparar os digests resolve: sempre 32 bytes, sempre o mesmo custo.
+ */
+function segredoConfere(recebido: string, esperado: string): boolean {
+  const a = createHash("sha256").update(recebido, "utf8").digest();
+  const b = createHash("sha256").update(esperado, "utf8").digest();
+  return timingSafeEqual(a, b);
+}
+
+function ipDaRequisicao(): string {
+  const h = getRequest()?.headers;
+  return (
+    h?.get("cf-connecting-ip")?.trim() ||
+    h?.get("x-real-ip")?.trim() ||
+    h?.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    "desconhecido"
+  );
+}
+
+/** Registra toda ação do painel mestre — antes nada ficava gravado. */
+async function auditar(acao: string, detalhe: Record<string, unknown> = {}) {
+  try {
+    await supabaseAdmin.from("system_logs").insert({
+      level: "info",
+      source: "admin-master",
+      message: acao,
+      context: { ...detalhe, ip: ipDaRequisicao() },
+    });
+  } catch {
+    /* auditoria nunca derruba a operação */
+  }
 }
 
 function signToken(): string {
@@ -50,15 +107,39 @@ export const masterLogin = createServerFn({ method: "POST" })
     if (!expectedEmail || !expectedPassword) {
       throw new Error("Credenciais mestre não configuradas no servidor");
     }
-    const emailOk =
-      data.email.length === expectedEmail.length &&
-      timingSafeEqual(Buffer.from(data.email), Buffer.from(expectedEmail));
-    const pwdOk =
-      data.password.length === expectedPassword.length &&
-      timingSafeEqual(Buffer.from(data.password), Buffer.from(expectedPassword));
-    if (!emailOk || !pwdOk) {
+
+    const ip = ipDaRequisicao();
+    const desde = new Date(Date.now() - JANELA_LOGIN_MIN * 60_000).toISOString();
+
+    // Teto de tentativas (A6). Este endpoint dá acesso a TODAS as academias e
+    // até aqui aceitava força bruta sem qualquer freio.
+    const { count: falhas } = await comTabelasPendentes(supabaseAdmin)
+      .from("master_login_attempts")
+      .select("id", { count: "exact", head: true })
+      .eq("ip", ip)
+      .eq("sucesso", false)
+      .gte("criado_em", desde);
+
+    if ((falhas ?? 0) >= MAX_TENTATIVAS_LOGIN) {
+      await auditar("login mestre bloqueado por excesso de tentativas", { falhas });
+      throw new Error(
+        `Muitas tentativas. Aguarde ${JANELA_LOGIN_MIN} minutos e tente novamente.`,
+      );
+    }
+
+    const emailOk = segredoConfere(data.email.trim().toLowerCase(),
+                                   expectedEmail.trim().toLowerCase());
+    const pwdOk = segredoConfere(data.password, expectedPassword);
+    const ok = emailOk && pwdOk;
+
+    await comTabelasPendentes(supabaseAdmin).from("master_login_attempts").insert({ ip, sucesso: ok });
+
+    if (!ok) {
+      await auditar("login mestre recusado", { tentativas_na_janela: (falhas ?? 0) + 1 });
       throw new Error("E-mail ou senha incorretos");
     }
+
+    await auditar("login mestre autorizado");
     return { token: signToken() };
   });
 
@@ -148,6 +229,7 @@ export const masterCreateTenant = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     assertToken(data.token);
+    await auditar("academia criada", { nome: data.tenant.nome });
     const t = data.tenant;
     const cnpj = normalizeCnpj(t.cnpj_cpf);
     await assertCnpjUnique(cnpj);
@@ -176,6 +258,7 @@ export const masterUpdateTenant = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     assertToken(data.token);
+    await auditar("academia alterada", { tenantId: data.tenantId });
     const t = data.tenant;
     const cnpj = normalizeCnpj(t.cnpj_cpf);
     await assertCnpjUnique(cnpj, data.tenantId);
@@ -203,6 +286,7 @@ export const masterToggleTenant = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     assertToken(data.token);
+    await auditar(data.ativo ? "academia reativada" : "academia desativada", { tenantId: data.tenantId });
     const { error } = await supabaseAdmin.from("tenants").update({ ativo: data.ativo }).eq("id", data.tenantId);
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -215,6 +299,8 @@ export const masterDeleteTenant = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     assertToken(data.token);
     const tenantId = data.tenantId;
+    // Registrado ANTES: se a exclusao falhar no meio, o rastro fica.
+    await auditar("EXCLUSAO de academia iniciada", { tenantId });
 
     // Tables to wipe BEFORE profiles/user_roles/tenants, ordered by dependency.
     // historico_graduacoes & notificacoes may reference alunos; delete first.
@@ -261,5 +347,6 @@ export const masterDeleteTenant = createServerFn({ method: "POST" })
 
     const { error: tErr } = await supabaseAdmin.from("tenants").delete().eq("id", tenantId);
     if (tErr) throw new Error(tErr.message);
+    await auditar("EXCLUSAO de academia concluida", { tenantId, usuariosRemovidos: userIds.length });
     return { ok: true, removedUsers: userIds.length };
   });

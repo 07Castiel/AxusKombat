@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireActiveSubscription } from "@/lib/subscription";
 import { getTenantId } from "@/lib/tenant-guard";
 
 
@@ -14,7 +15,7 @@ const despesaInput = z.object({
 });
 
 export const upsertDespesa = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveSubscription])
   .inputValidator((i) => despesaInput.parse(i))
   .handler(async ({ data, context }) => {
     const ctx = context as any;
@@ -38,7 +39,7 @@ export const upsertDespesa = createServerFn({ method: "POST" })
   });
 
 export const deleteDespesa = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveSubscription])
   .inputValidator((i) => z.object({ id: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
     const ctx = context as any;

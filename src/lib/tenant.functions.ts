@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireActiveSubscription } from "@/lib/subscription";
 import { requireAdmin } from "@/lib/tenant-guard";
 
 
@@ -16,7 +17,7 @@ export const getTenantConfig = createServerFn({ method: "POST" })
   });
 
 export const updateTenantConfig = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveSubscription])
   .inputValidator((i) => z.object({
     nome: z.string().min(2).max(120),
     nome_fantasia: z.string().max(120).optional().nullable(),
@@ -55,7 +56,7 @@ export const updateTenantConfig = createServerFn({ method: "POST" })
   });
 
 export const gerarPortalToken = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveSubscription])
   .inputValidator((i) => z.object({ aluno_id: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
     const ctx = context as any;

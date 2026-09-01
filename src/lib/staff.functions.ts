@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireActiveSubscription } from "@/lib/subscription";
 import { requireAdmin } from "@/lib/tenant-guard";
 
 export const STAFF_ROLES = [
@@ -100,7 +101,7 @@ export const listStaff = createServerFn({ method: "POST" })
   });
 
 export const createStaff = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveSubscription])
   .inputValidator((input) =>
     z.object({
       nome_completo: z.string().trim().min(2).max(120),
@@ -155,7 +156,7 @@ export const createStaff = createServerFn({ method: "POST" })
   });
 
 export const updateStaff = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveSubscription])
   .inputValidator((input) =>
     z.object({
       user_id: z.string().uuid(),
@@ -187,7 +188,7 @@ export const updateStaff = createServerFn({ method: "POST" })
   });
 
 export const toggleStaffActive = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveSubscription])
   .inputValidator((input) =>
     z.object({ user_id: z.string().uuid(), ativo: z.boolean() }).parse(input)
   )
@@ -210,7 +211,7 @@ export const toggleStaffActive = createServerFn({ method: "POST" })
   });
 
 export const resetStaffPassword = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveSubscription])
   .inputValidator((input) =>
     z.object({ user_id: z.string().uuid(), nova_senha: z.string().min(6).max(72) }).parse(input)
   )
@@ -228,7 +229,7 @@ export const resetStaffPassword = createServerFn({ method: "POST" })
   });
 
 export const deleteStaff = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveSubscription])
   .inputValidator((input) =>
     z.object({ user_id: z.string().uuid() }).parse(input)
   )

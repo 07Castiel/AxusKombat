@@ -1,12 +1,13 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireActiveSubscription } from "@/lib/subscription";
 import { requireAdmin } from "@/lib/tenant-guard";
 
 
 /** Envia comunicado geral por WhatsApp a um conjunto de alunos. */
 export const enviarComunicado = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveSubscription])
   .inputValidator((i) => z.object({
     mensagem: z.string().min(5).max(2000),
     categoria: z.enum(["todos", "adulto", "kids"]).default("todos"),

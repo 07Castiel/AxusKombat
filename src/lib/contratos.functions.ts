@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireActiveSubscription } from "@/lib/subscription";
 import { getTenantId } from "@/lib/tenant-guard";
 
 const contratoInput = z.object({
@@ -19,7 +20,7 @@ const contratoInput = z.object({
  * Ao salvar/ativar, dispara geração rolling de mensalidades (mês corrente + 3 à frente).
  */
 export const upsertContratoAtivo = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveSubscription])
   .inputValidator((i) => contratoInput.parse(i))
   .handler(async ({ data, context }) => {
     const ctx = context as any;
@@ -97,7 +98,7 @@ export const upsertContratoAtivo = createServerFn({ method: "POST" })
  * Cancela um contrato ativo e cancela mensalidades pendentes com vencimento futuro.
  */
 export const cancelarContrato = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveSubscription])
   .inputValidator((i) => z.object({ contrato_id: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
     const ctx = context as any;
@@ -120,7 +121,7 @@ export const cancelarContrato = createServerFn({ method: "POST" })
 
 /** Pausa o contrato (mantém mensalidades já geradas mas para de gerar novas). */
 export const pausarContrato = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveSubscription])
   .inputValidator((i) => z.object({ contrato_id: z.string().uuid(), pausar: z.boolean() }).parse(i))
   .handler(async ({ data, context }) => {
     const ctx = context as any;

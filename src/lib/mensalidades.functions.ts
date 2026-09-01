@@ -1,10 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireActiveSubscription } from "@/lib/subscription";
 import { requireAdmin } from "@/lib/tenant-guard";
 
 export const registrarPagamento = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveSubscription])
   .inputValidator((i) => z.object({
     mensalidade_id: z.string().uuid(),
     data_pagamento: z.string().min(1),
@@ -33,7 +34,7 @@ export const registrarPagamento = createServerFn({ method: "POST" })
   });
 
 export const cancelarMensalidade = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveSubscription])
   .inputValidator((i) => z.object({ mensalidade_id: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
     const ctx = context as any;
@@ -45,7 +46,7 @@ export const cancelarMensalidade = createServerFn({ method: "POST" })
   });
 
 export const reabrirMensalidade = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveSubscription])
   .inputValidator((i) => z.object({ mensalidade_id: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
     const ctx = context as any;
@@ -76,7 +77,7 @@ export const reabrirMensalidade = createServerFn({ method: "POST" })
  * diário continua chamando a versão global, que é o lugar certo para ela.
  */
 export const processarMensalidadesAgora = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveSubscription])
   .handler(async ({ context }) => {
     const ctx = context as any;
     const tenantId = await requireAdmin(ctx);

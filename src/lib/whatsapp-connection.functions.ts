@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireActiveSubscription } from "@/lib/subscription";
 import { requireAdmin } from "@/lib/tenant-guard";
 
 
@@ -44,7 +45,7 @@ export const getWhatsappConnection = createServerFn({ method: "POST" })
   });
 
 export const connectWhatsapp = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveSubscription])
   .handler(async ({ context }) => {
     const tenantId = await requireAdmin(context as any, "Apenas administradores podem gerenciar o WhatsApp");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -160,7 +161,7 @@ export const refreshWhatsappStatus = createServerFn({ method: "POST" })
   });
 
 export const disconnectWhatsapp = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveSubscription])
   .handler(async ({ context }) => {
     const tenantId = await requireAdmin(context as any, "Apenas administradores podem gerenciar o WhatsApp");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -178,7 +179,7 @@ export const disconnectWhatsapp = createServerFn({ method: "POST" })
   });
 
 export const sendWhatsappTest = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveSubscription])
   .inputValidator((input) => z.object({ to: z.string().trim().min(8).max(40) }).parse(input))
   .handler(async ({ data, context }) => {
     const tenantId = await requireAdmin(context as any, "Apenas administradores podem gerenciar o WhatsApp");

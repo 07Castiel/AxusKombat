@@ -515,12 +515,7 @@ function CheckoutModal({
     setLoading(true);
     try {
       const { url } = await checkout({
-        data: {
-          plan,
-          period,
-          isTrial,
-          origin: window.location.origin,
-        },
+        data: { plan, period, isTrial },
       });
       window.location.href = url;
     } catch (err) {

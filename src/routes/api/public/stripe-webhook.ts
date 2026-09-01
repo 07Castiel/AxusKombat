@@ -25,6 +25,57 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
         }
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        const { comTabelasPendentes } = await import("@/integrations/supabase/tabelas-pendentes");
+        const dbPendente = comTabelasPendentes(supabaseAdmin);
+
+        // ---- Idempotência (M8) -------------------------------------------
+        // O Stripe reentrega evento quando não recebe 200 rápido o bastante, e
+        // não garante ordem. Sem registro, a mesma cobrança era processada duas
+        // vezes e um `subscription.updated` atrasado podia reativar uma
+        // assinatura já cancelada.
+        //
+        // A PK de stripe_webhook_events faz o de-dupe: se o insert conflitar,
+        // o evento já passou por aqui.
+        const clienteDoEvento =
+          (event.data.object as { customer?: string | null } | null)?.customer ?? null;
+
+        const { error: dupErr } = await dbPendente
+          .from("stripe_webhook_events")
+          .insert({
+            event_id: event.id,
+            event_type: event.type,
+            event_created: new Date(event.created * 1000).toISOString(),
+            customer_id: clienteDoEvento,
+          });
+        if (dupErr) {
+          // 23505 = unique_violation. Já processado: responde 200 para o Stripe
+          // parar de reentregar.
+          if ((dupErr as { code?: string }).code === "23505") {
+            return new Response("duplicate", { status: 200 });
+          }
+          console.error("[stripe-webhook] falha ao registrar evento:", dupErr);
+          return new Response("Handler error", { status: 500 });
+        }
+
+        // ---- Guarda de ordem ----------------------------------------------
+        // Ignora evento mais antigo que o último já aplicado para este cliente.
+        if (clienteDoEvento) {
+          const { data: maisRecente } = await dbPendente
+            .from("stripe_webhook_events")
+            .select("event_created")
+            .eq("customer_id", clienteDoEvento)
+            .neq("event_id", event.id)
+            .order("event_created", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          const anterior = (maisRecente as { event_created?: string } | null)?.event_created;
+          if (anterior && new Date(anterior) > new Date(event.created * 1000)) {
+            console.warn(
+              `[stripe-webhook] evento ${event.id} (${event.type}) chegou fora de ordem; ignorado.`,
+            );
+            return new Response("stale", { status: 200 });
+          }
+        }
 
         const updateByCustomer = async (
           customerId: string,
