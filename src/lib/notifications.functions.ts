@@ -1,21 +1,14 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireAdmin } from "@/lib/tenant-guard";
 
-async function getTenantAdmin(ctx: { supabase: any; userId: string }) {
-  const { data: roles, error } = await ctx.supabase
-    .from("user_roles").select("role, tenant_id").eq("user_id", ctx.userId);
-  if (error) throw new Error(error.message);
-  const admin = (roles ?? []).find((r: any) => r.role === "admin");
-  if (!admin) throw new Error("Apenas administradores podem acessar esta área");
-  return admin.tenant_id as string;
-}
 
 // ============ SETTINGS ============
 export const getNotificationSettings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const tenantId = await getTenantAdmin(context as any);
+    const tenantId = await requireAdmin(context as any);
     const supabase = (context as any).supabase;
     const { data, error } = await supabase
       .from("notification_settings").select("*").eq("tenant_id", tenantId).maybeSingle();
@@ -43,7 +36,7 @@ export const saveNotificationSettings = createServerFn({ method: "POST" })
     assinatura: z.string().max(500).nullable().optional(),
   }).parse(i))
   .handler(async ({ data, context }) => {
-    const tenantId = await getTenantAdmin(context as any);
+    const tenantId = await requireAdmin(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.from("notification_settings")
       .upsert({ tenant_id: tenantId, ...data }, { onConflict: "tenant_id" });
@@ -67,7 +60,7 @@ export const saveNotificationSettings = createServerFn({ method: "POST" })
 export const listTemplates = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const tenantId = await getTenantAdmin(context as any);
+    const tenantId = await requireAdmin(context as any);
     const { data, error } = await (context as any).supabase
       .from("notification_templates").select("*")
       .eq("tenant_id", tenantId)
@@ -86,7 +79,7 @@ export const upsertTemplate = createServerFn({ method: "POST" })
     ativo: z.boolean().default(true),
   }).parse(i))
   .handler(async ({ data, context }) => {
-    const tenantId = await getTenantAdmin(context as any);
+    const tenantId = await requireAdmin(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const campos = {
       tipo: data.tipo,
@@ -118,7 +111,7 @@ export const deleteTemplate = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i) => z.object({ id: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
-    const tenantId = await getTenantAdmin(context as any);
+    const tenantId = await requireAdmin(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.from("notification_templates")
       .delete().eq("id", data.id).eq("tenant_id", tenantId);
@@ -138,7 +131,7 @@ export const listNotifications = createServerFn({ method: "POST" })
     limit: z.number().min(1).max(500).default(200),
   }).parse(i))
   .handler(async ({ data, context }) => {
-    const tenantId = await getTenantAdmin(context as any);
+    const tenantId = await requireAdmin(context as any);
     const COLS = `
         id, tipo, canal, destinatario, mensagem, status, dias_offset,
         agendada_para, enviada_em, erro, erro_codigo, tentativas, proxima_tentativa,
@@ -202,7 +195,7 @@ export const resendNotification = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i) => z.object({ notification_id: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
-    const tenantId = await getTenantAdmin(context as any);
+    const tenantId = await requireAdmin(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { sendWhatsappByTenant } = await import("@/lib/whatsapp.server");
 
@@ -229,14 +222,14 @@ export const resendNotification = createServerFn({ method: "POST" })
 export const retryAllFailed = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const tenantId = await getTenantAdmin(context as any);
+    const tenantId = await requireAdmin(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.from("notificacoes")
       .update({ tentativas: 0, proxima_tentativa: new Date().toISOString() })
       .eq("tenant_id", tenantId).eq("status", "falhou");
     if (error) throw new Error(error.message);
     const { runDispatch } = await import("@/lib/notifications-dispatch.server");
-    return await runDispatch();
+    return await runDispatch(tenantId);
   });
 
 // ============ DESCARTAR TODAS AS FALHAS (não enviar) ============
@@ -244,7 +237,7 @@ export const retryAllFailed = createServerFn({ method: "POST" })
 export const discardAllFailed = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const tenantId = await getTenantAdmin(context as any);
+    const tenantId = await requireAdmin(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data, error } = await supabaseAdmin.from("notificacoes")
       .delete().eq("tenant_id", tenantId).eq("status", "falhou").select("id");
@@ -275,7 +268,7 @@ async function limparNotificacoesTenant(tenantId: string) {
 export const limparNotificacoes = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const tenantId = await getTenantAdmin(context as any);
+    const tenantId = await requireAdmin(context as any);
     return await limparNotificacoesTenant(tenantId);
   });
 
@@ -285,7 +278,7 @@ export const limparNotificacoes = createServerFn({ method: "POST" })
 export const countPendingAfterReconnect = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const tenantId = await getTenantAdmin(context as any);
+    const tenantId = await requireAdmin(context as any);
     const { count, error } = await (context as any).supabase
       .from("notificacoes").select("id", { count: "exact", head: true })
       .eq("tenant_id", tenantId).eq("status", "falhou")
@@ -302,7 +295,7 @@ export const countPendingAfterReconnect = createServerFn({ method: "POST" })
 export const resendPendingAfterReconnect = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const tenantId = await getTenantAdmin(context as any);
+    const tenantId = await requireAdmin(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { sendWhatsappByTenant } = await import("@/lib/whatsapp.server");
     const { classifyErro } = await import("@/lib/notification-errors");
@@ -346,7 +339,7 @@ export const resendPendingAfterReconnect = createServerFn({ method: "POST" })
 export const discardPendingAfterReconnect = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const tenantId = await getTenantAdmin(context as any);
+    const tenantId = await requireAdmin(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data, error } = await supabaseAdmin.from("notificacoes")
       .update({
@@ -365,7 +358,7 @@ export const discardPendingAfterReconnect = createServerFn({ method: "POST" })
 export const getNotificationsHealth = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const tenantId = await getTenantAdmin(context as any);
+    const tenantId = await requireAdmin(context as any);
     // manutenção: remove inativas e o que passa de 1 mês à frente
     await limparNotificacoesTenant(tenantId);
     const supabase = (context as any).supabase;
@@ -430,7 +423,7 @@ export const getNotificationsHealth = createServerFn({ method: "POST" })
 export const runDispatchNow = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await getTenantAdmin(context as any);
+    const tenantId = await requireAdmin(context as any);
     const { runDispatch } = await import("@/lib/notifications-dispatch.server");
-    return await runDispatch();
+    return await runDispatch(tenantId);
   });

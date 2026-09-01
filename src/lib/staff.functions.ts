@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireAdmin } from "@/lib/tenant-guard";
 
 export const STAFF_ROLES = [
   "admin",
@@ -66,21 +67,11 @@ const permissionsSchema = z.record(
   z.object({ ver: z.boolean(), editar: z.boolean() })
 );
 
-async function assertAdmin(ctx: { supabase: any; userId: string }) {
-  const { data: roles, error } = await ctx.supabase
-    .from("user_roles")
-    .select("role, tenant_id")
-    .eq("user_id", ctx.userId);
-  if (error) throw new Error(error.message);
-  const adminRow = (roles ?? []).find((r: any) => r.role === "admin");
-  if (!adminRow) throw new Error("Apenas administradores podem gerenciar a equipe");
-  return adminRow.tenant_id as string;
-}
 
 export const listStaff = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const tenantId = await assertAdmin(context as any);
+    const tenantId = await requireAdmin(context as any, "Apenas administradores podem gerenciar a equipe");
     const supabase = (context as any).supabase;
 
     const { data: profiles, error: pe } = await supabase
@@ -121,7 +112,7 @@ export const createStaff = createServerFn({ method: "POST" })
     }).parse(input)
   )
   .handler(async ({ data, context }) => {
-    const tenantId = await assertAdmin(context as any);
+    const tenantId = await requireAdmin(context as any, "Apenas administradores podem gerenciar a equipe");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const { data: created, error: ce } = await supabaseAdmin.auth.admin.createUser({
@@ -175,7 +166,7 @@ export const updateStaff = createServerFn({ method: "POST" })
     }).parse(input)
   )
   .handler(async ({ data, context }) => {
-    const tenantId = await assertAdmin(context as any);
+    const tenantId = await requireAdmin(context as any, "Apenas administradores podem gerenciar a equipe");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const { data: prof } = await supabaseAdmin
@@ -201,7 +192,7 @@ export const toggleStaffActive = createServerFn({ method: "POST" })
     z.object({ user_id: z.string().uuid(), ativo: z.boolean() }).parse(input)
   )
   .handler(async ({ data, context }) => {
-    const tenantId = await assertAdmin(context as any);
+    const tenantId = await requireAdmin(context as any, "Apenas administradores podem gerenciar a equipe");
     if (data.user_id === (context as any).userId) {
       throw new Error("Você não pode desativar sua própria conta");
     }
@@ -224,7 +215,7 @@ export const resetStaffPassword = createServerFn({ method: "POST" })
     z.object({ user_id: z.string().uuid(), nova_senha: z.string().min(6).max(72) }).parse(input)
   )
   .handler(async ({ data, context }) => {
-    const tenantId = await assertAdmin(context as any);
+    const tenantId = await requireAdmin(context as any, "Apenas administradores podem gerenciar a equipe");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: prof } = await supabaseAdmin
       .from("profiles").select("tenant_id").eq("id", data.user_id).maybeSingle();
@@ -242,7 +233,7 @@ export const deleteStaff = createServerFn({ method: "POST" })
     z.object({ user_id: z.string().uuid() }).parse(input)
   )
   .handler(async ({ data, context }) => {
-    const tenantId = await assertAdmin(context as any);
+    const tenantId = await requireAdmin(context as any, "Apenas administradores podem gerenciar a equipe");
     if (data.user_id === (context as any).userId) {
       throw new Error("Você não pode excluir sua própria conta");
     }

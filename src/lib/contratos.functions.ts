@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { getTenantId } from "@/lib/tenant-guard";
 
 const contratoInput = z.object({
   aluno_id: z.string().uuid(),
@@ -12,12 +13,6 @@ const contratoInput = z.object({
   observacoes: z.string().max(1000).optional().nullable(),
 });
 
-async function getTenantId(ctx: { supabase: any; userId: string }) {
-  const { data: prof, error } = await ctx.supabase
-    .from("profiles").select("tenant_id").eq("id", ctx.userId).maybeSingle();
-  if (error || !prof) throw new Error("Perfil não encontrado");
-  return prof.tenant_id as string;
-}
 
 /**
  * Cria ou atualiza o contrato ativo do aluno. Garante apenas 1 contrato 'ativo' por aluno.

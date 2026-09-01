@@ -1,15 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireAdmin } from "@/lib/tenant-guard";
 
-async function getTenantAdmin(ctx: { supabase: any; userId: string }) {
-  const { data: roles, error } = await ctx.supabase
-    .from("user_roles").select("role, tenant_id").eq("user_id", ctx.userId);
-  if (error) throw new Error(error.message);
-  const admin = (roles ?? []).find((r: any) => r.role === "admin");
-  if (!admin) throw new Error("Apenas administradores podem enviar comunicados");
-  return admin.tenant_id as string;
-}
 
 /** Envia comunicado geral por WhatsApp a um conjunto de alunos. */
 export const enviarComunicado = createServerFn({ method: "POST" })
@@ -20,7 +13,7 @@ export const enviarComunicado = createServerFn({ method: "POST" })
     apenas_ativos: z.boolean().default(true),
   }).parse(i))
   .handler(async ({ data, context }) => {
-    const tenantId = await getTenantAdmin(context as any);
+    const tenantId = await requireAdmin(context as any, "Apenas administradores podem enviar comunicados");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { sendWhatsappByTenant } = await import("@/lib/whatsapp.server");
 

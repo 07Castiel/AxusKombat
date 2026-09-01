@@ -12,6 +12,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   classifyErro, isRetentavel, proximaTentativaISO, MAX_TENTATIVAS,
 } from "@/lib/notification-errors";
+import { authorizeCronRequest } from "@/lib/cron-auth";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const TZ_HOUR_FMT = new Map<string, Intl.DateTimeFormat>();
 function currentTimeInTz(tz: string): { hh: number; mm: number } {
@@ -51,13 +54,20 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const apikey = request.headers.get("apikey");
-        const expected = process.env.SUPABASE_PUBLISHABLE_KEY;
-        if (!expected || apikey !== expected) {
-          return new Response(JSON.stringify({ error: "unauthorized" }), {
-            status: 401, headers: { "Content-Type": "application/json" },
+        const auth = authorizeCronRequest(request);
+        if (!auth.ok) return auth.response;
+
+        // Escopo opcional por academia. O cron chama sem parâmetro e varre tudo;
+        // o botão "Verificar agora" do painel passa o próprio tenant, para não
+        // disparar a fila das outras academias.
+        const tenantFiltro = new URL(request.url).searchParams.get("tenant_id");
+        if (tenantFiltro && !UUID_RE.test(tenantFiltro)) {
+          return new Response(JSON.stringify({ error: "tenant_id inválido" }), {
+            status: 400, headers: { "Content-Type": "application/json" },
           });
         }
+        const comEscopo = <T extends { eq: (c: string, v: string) => T }>(q: T): T =>
+          tenantFiltro ? q.eq("tenant_id", tenantFiltro) : q;
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { sendWhatsappByTenant, renderTemplate } = await import("@/lib/whatsapp.server");
@@ -72,22 +82,24 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
         const nowIso = new Date().toISOString();
 
         // 1) agendadas devidas
-        const { data: agendadas, error } = await supabaseAdmin
-          .from("notificacoes")
-          .select(SELECT_COLS)
-          .eq("status", "agendada")
-          .lte("agendada_para", nowIso)
-          .limit(400);
+        const { data: agendadas, error } = await comEscopo(
+          supabaseAdmin
+            .from("notificacoes")
+            .select(SELECT_COLS)
+            .eq("status", "agendada")
+            .lte("agendada_para", nowIso) as any,
+        ).limit(400);
 
         // 2) falhas retentáveis
-        const { data: retries } = await supabaseAdmin
-          .from("notificacoes")
-          .select(SELECT_COLS)
-          .eq("status", "falhou")
-          .lt("tentativas", MAX_TENTATIVAS)
-          .not("proxima_tentativa", "is", null)
-          .lte("proxima_tentativa", nowIso)
-          .limit(200);
+        const { data: retries } = await comEscopo(
+          supabaseAdmin
+            .from("notificacoes")
+            .select(SELECT_COLS)
+            .eq("status", "falhou")
+            .lt("tentativas", MAX_TENTATIVAS)
+            .not("proxima_tentativa", "is", null)
+            .lte("proxima_tentativa", nowIso) as any,
+        ).limit(200);
 
         if (error) {
           if (runId) {
@@ -102,9 +114,15 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
 
         const { filtrarFila } = await import("@/lib/notification-queue");
         const brutas = [...((agendadas ?? []) as any[]), ...((retries ?? []) as any[])];
-        // Descarta versões antigas duplicadas; a janela não se aplica aqui
-        // (o worker envia o que já venceu), mas a ordem é cronológica.
-        const notifs = filtrarFila(brutas, [], { aplicarJanela: false });
+        // Descarta versões antigas duplicadas e ordena da mais antiga para a mais
+        // nova. A janela de 1 mês não se aplica (o worker envia o que já venceu) e
+        // o filtro de modelo também não: os modelos são carregados por tenant
+        // dentro do laço abaixo, que cancela a mensagem quando o modelo não existe.
+        const notifs = filtrarFila(brutas, [], {
+          aplicarJanela: false,
+          aplicarTemplates: false,
+          ordem: "asc",
+        });
         const summary = {
           scanned: notifs.length, sent: 0, failed: 0,
           retried: (retries ?? []).length, skipped_window: 0, skipped_config: 0,
