@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -150,9 +150,16 @@ function PrecosPage() {
       .catch(() => {});
   }, [user, getStatus]);
 
-  // Banner: retomar abre o modal direto no Step 2 com plano salvo
+  // Banner: retomar abre o modal direto no Step 2 com o plano salvo.
+  //
+  // Roda UMA vez. Antes, as dependências incluíam `user`, cujo objeto muda a
+  // cada renovação de token — o modal reabria sozinho e sobrescrevia a escolha
+  // de quem tinha acabado de clicar em "Começar trial gratuito".
+  const retomarAplicado = useRef(false);
   useEffect(() => {
+    if (retomarAplicado.current) return;
     if (search.retomar && user && tenantStatus && tenantStatus.status === "pending") {
+      retomarAplicado.current = true;
       setSelectedPlan((tenantStatus.plan as PlanKey) || "pro");
       setPeriod((tenantStatus.plan_period as Period) || "monthly");
       setIsTrial(tenantStatus.is_trial);
@@ -336,6 +343,7 @@ function PrecosPage() {
         plan={selectedPlan}
         period={period}
         isTrial={isTrial}
+        onEscolherTrial={() => setIsTrial(true)}
         initialStep={initialStep}
       />
     </div>
@@ -445,6 +453,7 @@ function CheckoutModal({
   plan,
   period,
   isTrial,
+  onEscolherTrial,
   initialStep,
 }: {
   open: boolean;
@@ -452,6 +461,7 @@ function CheckoutModal({
   plan: PlanKey;
   period: Period;
   isTrial: boolean;
+  onEscolherTrial: () => void;
   initialStep: 1 | 2 | 3;
 }) {
   const { user } = useAuth();
@@ -650,7 +660,7 @@ function CheckoutModal({
                 </div>
               </div>
 
-              {isTrial && (
+              {isTrial ? (
                 <div
                   className="p-3 rounded text-sm"
                   style={{ background: "#1a0000", border: "1px solid #8B0000" }}
@@ -658,6 +668,21 @@ function CheckoutModal({
                   <strong>R$ 0,00 hoje.</strong> Cobrança de {formatBRL(value)}
                   {suffix} após 14 dias de teste. Cancele a qualquer momento antes disso sem custo.
                 </div>
+              ) : (
+                // Sem esta saída, quem chega por /precos?retomar=true fica preso
+                // no fluxo pago: o modal abre por cima da página e o botão do
+                // trial fica atrás dele, inalcançável.
+                <button
+                  type="button"
+                  onClick={onEscolherTrial}
+                  className="w-full p-3 rounded text-sm text-left transition-colors hover:bg-white/[0.04]"
+                  style={{ background: "#141414", border: "1px solid rgba(255,255,255,0.10)" }}
+                >
+                  <strong>Prefiro testar 14 dias grátis antes.</strong>
+                  <span className="block text-white/60 mt-0.5">
+                    Sem cobrança hoje. Cartão exigido só se você decidir continuar.
+                  </span>
+                </button>
               )}
 
               <div className="flex gap-2">
