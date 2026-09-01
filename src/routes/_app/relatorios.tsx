@@ -1,3 +1,4 @@
+import { RequireAdmin } from "@/components/RequireRole";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -17,7 +18,7 @@ import {
 } from "recharts";
 
 export const Route = createFileRoute("/_app/relatorios")({
-  component: RelatoriosPage,
+  component: RelatoriosPageProtegido,
   head: () => ({
     meta: [
       { title: "Relatórios | Axus Kombat" },
@@ -273,5 +274,13 @@ function RelatoriosPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+function RelatoriosPageProtegido() {
+  return (
+    <RequireAdmin>
+      <RelatoriosPage />
+    </RequireAdmin>
   );
 }

@@ -1,3 +1,4 @@
+import { RequireAdmin } from "@/components/RequireRole";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
@@ -16,7 +17,7 @@ import { translateError } from "@/lib/errors";
 import { listVisitorLogs, visitorStats, exportVisitorLogs, deleteVisitorLog } from "@/lib/acessos.functions";
 
 export const Route = createFileRoute("/_app/acessos")({
-  component: AcessosPage,
+  component: AcessosPageProtegido,
   head: () => ({
     meta: [
       { title: "Acessos | Axus Kombat" },
@@ -291,5 +292,13 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
       <h3 className="text-[11px] uppercase tracking-widest text-metal mb-3">{title}</h3>
       {children}
     </Card>
+  );
+}
+
+function AcessosPageProtegido() {
+  return (
+    <RequireAdmin>
+      <AcessosPage />
+    </RequireAdmin>
   );
 }

@@ -1,3 +1,4 @@
+import { RequireAdmin } from "@/components/RequireRole";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -21,7 +22,7 @@ import { fmtDate, fmtMoney, toISODate } from "@/lib/utils";
 import { upsertDespesa, deleteDespesa } from "@/lib/despesas.functions";
 
 export const Route = createFileRoute("/_app/despesas")({
-  component: DespesasPage,
+  component: DespesasPageProtegido,
   head: () => ({
     meta: [
       { title: "Despesas | Axus Kombat" },
@@ -215,5 +216,13 @@ function DespesasPage() {
         onConfirm={doDelete}
       />
     </div>
+  );
+}
+
+function DespesasPageProtegido() {
+  return (
+    <RequireAdmin>
+      <DespesasPage />
+    </RequireAdmin>
   );
 }

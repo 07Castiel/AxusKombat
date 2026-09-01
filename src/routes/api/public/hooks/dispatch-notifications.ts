@@ -13,8 +13,23 @@ import {
   classifyErro, isRetentavel, proximaTentativaISO, MAX_TENTATIVAS,
 } from "@/lib/notification-errors";
 import { authorizeCronRequest } from "@/lib/cron-auth";
+import { TIPOS_SEM_TEMPLATE } from "@/lib/notification-queue";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Teto por execução e intervalo entre envios.
+ *
+ * O worker roda a cada 15 minutos, então 120 mensagens por rodada dão ~480 por
+ * hora — folga larga para uma academia. O limite antigo era 400 sem intervalo
+ * nenhum: rajada que é exatamente o padrão que faz o WhatsApp bloquear o
+ * número, e que também estourava o tempo da requisição no Worker.
+ */
+const LOTE_AGENDADAS = Number(process.env.NOTIF_LOTE ?? 120);
+const LOTE_RETRIES = Number(process.env.NOTIF_LOTE_RETRY ?? 60);
+const INTERVALO_ENVIO_MS = Number(process.env.NOTIF_INTERVALO_MS ?? 250);
+
+const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const TZ_HOUR_FMT = new Map<string, Intl.DateTimeFormat>();
 function currentTimeInTz(tz: string): { hh: number; mm: number } {
@@ -42,7 +57,7 @@ function withinWindow(tz: string, start: string, end: string): boolean {
 }
 
 const SELECT_COLS = `
-  id, tenant_id, aluno_id, mensalidade_id, tipo, dias_offset, agendada_para, tentativas,
+  id, tenant_id, aluno_id, mensalidade_id, tipo, dias_offset, agendada_para, tentativas, mensagem,
   aluno:alunos!inner ( id, nome_completo, telefone, responsavel_telefone, categoria ),
   mensalidade:mensalidades ( id, data_vencimento, valor_final, valor,
     contrato:contratos ( plano:planos ( nome ) )
@@ -88,7 +103,7 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
             .select(SELECT_COLS)
             .eq("status", "agendada")
             .lte("agendada_para", nowIso) as any,
-        ).limit(400);
+        ).limit(LOTE_AGENDADAS);
 
         // 2) falhas retentáveis
         const { data: retries } = await comEscopo(
@@ -99,7 +114,7 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
             .lt("tentativas", MAX_TENTATIVAS)
             .not("proxima_tentativa", "is", null)
             .lte("proxima_tentativa", nowIso) as any,
-        ).limit(200);
+        ).limit(LOTE_RETRIES);
 
         if (error) {
           if (runId) {
@@ -177,10 +192,17 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
               String(b.updated_at ?? b.created_at ?? "").localeCompare(String(a.updated_at ?? a.created_at ?? "")));
             templatesCache.set(n.tenant_id, tpls);
           }
+          // Envio avulso (comunicado, teste, manual) já chega com o texto
+          // pronto e não depende de modelo — sem isto o worker cancelaria toda
+          // mensagem desse tipo como "modelo não configurado".
+          const avulso = TIPOS_SEM_TEMPLATE.has(n.tipo);
+
           // sempre a versão ativa mais recente do modelo
-          const tpl = tpls.find((t) => t.tipo === n.tipo && t.dias_offset === n.dias_offset)
-                  ?? tpls.find((t) => t.tipo === n.tipo);
-          if (!tpl) {
+          const tpl = avulso
+            ? null
+            : (tpls.find((t) => t.tipo === n.tipo && t.dias_offset === n.dias_offset)
+               ?? tpls.find((t) => t.tipo === n.tipo));
+          if (!avulso && !tpl) {
             // modelo inativo/removido: a mensagem não deve ser enviada
             await supabaseAdmin.from("notificacoes").update({
               status: "cancelada",
@@ -209,7 +231,7 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
           const plano = mens?.contrato?.plano?.nome ?? "";
 
           // sempre renderiza com a versão ATUAL do modelo
-          const mensagem = renderTemplate(tpl.mensagem, {
+          const mensagem = avulso ? (n.mensagem ?? "") : renderTemplate(tpl!.mensagem, {
             nome, primeiro_nome: primeiroNome,
             academia: n.tenant?.nome ?? "",
             vencimento: venc, valor,
@@ -223,12 +245,24 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
             assinatura: s.assinatura ?? "",
           });
 
+          if (avulso && !mensagem.trim()) {
+            await supabaseAdmin.from("notificacoes").update({
+              status: "cancelada",
+              motivo_cancelamento: "Mensagem vazia",
+              proxima_tentativa: null,
+              updated_at: new Date().toISOString(),
+            }).eq("id", n.id);
+            summary.skipped_config++;
+            continue;
+          }
+
           if (!phone) {
             await marcarFalha(n, mensagem, "Aluno sem telefone cadastrado");
             summary.failed++;
             continue;
           }
 
+          if (summary.sent > 0 && INTERVALO_ENVIO_MS > 0) await espera(INTERVALO_ENVIO_MS);
           const result = await sendWhatsappByTenant(n.tenant_id, phone, mensagem);
           if (result.ok) {
             await supabaseAdmin.from("notificacoes").update({

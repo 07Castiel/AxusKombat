@@ -1,3 +1,4 @@
+import { RequireAdmin } from "@/components/RequireRole";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -21,7 +22,7 @@ import { fmtMoney, fmtDate, toISODate } from "@/lib/utils";
 import { registrarPagamento, cancelarMensalidade, reabrirMensalidade, processarMensalidadesAgora } from "@/lib/mensalidades.functions";
 
 export const Route = createFileRoute("/_app/financeiro")({
-  component: FinanceiroPage,
+  component: FinanceiroPageProtegido,
   head: () => ({
     meta: [
       { title: "Financeiro | Axus Kombat" },
@@ -272,5 +273,13 @@ function Mini({ label, value, cls }: { label: string; value: string; cls: string
       <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</p>
       <p className={`text-lg font-bold mt-1 ${cls}`}>{value}</p>
     </Card>
+  );
+}
+
+function FinanceiroPageProtegido() {
+  return (
+    <RequireAdmin>
+      <FinanceiroPage />
+    </RequireAdmin>
   );
 }

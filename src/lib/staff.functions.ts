@@ -123,33 +123,65 @@ export const createStaff = createServerFn({ method: "POST" })
       user_metadata: {
         nome_completo: data.nome_completo,
         telefone: data.telefone ?? null,
-        tenant_nome: "__skip__",
+        // Marca de convite: o trigger handle_new_user, depois da ETAPA 3, honra
+        // isto e não cria academia nenhuma. Enquanto essa migration não rodar,
+        // ele ainda cria um tenant temporário e o bloco de limpeza remove.
+        skip_tenant: true,
       },
     });
     if (ce || !created.user) throw new Error(ce?.message || "Falha ao criar usuário");
     const uid = created.user.id;
 
-    // handle_new_user trigger created a tenant/profile/role. We must overwrite to point to this tenant.
-    await supabaseAdmin.from("user_roles").delete().eq("user_id", uid);
-    // Find the auto-created tenant and remove it
+    // Desfaz o cadastro pela metade. Sem isto, uma falha no meio deixa um
+    // usuário no Auth que consegue logar e não tem perfil nem academia.
+    const desfazer = async (motivo: string): Promise<never> => {
+      await supabaseAdmin.from("user_roles").delete().eq("user_id", uid);
+      await supabaseAdmin.from("profiles").delete().eq("id", uid);
+      await supabaseAdmin.auth.admin.deleteUser(uid).catch(() => {});
+      throw new Error(motivo);
+    };
+
+    // Guarda a academia que o trigger possa ter criado, antes de reapontar.
     const { data: prof } = await supabaseAdmin
       .from("profiles").select("tenant_id").eq("id", uid).maybeSingle();
-    const autoTenant = prof?.tenant_id;
+    const tenantOrfao =
+      prof?.tenant_id && prof.tenant_id !== tenantId ? prof.tenant_id : null;
 
-    await supabaseAdmin.from("profiles").update({
-      tenant_id: tenantId,
-      nome_completo: data.nome_completo,
-      telefone: data.telefone ?? null,
-      ativo: true,
-      permissions: data.permissions,
-    }).eq("id", uid);
+    await supabaseAdmin.from("user_roles").delete().eq("user_id", uid);
 
-    await supabaseAdmin.from("user_roles").insert({
+    // upsert cobre os dois mundos: com o trigger novo o perfil ainda não
+    // existe; com o antigo, existe e precisa ser reapontado.
+    const { error: pe } = await supabaseAdmin.from("profiles").upsert(
+      {
+        id: uid,
+        tenant_id: tenantId,
+        nome_completo: data.nome_completo,
+        email: data.email,
+        telefone: data.telefone ?? null,
+        ativo: true,
+        permissions: data.permissions,
+      },
+      { onConflict: "id" },
+    );
+    if (pe) await desfazer(`Falha ao criar o perfil: ${pe.message}`);
+
+    const { error: re } = await supabaseAdmin.from("user_roles").insert({
       user_id: uid, tenant_id: tenantId, role: data.role,
     });
+    if (re) await desfazer(`Falha ao definir o papel: ${re.message}`);
 
-    if (autoTenant && autoTenant !== tenantId) {
-      await supabaseAdmin.from("tenants").delete().eq("id", autoTenant);
+    if (tenantOrfao) {
+      const { error: te } = await supabaseAdmin
+        .from("tenants").delete().eq("id", tenantOrfao);
+      // A academia fantasma não vale derrubar um cadastro que já deu certo,
+      // mas precisa deixar rastro: era exatamente assim que sobravam tenants
+      // órfãos no painel mestre e nas contagens.
+      if (te) {
+        console.error(
+          `[createStaff] academia temporária ${tenantOrfao} não pôde ser removida:`,
+          te.message,
+        );
+      }
     }
 
     return { id: uid };

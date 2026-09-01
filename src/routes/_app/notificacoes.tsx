@@ -1,3 +1,4 @@
+import { RequireAdmin } from "@/components/RequireRole";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -39,7 +40,7 @@ import {
 import { enviarComunicado } from "@/lib/comunicados.functions";
 
 export const Route = createFileRoute("/_app/notificacoes")({
-  component: NotificacoesPage,
+  component: NotificacoesPageProtegido,
   head: () => ({
     meta: [
       { title: "Notificações | Axus Kombat" },
@@ -716,7 +717,13 @@ function TabComunicados() {
     setSending(true);
     try {
       const r: any = await enviar({ data: comunicado });
-      toast.success(`Comunicado enviado: ${r.sent} de ${r.total} (${r.failed} falhas, ${r.skipped} sem telefone)`);
+      const semTelefone = r.sem_telefone
+        ? ` ${r.sem_telefone} sem telefone ficaram de fora.`
+        : "";
+      toast.success(
+        `${r.enfileirados} de ${r.total} alunos na fila de envio.${semTelefone} ` +
+        `As mensagens saem respeitando o horário configurado.`,
+      );
       setComunicado({ ...comunicado, mensagem: "" });
       qc.invalidateQueries({ queryKey: ["notificacoes"] });
     } catch (e: any) { toast.error(translateError(e)); } finally { setSending(false); }
@@ -925,5 +932,13 @@ function TabHistorico({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function NotificacoesPageProtegido() {
+  return (
+    <RequireAdmin>
+      <NotificacoesPage />
+    </RequireAdmin>
   );
 }

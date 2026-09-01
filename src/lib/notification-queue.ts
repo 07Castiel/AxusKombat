@@ -34,7 +34,7 @@ export function janelaFim(from: Date = new Date()): Date {
 }
 
 /** Tipos que não dependem de modelo automático (envio avulso). */
-const TIPOS_SEM_TEMPLATE = new Set(["manual", "COMUNICADO", "teste"]);
+export const TIPOS_SEM_TEMPLATE = new Set(["manual", "COMUNICADO", "teste"]);
 
 export function temTemplateAtivo(row: QueueRow, templates: TemplateLike[]): boolean {
   if (TIPOS_SEM_TEMPLATE.has(row.tipo)) return true;
