@@ -108,7 +108,21 @@ function MasterDashboard() {
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => remove({ data: { token: token!, tenantId: id } }),
-    onSuccess: () => { toast.success("Academia excluída"); invalidate(); },
+    onSuccess: (r: any) => {
+      // Os dados saem em uma transação, mas os usuários do Auth são removidos
+      // um a um depois do commit. Se algum falhar, o operador precisa saber:
+      // a academia sumiu e sobrou uma conta órfã que não consegue mais entrar.
+      const orfaos: string[] = r?.usuariosNaoRemovidos ?? [];
+      if (orfaos.length) {
+        toast.warning(
+          `Academia excluída, mas ${orfaos.length} usuário(s) não puderam ser ` +
+            `removidos do login. Veja os ids no registro de auditoria.`,
+        );
+      } else {
+        toast.success("Academia excluída");
+      }
+      invalidate();
+    },
     onError: (e: any) => toast.error(e?.message ?? "Erro ao excluir"),
   });
 

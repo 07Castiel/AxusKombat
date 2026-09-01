@@ -299,54 +299,46 @@ export const masterDeleteTenant = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     assertToken(data.token);
     const tenantId = data.tenantId;
-    // Registrado ANTES: se a exclusao falhar no meio, o rastro fica.
+    // Registrado ANTES: se a exclusão falhar no meio, o rastro fica.
     await auditar("EXCLUSAO de academia iniciada", { tenantId });
 
-    // Tables to wipe BEFORE profiles/user_roles/tenants, ordered by dependency.
-    // historico_graduacoes & notificacoes may reference alunos; delete first.
-    const dependentTables = [
-      "historico_graduacoes",
-      "notificacoes",
-      "mensalidades",
-      "contratos",
-      "despesas",
-      "graduacoes",
-      "horarios",
-      "alunos",
-      "modalidades",
-      "planos",
-      "whatsapp_config",
-    ] as const;
+    // Toda a exclusão no banco acontece dentro de master_excluir_tenant, que é
+    // uma única transação (M12). A versão anterior apagava onze tabelas em
+    // sequência com throw próprio em cada passo: uma falha no meio deixava a
+    // academia pela metade, com usuários que ainda logavam e dados já removidos.
+    //
+    // A ordem das exclusões vive na função, não aqui, porque três FKs são
+    // ON DELETE RESTRICT e ditam quem sai primeiro.
+    const { data: resultado, error } = await comTabelasPendentes(supabaseAdmin)
+      .rpc("master_excluir_tenant", { p_tenant_id: tenantId });
+    if (error) throw new Error(`Falha ao excluir a academia: ${error.message}`);
 
-    for (const tbl of dependentTables) {
-      const { error } = await supabaseAdmin.from(tbl).delete().eq("tenant_id", tenantId);
-      if (error) throw new Error(`Falha ao remover ${tbl}: ${error.message}`);
-    }
+    const userIds = resultado?.usuarios ?? [];
 
-    // Collect users of this tenant before removing profiles/roles.
-    const { data: profs, error: pErr } = await supabaseAdmin
-      .from("profiles").select("id").eq("tenant_id", tenantId);
-    if (pErr) throw new Error(pErr.message);
-    const userIds = (profs ?? []).map((p) => p.id);
-
-    const { error: urErr } = await supabaseAdmin
-      .from("user_roles").delete().eq("tenant_id", tenantId);
-    if (urErr) throw new Error(urErr.message);
-
-    const { error: profDelErr } = await supabaseAdmin
-      .from("profiles").delete().eq("tenant_id", tenantId);
-    if (profDelErr) throw new Error(profDelErr.message);
-
-    // Remove auth users so they can no longer log in.
+    // auth.users não está ao alcance da transação: só a API de admin remove.
+    // Neste ponto os dados já foram apagados de forma atômica, então uma falha
+    // aqui deixa no máximo um usuário órfão no Auth — que não consegue mais
+    // usar o sistema, já que perfil e papel não existem mais. Registramos quais
+    // ficaram, em vez de abortar e dar a impressão de que nada foi excluído.
+    const naoRemovidos: string[] = [];
     for (const uid of userIds) {
-      const { error } = await supabaseAdmin.auth.admin.deleteUser(uid);
-      if (error && !/not[_ ]?found/i.test(error.message)) {
-        throw new Error(`Falha ao remover usuário ${uid}: ${error.message}`);
+      const { error: delErr } = await supabaseAdmin.auth.admin.deleteUser(uid);
+      if (delErr && !/not[_ ]?found/i.test(delErr.message)) {
+        naoRemovidos.push(uid);
+        console.error(`[masterDeleteTenant] usuário ${uid} não removido do Auth:`, delErr.message);
       }
     }
 
-    const { error: tErr } = await supabaseAdmin.from("tenants").delete().eq("id", tenantId);
-    if (tErr) throw new Error(tErr.message);
-    await auditar("EXCLUSAO de academia concluida", { tenantId, usuariosRemovidos: userIds.length });
-    return { ok: true, removedUsers: userIds.length };
+    await auditar("EXCLUSAO de academia concluida", {
+      tenantId,
+      nome: resultado?.nome ?? null,
+      usuariosRemovidos: userIds.length - naoRemovidos.length,
+      usuariosNaoRemovidos: naoRemovidos,
+    });
+
+    return {
+      ok: true,
+      removedUsers: userIds.length - naoRemovidos.length,
+      usuariosNaoRemovidos: naoRemovidos,
+    };
   });

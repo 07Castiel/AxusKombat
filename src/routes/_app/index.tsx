@@ -1,10 +1,24 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  comTabelasPendentes,
+  type DashboardResumo,
+} from "@/integrations/supabase/tabelas-pendentes";
 import { useAuth } from "@/hooks/use-auth";
 import { PageHeader } from "@/components/PageHeader";
 import { Card } from "@/components/ui/card";
-import { Users, UserX, AlertCircle, TrendingUp, TrendingDown, Cake, Calendar, Clock } from "lucide-react";
+import {
+  Users,
+  UserX,
+  AlertCircle,
+  TrendingUp,
+  TrendingDown,
+  Cake,
+  Calendar,
+  Clock,
+  Loader2,
+} from "lucide-react";
 import { fmtMoney, fmtDate } from "@/lib/utils";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 
@@ -13,7 +27,10 @@ export const Route = createFileRoute("/_app/")({
   head: () => ({
     meta: [
       { title: "Painel | Axus Kombat" },
-      { name: "description", content: "Visão geral da academia: alunos, financeiro e inadimplência." },
+      {
+        name: "description",
+        content: "Visão geral da academia: alunos, financeiro e inadimplência.",
+      },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
@@ -22,94 +39,121 @@ export const Route = createFileRoute("/_app/")({
 function Dashboard() {
   const { profile } = useAuth();
 
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["dashboard", profile?.tenant_id],
     enabled: !!profile?.tenant_id,
     queryFn: async () => {
-      const [alunos, mensalidades, despesas] = await Promise.all([
-        supabase.from("alunos").select("id, nome_completo, status, data_nascimento, foto_url"),
-        supabase.from("mensalidades").select("id, valor, valor_final, status, data_pagamento, data_vencimento, competencia, aluno_id, alunos(nome_completo)"),
-        supabase.from("despesas").select("id, valor, data"),
-      ]);
-      return {
-        alunos: alunos.data ?? [],
-        mensalidades: mensalidades.data ?? [],
-        despesas: despesas.data ?? [],
-      };
+      // Agregação no Postgres (A4). Antes o painel baixava TODAS as
+      // mensalidades, alunos e despesas e somava aqui — e o PostgREST corta a
+      // resposta em 1000 linhas sem erro, então passando disso receita,
+      // inadimplência e lucro ficavam errados em silêncio.
+      //
+      // dashboard_resumo() não é SECURITY DEFINER: roda com o papel de quem
+      // chama, então o RLS continua valendo e cada papel vê o que já via.
+      const { data, error } = await comTabelasPendentes(supabase).rpc("dashboard_resumo");
+      if (error) throw error;
+      return data as DashboardResumo | null;
     },
   });
 
-  const alunos = data?.alunos ?? [];
-  const mensalidades = (data?.mensalidades ?? []) as any[];
-  const despesas = data?.despesas ?? [];
+  const alunos = data?.alunos ?? { ativos: 0, inativos: 0, total: 0 };
+  const fin = data?.financeiro ?? {
+    receita_recebida: 0,
+    receita_prevista: 0,
+    total_vencidas: 0,
+    qtd_vencidas: 0,
+    qtd_pendentes: 0,
+    inadimplentes: 0,
+  };
+  const despesasMes = Number(data?.despesas_mes ?? 0);
+  const lucro = Number(data?.lucro_mes ?? 0);
+  const proximosVencimentos = data?.proximos_vencimentos ?? [];
+  const aniversariantes = data?.aniversariantes ?? [];
 
-  const ativos = alunos.filter((a) => a.status === "ativo").length;
-  const inativos = alunos.filter((a) => a.status === "inativo").length;
-  const today = new Date().toISOString().slice(0, 10);
-  const in7 = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
-  const mesAtual = new Date().toISOString().slice(0, 7);
+  const chart = (data?.serie_receita ?? []).map((p) => ({
+    mes: new Date(`${p.mes}-01T12:00:00`).toLocaleDateString("pt-BR", { month: "short" }),
+    Receita: Number(p.receita),
+  }));
 
-  const alunosInadimplentes = new Set(
-    mensalidades.filter((m) => m.status === "vencido").map((m) => m.aluno_id)
-  );
-
-  const receitaRecebida = mensalidades
-    .filter((m) => m.status === "pago" && m.data_pagamento?.startsWith(mesAtual))
-    .reduce((s, m) => s + Number(m.valor_final ?? m.valor), 0);
-  const receitaPrevista = mensalidades
-    .filter((m) => m.competencia?.startsWith(mesAtual) && m.status !== "cancelado")
-    .reduce((s, m) => s + Number(m.valor_final ?? m.valor), 0);
-  const totalVencidas = mensalidades.filter((m) => m.status === "vencido").reduce((s, m) => s + Number(m.valor_final ?? m.valor), 0);
-  const qtdVencidas = mensalidades.filter((m) => m.status === "vencido").length;
-  const qtdPendentes = mensalidades.filter((m) => m.status === "pendente").length;
-
-  const despesasMes = despesas.filter((d) => d.data?.startsWith(mesAtual)).reduce((s, d) => s + Number(d.valor), 0);
-  const lucro = receitaRecebida - despesasMes;
-
-  // últimos 6 meses de receita recebida
-  const chart = Array.from({ length: 6 }).map((_, i) => {
-    const d = new Date(); d.setMonth(d.getMonth() - (5 - i));
-    const ym = d.toISOString().slice(0, 7);
-    const rec = mensalidades
-      .filter((m) => m.status === "pago" && m.data_pagamento?.startsWith(ym))
-      .reduce((s, m) => s + Number(m.valor_final ?? m.valor), 0);
-    return { mes: d.toLocaleDateString("pt-BR", { month: "short" }), Receita: rec };
-  });
-
-  const proximosVencimentos = mensalidades
-    .filter((m) => m.status === "pendente" && m.data_vencimento >= today && m.data_vencimento <= in7)
-    .sort((a, b) => a.data_vencimento.localeCompare(b.data_vencimento))
-    .slice(0, 8);
-
-  const aniversariantes = alunos.filter((a) => {
-    if (!a.data_nascimento) return false;
-    const dn = new Date(a.data_nascimento);
-    const h = new Date();
-    return dn.getMonth() === h.getMonth();
-  });
+  if (isLoading) {
+    return (
+      <div>
+        <PageHeader
+          title={`Bem-vindo, ${profile?.nome_completo?.split(" ")[0] ?? ""}`}
+          description="Visão geral financeira e operacional"
+        />
+        <div className="grid place-items-center py-24">
+          <Loader2 className="text-primary h-6 w-6 animate-spin" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
-      <PageHeader title={`Bem-vindo, ${profile?.nome_completo?.split(" ")[0] ?? ""}`} description="Visão geral financeira e operacional" />
+      <PageHeader
+        title={`Bem-vindo, ${profile?.nome_completo?.split(" ")[0] ?? ""}`}
+        description="Visão geral financeira e operacional"
+      />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-        <Stat icon={Users} label="Alunos ativos" value={ativos} accent="text-success" />
-        <Stat icon={UserX} label="Inativos" value={inativos} accent="text-muted-foreground" />
-        <Stat icon={AlertCircle} label="Inadimplentes" value={alunosInadimplentes.size} accent="text-destructive" />
-        <Stat icon={Users} label="Total alunos" value={alunos.length} accent="text-foreground" />
+        <Stat icon={Users} label="Alunos ativos" value={alunos.ativos} accent="text-success" />
+        <Stat
+          icon={UserX}
+          label="Inativos"
+          value={alunos.inativos}
+          accent="text-muted-foreground"
+        />
+        <Stat
+          icon={AlertCircle}
+          label="Inadimplentes"
+          value={fin.inadimplentes}
+          accent="text-destructive"
+        />
+        <Stat icon={Users} label="Total alunos" value={alunos.total} accent="text-foreground" />
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-        <Stat icon={TrendingUp} label="Receita recebida (mês)" value={fmtMoney(receitaRecebida)} accent="text-success" />
-        <Stat icon={Calendar} label="Receita prevista (mês)" value={fmtMoney(receitaPrevista)} accent="text-primary" />
-        <Stat icon={AlertCircle} label="Vencidas" value={`${qtdVencidas} · ${fmtMoney(totalVencidas)}`} accent="text-destructive" />
-        <Stat icon={Clock} label="Pendentes" value={qtdPendentes} accent="text-warning" />
+        <Stat
+          icon={TrendingUp}
+          label="Receita recebida (mês)"
+          value={fmtMoney(Number(fin.receita_recebida))}
+          accent="text-success"
+        />
+        <Stat
+          icon={Calendar}
+          label="Receita prevista (mês)"
+          value={fmtMoney(Number(fin.receita_prevista))}
+          accent="text-primary"
+        />
+        <Stat
+          icon={AlertCircle}
+          label="Vencidas"
+          value={`${fin.qtd_vencidas} · ${fmtMoney(Number(fin.total_vencidas))}`}
+          accent="text-destructive"
+        />
+        <Stat icon={Clock} label="Pendentes" value={fin.qtd_pendentes} accent="text-warning" />
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-        <Stat icon={TrendingDown} label="Despesas (mês)" value={fmtMoney(despesasMes)} accent="text-warning" />
-        <Stat icon={TrendingUp} label="Lucro (mês)" value={fmtMoney(lucro)} accent={lucro >= 0 ? "text-success" : "text-destructive"} />
-        <Stat icon={Cake} label="Aniversariantes" value={aniversariantes.length} accent="text-primary" />
+        <Stat
+          icon={TrendingDown}
+          label="Despesas (mês)"
+          value={fmtMoney(despesasMes)}
+          accent="text-warning"
+        />
+        <Stat
+          icon={TrendingUp}
+          label="Lucro (mês)"
+          value={fmtMoney(lucro)}
+          accent={lucro >= 0 ? "text-success" : "text-destructive"}
+        />
+        <Stat
+          icon={Cake}
+          label="Aniversariantes"
+          value={aniversariantes.length}
+          accent="text-primary"
+        />
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
@@ -121,7 +165,13 @@ function Dashboard() {
                 <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.27 0.014 250)" />
                 <XAxis dataKey="mes" stroke="oklch(0.65 0.012 250)" fontSize={12} />
                 <YAxis stroke="oklch(0.65 0.012 250)" fontSize={12} />
-                <Tooltip contentStyle={{ background: "oklch(0.18 0.014 250)", border: "1px solid oklch(0.27 0.014 250)", borderRadius: 8 }} />
+                <Tooltip
+                  contentStyle={{
+                    background: "oklch(0.18 0.014 250)",
+                    border: "1px solid oklch(0.27 0.014 250)",
+                    borderRadius: 8,
+                  }}
+                />
                 <Bar dataKey="Receita" fill="oklch(0.62 0.22 25)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -131,14 +181,23 @@ function Dashboard() {
         <Card className="p-6 gradient-card border-border">
           <h3 className="font-semibold mb-4">Próximos vencimentos (7 dias)</h3>
           <div className="space-y-3">
-            {proximosVencimentos.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma mensalidade vencendo nos próximos 7 dias.</p>}
+            {proximosVencimentos.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                Nenhuma mensalidade vencendo nos próximos 7 dias.
+              </p>
+            )}
             {proximosVencimentos.map((m) => (
-              <div key={m.id} className="flex justify-between text-sm border-b border-border pb-2 last:border-0">
+              <div
+                key={m.id}
+                className="flex justify-between text-sm border-b border-border pb-2 last:border-0"
+              >
                 <div>
-                  <p className="font-medium truncate max-w-[180px]">{m.alunos?.nome_completo ?? "—"}</p>
+                  <p className="font-medium truncate max-w-[180px]">{m.aluno}</p>
                   <p className="text-xs text-muted-foreground">{fmtDate(m.data_vencimento)}</p>
                 </div>
-                <span className="text-xs font-semibold text-warning">{fmtMoney(Number(m.valor_final ?? m.valor))}</span>
+                <span className="text-xs font-semibold text-warning">
+                  {fmtMoney(Number(m.valor))}
+                </span>
               </div>
             ))}
           </div>
@@ -147,11 +206,16 @@ function Dashboard() {
 
       {aniversariantes.length > 0 && (
         <Card className="mt-6 p-6 gradient-card border-border">
-          <h3 className="font-semibold mb-4 flex items-center gap-2"><Cake className="h-4 w-4 text-primary"/>Aniversariantes do mês</h3>
+          <h3 className="font-semibold mb-4 flex items-center gap-2">
+            <Cake className="h-4 w-4 text-primary" />
+            Aniversariantes do mês
+          </h3>
           <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {aniversariantes.map((a) => (
               <div key={a.id} className="flex items-center gap-3 p-3 rounded-md bg-accent/30">
-                <div className="h-9 w-9 rounded-full bg-primary/20 grid place-items-center text-primary text-sm font-bold">{a.nome_completo.charAt(0)}</div>
+                <div className="h-9 w-9 rounded-full bg-primary/20 grid place-items-center text-primary text-sm font-bold">
+                  {a.nome_completo.charAt(0)}
+                </div>
                 <div>
                   <p className="text-sm font-medium">{a.nome_completo}</p>
                   <p className="text-xs text-muted-foreground">{fmtDate(a.data_nascimento)}</p>
@@ -165,7 +229,17 @@ function Dashboard() {
   );
 }
 
-function Stat({ icon: Icon, label, value, accent }: { icon: React.ElementType; label: string; value: string | number; accent: string }) {
+function Stat({
+  icon: Icon,
+  label,
+  value,
+  accent,
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: string | number;
+  accent: string;
+}) {
   return (
     <Card className="p-5 gradient-card border-border shadow-card">
       <div className="flex items-start justify-between">
