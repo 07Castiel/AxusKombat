@@ -34,16 +34,24 @@ export function janelaFim(from: Date = new Date()): Date {
 }
 
 /** Tipos que não dependem de modelo automático (envio avulso). */
-const TIPOS_SEM_TEMPLATE = new Set(["manual", "COMUNICADO", "teste"]);
+export const TIPOS_SEM_TEMPLATE = new Set(["manual", "COMUNICADO", "teste"]);
 
 export function temTemplateAtivo(row: QueueRow, templates: TemplateLike[]): boolean {
   if (TIPOS_SEM_TEMPLATE.has(row.tipo)) return true;
   const ativos = templates.filter((t) => t.ativo !== false);
-  return ativos.some((t) => t.tipo === row.tipo && t.dias_offset === (row.dias_offset ?? 0))
-    || ativos.some((t) => t.tipo === row.tipo);
+  return (
+    ativos.some((t) => t.tipo === row.tipo && t.dias_offset === (row.dias_offset ?? 0)) ||
+    ativos.some((t) => t.tipo === row.tipo)
+  );
 }
 
 function dedupeKey(r: QueueRow): string {
+  // Envio avulso não tem "versão anterior" para descartar: cada linha é uma
+  // mensagem distinta, escrita à mão. Sem esta ressalva, dois comunicados para
+  // o mesmo aluno na mesma janela cairiam na mesma chave
+  // (aluno_id|COMUNICADO|0) e um deles sumiria da fila em silêncio — nunca
+  // enviado, nunca cancelado, filtrado a cada rodada do worker.
+  if (TIPOS_SEM_TEMPLATE.has(r.tipo)) return r.id;
   return [r.mensalidade_id ?? r.aluno_id ?? r.id, r.tipo, r.dias_offset ?? 0].join("|");
 }
 
@@ -57,7 +65,10 @@ export function apenasVersaoMaisRecente<T extends QueueRow>(rows: T[]): T[] {
   for (const r of rows) {
     const k = dedupeKey(r);
     const atual = map.get(k);
-    if (!atual) { map.set(k, r); continue; }
+    if (!atual) {
+      map.set(k, r);
+      continue;
+    }
     const novo = new Date(r.created_at ?? 0).getTime();
     const velho = new Date(atual.created_at ?? 0).getTime();
     if (novo >= velho) map.set(k, r);
@@ -66,19 +77,37 @@ export function apenasVersaoMaisRecente<T extends QueueRow>(rows: T[]): T[] {
 }
 
 /**
- * Aplica todas as regras da fila (modelo ativo, janela, dedupe, ordenação).
- * `janela` pode ser desligada para o worker, que envia apenas o que já venceu.
+ * Aplica as regras da fila (modelo ativo, janela, dedupe, ordenação).
+ *
+ * `aplicarJanela` desliga o recorte de 1 mês — o worker envia o que já venceu.
+ *
+ * `aplicarTemplates` desliga o filtro de modelo. O worker precisa disso: ele
+ * carrega os modelos por tenant dentro do próprio laço (e cancela a mensagem
+ * quando o modelo sumiu), então não tem a lista completa para passar aqui.
+ * Passar `[]` com o filtro ligado descartava silenciosamente TODA notificação
+ * automática — `[].some(...)` é sempre falso para lembrete/vencimento/atraso.
+ *
+ * `ordem` controla a ordenação: 'desc' para a tela (a última a ser enviada
+ * aparece no topo), 'asc' para o worker (fila cronológica, mais antiga primeiro).
  */
 export function filtrarFila<T extends QueueRow>(
   rows: T[],
   templates: TemplateLike[],
-  opts: { agora?: Date; aplicarJanela?: boolean } = {},
+  opts: {
+    agora?: Date;
+    aplicarJanela?: boolean;
+    aplicarTemplates?: boolean;
+    ordem?: "asc" | "desc";
+  } = {},
 ): T[] {
   const agora = opts.agora ?? new Date();
   const fim = janelaFim(agora).getTime();
   const inicio = agora.getTime();
 
-  let out = rows.filter((r) => temTemplateAtivo(r, templates));
+  let out =
+    opts.aplicarTemplates === false
+      ? [...rows]
+      : rows.filter((r) => temTemplateAtivo(r, templates));
   if (opts.aplicarJanela !== false) {
     out = out.filter((r) => {
       const t = ts(r);
@@ -86,7 +115,6 @@ export function filtrarFila<T extends QueueRow>(
     });
   }
   out = apenasVersaoMaisRecente(out);
-  // Ordem decrescente: a última mensagem a ser enviada aparece no topo.
-  out.sort((a, b) => ts(b) - ts(a));
+  out.sort((a, b) => (opts.ordem === "asc" ? ts(a) - ts(b) : ts(b) - ts(a)));
   return out;
 }

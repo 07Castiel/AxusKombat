@@ -1,8 +1,17 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { lerPermissoes, type PermissionsMap } from "@/lib/permissoes";
 
-export type AppRole = "admin" | "professor_kids" | "professor_adulto";
+// Espelha o enum public.app_role. Faltavam recepcao e financeiro, entao
+// `roles.includes("financeiro")` nem compilava e os dois papeis eram
+// invisiveis para qualquer checagem de interface.
+export type AppRole =
+  | "admin"
+  | "recepcao"
+  | "financeiro"
+  | "professor_adulto"
+  | "professor_kids";
 
 interface Profile {
   id: string;
@@ -10,6 +19,7 @@ interface Profile {
   nome_completo: string;
   email: string;
   avatar_url: string | null;
+  permissions?: unknown;
 }
 
 interface AuthCtx {
@@ -17,6 +27,7 @@ interface AuthCtx {
   session: Session | null;
   profile: Profile | null;
   roles: AppRole[];
+  permissoes: PermissionsMap;
   loading: boolean;
   isAdmin: boolean;
   isProfessorKids: boolean;
@@ -68,6 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value: AuthCtx = {
     user, session, profile, roles, loading,
+    permissoes: lerPermissoes(profile?.permissions),
     isAdmin: roles.includes("admin"),
     isProfessorKids: roles.includes("professor_kids"),
     isProfessorAdulto: roles.includes("professor_adulto"),

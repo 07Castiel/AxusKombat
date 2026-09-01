@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # Sem --frozen-lockfile: o vitest entrou no package.json por npm (a
+      # maquina de desenvolvimento nao tem bun), entao o bun.lock ainda nao o
+      # conhece. Assim que alguem rodar `bun install` e commitar o lockfile
+      # atualizado, trocar por `bun install --frozen-lockfile`, que e o
+      # comportamento reproduzivel que se espera em CI.
+      - name: Instalar dependências
+        run: bun install
+
+      - name: Checagem de tipos
+        run: bun run typecheck
+
+      - name: Testes
+        run: bun run test
+
+      # O build e o teste mais forte que temos hoje: ele resolve as rotas do
+      # TanStack Start e monta o bundle do Worker. Erro de rota so aparece aqui.
+      - name: Build
+        run: bun run build

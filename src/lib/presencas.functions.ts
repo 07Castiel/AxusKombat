@@ -1,16 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireActiveSubscription } from "@/lib/subscription";
+import { getTenantId, requirePermissao } from "@/lib/tenant-guard";
 
-async function getTenantId(ctx: { supabase: any; userId: string }) {
-  const { data: prof, error } = await ctx.supabase
-    .from("profiles").select("tenant_id").eq("id", ctx.userId).maybeSingle();
-  if (error || !prof) throw new Error("Perfil não encontrado");
-  return prof.tenant_id as string;
-}
 
 export const togglePresenca = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveSubscription])
   .inputValidator((i) => z.object({
     horario_id: z.string().uuid(),
     aluno_id: z.string().uuid(),
@@ -19,7 +15,7 @@ export const togglePresenca = createServerFn({ method: "POST" })
   }).parse(i))
   .handler(async ({ data, context }) => {
     const ctx = context as any;
-    const tenantId = await getTenantId(ctx);
+    const tenantId = await requirePermissao(ctx, "alunos");
     const { error } = await ctx.supabase.from("presencas").upsert({
       tenant_id: tenantId,
       horario_id: data.horario_id,

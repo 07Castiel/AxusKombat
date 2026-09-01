@@ -12,6 +12,25 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   classifyErro, isRetentavel, proximaTentativaISO, MAX_TENTATIVAS,
 } from "@/lib/notification-errors";
+import { authorizeCronRequest } from "@/lib/cron-auth";
+import { comTabelasPendentes } from "@/integrations/supabase/tabelas-pendentes";
+import { TIPOS_SEM_TEMPLATE } from "@/lib/notification-queue";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Teto por execução e intervalo entre envios.
+ *
+ * O worker roda a cada 15 minutos, então 120 mensagens por rodada dão ~480 por
+ * hora — folga larga para uma academia. O limite antigo era 400 sem intervalo
+ * nenhum: rajada que é exatamente o padrão que faz o WhatsApp bloquear o
+ * número, e que também estourava o tempo da requisição no Worker.
+ */
+const LOTE_AGENDADAS = Number(process.env.NOTIF_LOTE ?? 120);
+const LOTE_RETRIES = Number(process.env.NOTIF_LOTE_RETRY ?? 60);
+const INTERVALO_ENVIO_MS = Number(process.env.NOTIF_INTERVALO_MS ?? 250);
+
+const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const TZ_HOUR_FMT = new Map<string, Intl.DateTimeFormat>();
 function currentTimeInTz(tz: string): { hh: number; mm: number } {
@@ -39,7 +58,7 @@ function withinWindow(tz: string, start: string, end: string): boolean {
 }
 
 const SELECT_COLS = `
-  id, tenant_id, aluno_id, mensalidade_id, tipo, dias_offset, agendada_para, tentativas,
+  id, tenant_id, aluno_id, mensalidade_id, tipo, dias_offset, agendada_para, tentativas, mensagem,
   aluno:alunos!inner ( id, nome_completo, telefone, responsavel_telefone, categoria ),
   mensalidade:mensalidades ( id, data_vencimento, valor_final, valor,
     contrato:contratos ( plano:planos ( nome ) )
@@ -51,15 +70,25 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const apikey = request.headers.get("apikey");
-        const expected = process.env.SUPABASE_PUBLISHABLE_KEY;
-        if (!expected || apikey !== expected) {
-          return new Response(JSON.stringify({ error: "unauthorized" }), {
-            status: 401, headers: { "Content-Type": "application/json" },
+        const auth = authorizeCronRequest(request);
+        if (!auth.ok) return auth.response;
+
+        // Escopo opcional por academia. O cron chama sem parâmetro e varre tudo;
+        // o botão "Verificar agora" do painel passa o próprio tenant, para não
+        // disparar a fila das outras academias.
+        const tenantFiltro = new URL(request.url).searchParams.get("tenant_id");
+        if (tenantFiltro && !UUID_RE.test(tenantFiltro)) {
+          return new Response(JSON.stringify({ error: "tenant_id inválido" }), {
+            status: 400, headers: { "Content-Type": "application/json" },
           });
         }
+        const comEscopo = <T extends { eq: (c: string, v: string) => T }>(q: T): T =>
+          tenantFiltro ? q.eq("tenant_id", tenantFiltro) : q;
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        // Escrita em `notificacoes` passa por aqui: reivindicado_em ainda nao
+        // esta no types.ts gerado pelo Lovable.
+        const dbNotif = comTabelasPendentes(supabaseAdmin);
         const { sendWhatsappByTenant, renderTemplate } = await import("@/lib/whatsapp.server");
 
         const startedAt = new Date().toISOString();
@@ -71,23 +100,82 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
 
         const nowIso = new Date().toISOString();
 
-        // 1) agendadas devidas
-        const { data: agendadas, error } = await supabaseAdmin
-          .from("notificacoes")
-          .select(SELECT_COLS)
-          .eq("status", "agendada")
-          .lte("agendada_para", nowIso)
-          .limit(400);
+        // ---- Reivindicação do lote (A3) --------------------------------
+        // Antes o worker selecionava status='agendada' e só gravava o status
+        // novo DEPOIS do envio. Duas execuções sobrepostas — o cron dispara a
+        // cada 15 min e uma rodada faz até 180 chamadas HTTP de 20 s — liam as
+        // mesmas linhas e o aluno recebia a cobrança duas vezes.
+        //
+        // reivindicar_notificacoes marca o lote com FOR UPDATE SKIP LOCKED, o
+        // que faz a segunda execução pular o que a primeira travou.
+        //
+        // Se a função ainda não existe (código publicado antes da ETAPA 4), cai
+        // no caminho antigo em vez de parar de enviar. A janela de duplicidade
+        // volta a existir nesse intervalo, e o aviso no log é proposital.
+        let idsReivindicados: string[] | null = null;
+        const { data: reivindicados, error: erroReivindicar } = await dbNotif.rpc(
+          "reivindicar_notificacoes",
+          {
+            p_tenant: tenantFiltro,
+            p_limite_agendadas: LOTE_AGENDADAS,
+            p_limite_retry: LOTE_RETRIES,
+            p_max_tentativas: MAX_TENTATIVAS,
+          },
+        );
+        if (erroReivindicar) {
+          console.warn(
+            "[dispatch] reivindicar_notificacoes indisponível — rodando sem proteção " +
+              "contra execuções sobrepostas. Aplique a ETAPA 4:",
+            erroReivindicar.message,
+          );
+        } else {
+          idsReivindicados = ((reivindicados ?? []) as unknown[])
+            .map((r) => (typeof r === "string" ? r : (r as { id?: string })?.id))
+            .filter((v): v is string => typeof v === "string");
+        }
 
-        // 2) falhas retentáveis
-        const { data: retries } = await supabaseAdmin
-          .from("notificacoes")
-          .select(SELECT_COLS)
-          .eq("status", "falhou")
-          .lt("tentativas", MAX_TENTATIVAS)
-          .not("proxima_tentativa", "is", null)
-          .lte("proxima_tentativa", nowIso)
-          .limit(200);
+        let agendadas: unknown[] | null = null;
+        let retries: unknown[] | null = null;
+        let error: { message: string } | null = null;
+
+        if (idsReivindicados) {
+          if (idsReivindicados.length === 0) {
+            agendadas = [];
+          } else {
+            const r = await supabaseAdmin
+              .from("notificacoes")
+              .select(SELECT_COLS)
+              .in("id", idsReivindicados);
+            agendadas = r.data as unknown[] | null;
+            error = r.error;
+          }
+          retries = [];
+        } else {
+          const r1 = await comEscopo(
+            supabaseAdmin
+              .from("notificacoes")
+              .select(SELECT_COLS)
+              .eq("status", "agendada")
+              .lte("agendada_para", nowIso) as any,
+          ).limit(LOTE_AGENDADAS);
+          agendadas = r1.data as unknown[] | null;
+          error = r1.error;
+
+          const r2 = await comEscopo(
+            supabaseAdmin
+              .from("notificacoes")
+              .select(SELECT_COLS)
+              .eq("status", "falhou")
+              .lt("tentativas", MAX_TENTATIVAS)
+              .not("proxima_tentativa", "is", null)
+              .lte("proxima_tentativa", nowIso) as any,
+          ).limit(LOTE_RETRIES);
+          retries = r2.data as unknown[] | null;
+        }
+
+        // Só devolve a marca quando ela existe: a coluna reivindicado_em pode
+        // ainda não ter sido criada.
+        const liberar = idsReivindicados ? { reivindicado_em: null } : {};
 
         if (error) {
           if (runId) {
@@ -102,9 +190,15 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
 
         const { filtrarFila } = await import("@/lib/notification-queue");
         const brutas = [...((agendadas ?? []) as any[]), ...((retries ?? []) as any[])];
-        // Descarta versões antigas duplicadas; a janela não se aplica aqui
-        // (o worker envia o que já venceu), mas a ordem é cronológica.
-        const notifs = filtrarFila(brutas, [], { aplicarJanela: false });
+        // Descarta versões antigas duplicadas e ordena da mais antiga para a mais
+        // nova. A janela de 1 mês não se aplica (o worker envia o que já venceu) e
+        // o filtro de modelo também não: os modelos são carregados por tenant
+        // dentro do laço abaixo, que cancela a mensagem quando o modelo não existe.
+        const notifs = filtrarFila(brutas, [], {
+          aplicarJanela: false,
+          aplicarTemplates: false,
+          ordem: "asc",
+        });
         const summary = {
           scanned: notifs.length, sent: 0, failed: 0,
           retried: (retries ?? []).length, skipped_window: 0, skipped_config: 0,
@@ -117,7 +211,8 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
           const codigo = classifyErro(motivo);
           const tentativas = (n.tentativas ?? 0) + 1;
           const retentavel = isRetentavel(codigo);
-          await supabaseAdmin.from("notificacoes").update({
+          await dbNotif.from("notificacoes").update({
+            ...liberar,
             status: "falhou",
             erro: motivo,
             erro_codigo: codigo,
@@ -145,6 +240,12 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
 
           // janela horária — nunca envia fora dela
           if (!withinWindow(s.timezone, s.hora_inicio, s.hora_fim)) {
+            // Devolve a reivindicação: fora da janela a mensagem não é enviada
+            // agora, e sem isto ela só voltaria à fila após a expiração.
+            if (idsReivindicados) {
+              await dbNotif.from("notificacoes")
+                .update({ reivindicado_em: null }).eq("id", n.id);
+            }
             summary.skipped_window++;
             continue;
           }
@@ -159,12 +260,20 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
               String(b.updated_at ?? b.created_at ?? "").localeCompare(String(a.updated_at ?? a.created_at ?? "")));
             templatesCache.set(n.tenant_id, tpls);
           }
+          // Envio avulso (comunicado, teste, manual) já chega com o texto
+          // pronto e não depende de modelo — sem isto o worker cancelaria toda
+          // mensagem desse tipo como "modelo não configurado".
+          const avulso = TIPOS_SEM_TEMPLATE.has(n.tipo);
+
           // sempre a versão ativa mais recente do modelo
-          const tpl = tpls.find((t) => t.tipo === n.tipo && t.dias_offset === n.dias_offset)
-                  ?? tpls.find((t) => t.tipo === n.tipo);
-          if (!tpl) {
+          const tpl = avulso
+            ? null
+            : (tpls.find((t) => t.tipo === n.tipo && t.dias_offset === n.dias_offset)
+               ?? tpls.find((t) => t.tipo === n.tipo));
+          if (!avulso && !tpl) {
             // modelo inativo/removido: a mensagem não deve ser enviada
-            await supabaseAdmin.from("notificacoes").update({
+            await dbNotif.from("notificacoes").update({
+              ...liberar,
               status: "cancelada",
               motivo_cancelamento: "Modelo de mensagem inativo ou não configurado",
               proxima_tentativa: null,
@@ -191,7 +300,7 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
           const plano = mens?.contrato?.plano?.nome ?? "";
 
           // sempre renderiza com a versão ATUAL do modelo
-          const mensagem = renderTemplate(tpl.mensagem, {
+          const mensagem = avulso ? (n.mensagem ?? "") : renderTemplate(tpl!.mensagem, {
             nome, primeiro_nome: primeiroNome,
             academia: n.tenant?.nome ?? "",
             vencimento: venc, valor,
@@ -205,15 +314,29 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
             assinatura: s.assinatura ?? "",
           });
 
+          if (avulso && !mensagem.trim()) {
+            await dbNotif.from("notificacoes").update({
+              ...liberar,
+              status: "cancelada",
+              motivo_cancelamento: "Mensagem vazia",
+              proxima_tentativa: null,
+              updated_at: new Date().toISOString(),
+            }).eq("id", n.id);
+            summary.skipped_config++;
+            continue;
+          }
+
           if (!phone) {
             await marcarFalha(n, mensagem, "Aluno sem telefone cadastrado");
             summary.failed++;
             continue;
           }
 
+          if (summary.sent > 0 && INTERVALO_ENVIO_MS > 0) await espera(INTERVALO_ENVIO_MS);
           const result = await sendWhatsappByTenant(n.tenant_id, phone, mensagem);
           if (result.ok) {
-            await supabaseAdmin.from("notificacoes").update({
+            await dbNotif.from("notificacoes").update({
+              ...liberar,
               status: "enviada",
               enviada_em: new Date().toISOString(),
               destinatario: phone,

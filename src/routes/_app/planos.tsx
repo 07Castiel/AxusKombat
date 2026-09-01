@@ -1,3 +1,4 @@
+import { RequireTela } from "@/components/RequireRole";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -20,7 +21,7 @@ import { planoSchema } from "@/lib/validators";
 import { fmtMoney } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/planos")({
-  component: PlanosPage,
+  component: PlanosPageProtegido,
   head: () => ({
     meta: [
       { title: "Planos | Axus Kombat" },
@@ -246,5 +247,13 @@ function PlanosPage() {
         onConfirm={doDelete}
       />
     </div>
+  );
+}
+
+function PlanosPageProtegido() {
+  return (
+    <RequireTela tela="/planos">
+      <PlanosPage />
+    </RequireTela>
   );
 }

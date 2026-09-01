@@ -1,3 +1,4 @@
+import { RequireTela } from "@/components/RequireRole";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
@@ -20,7 +21,7 @@ import { Loader2, Lock, User, Building2, Bell } from "lucide-react";
 import { getTenantConfig, updateTenantConfig } from "@/lib/tenant.functions";
 
 export const Route = createFileRoute("/_app/configuracoes")({
-  component: ConfigPage,
+  component: ConfigPageProtegido,
   head: () => ({
     meta: [
       { title: "Configurações | Axus Kombat" },
@@ -212,5 +213,13 @@ function ConfigPage() {
         )}
       </Tabs>
     </div>
+  );
+}
+
+function ConfigPageProtegido() {
+  return (
+    <RequireTela tela="/configuracoes">
+      <ConfigPage />
+    </RequireTela>
   );
 }

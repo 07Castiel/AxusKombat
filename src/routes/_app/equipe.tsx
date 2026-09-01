@@ -1,3 +1,4 @@
+import { RequireTela } from "@/components/RequireRole";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -26,7 +27,7 @@ import {
 } from "@/lib/staff.functions";
 
 export const Route = createFileRoute("/_app/equipe")({
-  component: EquipePage,
+  component: EquipePageProtegido,
   head: () => ({
     meta: [
       { title: "Professores e Funcionários | Axus Kombat" },
@@ -365,5 +366,13 @@ function EquipePage() {
         onConfirm={handleDelete}
       />
     </div>
+  );
+}
+
+function EquipePageProtegido() {
+  return (
+    <RequireTela tela="/equipe">
+      <EquipePage />
+    </RequireTela>
   );
 }

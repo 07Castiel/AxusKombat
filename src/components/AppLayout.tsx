@@ -1,6 +1,8 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { LayoutDashboard, Users, CreditCard, Wallet, CalendarDays, Award, BarChart3, Settings, LogOut, Menu, Swords, UserCog, Bell, Receipt, CalendarCheck } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { MODULO_DA_TELA, papeisDaTela, type TelaProtegida } from "@/lib/acesso-telas";
+import { podeVer } from "@/lib/permissoes";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 // Toaster mounted globally in __root.tsx
@@ -9,28 +11,37 @@ import logo from "@/assets/axus-kombat-logo.png";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 const NAV = [
-  { to: "/", icon: LayoutDashboard, label: "Dashboard", adminOnly: false },
-  { to: "/alunos", icon: Users, label: "Alunos", adminOnly: false },
-  { to: "/financeiro", icon: CreditCard, label: "Financeiro", adminOnly: true },
-  { to: "/despesas", icon: Receipt, label: "Despesas", adminOnly: true },
-  { to: "/planos", icon: Wallet, label: "Planos", adminOnly: true },
-  { to: "/modalidades", icon: Swords, label: "Modalidades", adminOnly: true },
-  { to: "/horarios", icon: CalendarDays, label: "Horários", adminOnly: false },
-  { to: "/presencas", icon: CalendarCheck, label: "Presenças", adminOnly: false },
-  { to: "/graduacoes", icon: Award, label: "Graduações", adminOnly: false },
-  { to: "/relatorios", icon: BarChart3, label: "Relatórios", adminOnly: true },
-  { to: "/notificacoes", icon: Bell, label: "Notificações", adminOnly: true },
-  { to: "/equipe", icon: UserCog, label: "Equipe", adminOnly: true },
-  { to: "/configuracoes", icon: Settings, label: "Configurações", adminOnly: true },
+  { to: "/", icon: LayoutDashboard, label: "Dashboard" },
+  { to: "/alunos", icon: Users, label: "Alunos" },
+  { to: "/financeiro", icon: CreditCard, label: "Financeiro" },
+  { to: "/despesas", icon: Receipt, label: "Despesas" },
+  { to: "/planos", icon: Wallet, label: "Planos" },
+  { to: "/modalidades", icon: Swords, label: "Modalidades" },
+  { to: "/horarios", icon: CalendarDays, label: "Horários" },
+  { to: "/presencas", icon: CalendarCheck, label: "Presenças" },
+  { to: "/graduacoes", icon: Award, label: "Graduações" },
+  { to: "/relatorios", icon: BarChart3, label: "Relatórios" },
+  { to: "/notificacoes", icon: Bell, label: "Notificações" },
+  { to: "/equipe", icon: UserCog, label: "Equipe" },
+  { to: "/configuracoes", icon: Settings, label: "Configurações" },
 ] as const;
 
 export function AppLayout({ children }: { children: ReactNode }) {
-  const { profile, isAdmin, signOut } = useAuth();
+  const { profile, roles, permissoes, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const [open, setOpen] = useState(false);
 
-  const items = NAV.filter((n) => !n.adminOnly || isAdmin);
+  // Mesma tabela que o guarda de rota consulta: assim menu e permissão de tela
+  // não podem divergir. Antes o menu usava um booleano `adminOnly` próprio, que
+  // escondia Financeiro e Relatórios de quem o RLS libera (recepção e
+  // financeiro) — os dois papéis existiam sem nenhuma tela para usar.
+  const items = NAV.filter((n) => {
+    const tela = n.to as TelaProtegida;
+    if (!papeisDaTela(tela).some((p) => roles.includes(p))) return false;
+    const modulo = MODULO_DA_TELA[tela];
+    return modulo ? podeVer(permissoes, modulo) : true;
+  });
 
   const handleSignOut = async () => {
     await signOut();

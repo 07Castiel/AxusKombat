@@ -1,3 +1,4 @@
+import { RequireTela } from "@/components/RequireRole";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -19,7 +20,7 @@ import { translateError, firstZodMessage } from "@/lib/errors";
 import { modalidadeSchema } from "@/lib/validators";
 
 export const Route = createFileRoute("/_app/modalidades")({
-  component: ModalidadesPage,
+  component: ModalidadesPageProtegido,
   head: () => ({
     meta: [
       { title: "Modalidades | Axus Kombat" },
@@ -184,5 +185,13 @@ function ModalidadesPage() {
         onConfirm={doDelete}
       />
     </div>
+  );
+}
+
+function ModalidadesPageProtegido() {
+  return (
+    <RequireTela tela="/modalidades">
+      <ModalidadesPage />
+    </RequireTela>
   );
 }

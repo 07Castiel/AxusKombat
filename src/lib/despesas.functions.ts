@@ -1,13 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireActiveSubscription } from "@/lib/subscription";
+import { requirePermissao } from "@/lib/tenant-guard";
 
-async function getTenantId(ctx: { supabase: any; userId: string }) {
-  const { data: prof, error } = await ctx.supabase
-    .from("profiles").select("tenant_id").eq("id", ctx.userId).maybeSingle();
-  if (error || !prof) throw new Error("Perfil não encontrado");
-  return prof.tenant_id as string;
-}
 
 const despesaInput = z.object({
   id: z.string().uuid().optional().nullable(),
@@ -19,11 +15,11 @@ const despesaInput = z.object({
 });
 
 export const upsertDespesa = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveSubscription])
   .inputValidator((i) => despesaInput.parse(i))
   .handler(async ({ data, context }) => {
     const ctx = context as any;
-    const tenantId = await getTenantId(ctx);
+    const tenantId = await requirePermissao(ctx, "pagamentos");
     const payload = {
       tenant_id: tenantId,
       descricao: data.descricao,
@@ -43,11 +39,11 @@ export const upsertDespesa = createServerFn({ method: "POST" })
   });
 
 export const deleteDespesa = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveSubscription])
   .inputValidator((i) => z.object({ id: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
     const ctx = context as any;
-    await getTenantId(ctx);
+    await requirePermissao(ctx, "pagamentos");
     const { error } = await ctx.supabase.from("despesas").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };

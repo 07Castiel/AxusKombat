@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { getRequest } from "@tanstack/react-start/server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const planSchema = z.enum(["start", "pro", "elite"]);
@@ -9,8 +10,27 @@ const checkoutInput = z.object({
   plan: planSchema,
   period: periodSchema,
   isTrial: z.boolean().optional().default(false),
-  origin: z.string().url(),
 });
+
+/**
+ * Origem para onde o Stripe devolve o usuário depois do checkout.
+ *
+ * Antes vinha do cliente como `origin: z.string().url()` e era usada direto em
+ * success_url e cancel_url — qualquer domínio passava, e uma página legítima do
+ * Stripe podia devolver o usuário a um site de terceiros.
+ *
+ * Agora é decidida no servidor: APP_URL quando configurada, senão a origem da
+ * própria requisição. O que o cliente manda é ignorado.
+ */
+function resolverOrigem(): string {
+  const configurada = process.env.APP_URL;
+  if (configurada) return configurada.replace(/\/$/, "");
+  const req = getRequest();
+  const origem = req?.headers.get("origin");
+  if (origem) return origem.replace(/\/$/, "");
+  if (req?.url) return new URL(req.url).origin;
+  throw new Error("Não foi possível determinar a origem para o checkout.");
+}
 
 /**
  * Cria uma Stripe Checkout Session para o tenant do usuário logado.
@@ -61,8 +81,9 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
         .eq("id", tenant.id);
     }
 
-    const successUrl = `${data.origin}/bem-vindo?plano=${data.plan}&trial=${data.isTrial ? "1" : "0"}`;
-    const cancelUrl = `${data.origin}/precos`;
+    const origem = resolverOrigem();
+    const successUrl = `${origem}/bem-vindo?plano=${data.plan}&trial=${data.isTrial ? "1" : "0"}`;
+    const cancelUrl = `${origem}/precos`;
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",

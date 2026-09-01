@@ -1,70 +1,67 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { createHmac, timingSafeEqual } from "crypto";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { comTabelasPendentes } from "@/integrations/supabase/tabelas-pendentes";
 
-const TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
-
-function getSecret() {
-  const s = process.env.MASTER_ADMIN_PASSWORD;
-  if (!s) throw new Error("MASTER_ADMIN_PASSWORD não configurado");
-  return s;
-}
-
-function signToken(): string {
-  const payload = { exp: Date.now() + TOKEN_TTL_MS };
-  const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const sig = createHmac("sha256", getSecret()).update(data).digest("base64url");
-  return `${data}.${sig}`;
-}
-
-function verifyToken(token: string | undefined): boolean {
-  if (!token) return false;
-  const [data, sig] = token.split(".");
-  if (!data || !sig) return false;
-  try {
-    const expected = createHmac("sha256", getSecret()).update(data).digest("base64url");
-    const a = Buffer.from(sig);
-    const b = Buffer.from(expected);
-    if (a.length !== b.length || !timingSafeEqual(a, b)) return false;
-    const payload = JSON.parse(Buffer.from(data, "base64url").toString());
-    return typeof payload.exp === "number" && payload.exp > Date.now();
-  } catch {
-    return false;
-  }
-}
-
-function assertToken(token: string | undefined) {
-  if (!verifyToken(token)) {
-    throw new Error("Sessão de admin mestre inválida ou expirada");
-  }
-}
-
+// Sessao, assinatura e auditoria vivem em master-token.server.ts, carregado com
+// `await import()` dentro de cada handler. Import estatico traria `node:crypto`
+// para o bundle do cliente — foi exatamente o que quebrou o build quando
+// assertToken passou a ser exportado daqui.
 export const masterLogin = createServerFn({ method: "POST" })
   .inputValidator((input) =>
     z.object({ email: z.string().email(), password: z.string().min(1) }).parse(input)
   )
   .handler(async ({ data }) => {
+    const {
+      assertToken: _naoUsado, auditar, ipDaRequisicao, segredoConfere, signToken,
+      MAX_TENTATIVAS_LOGIN, JANELA_LOGIN_MIN,
+    } = await import("@/lib/master-token.server");
+    void _naoUsado;
     const expectedEmail = process.env.MASTER_ADMIN_EMAIL;
     const expectedPassword = process.env.MASTER_ADMIN_PASSWORD;
     if (!expectedEmail || !expectedPassword) {
       throw new Error("Credenciais mestre não configuradas no servidor");
     }
-    const emailOk =
-      data.email.length === expectedEmail.length &&
-      timingSafeEqual(Buffer.from(data.email), Buffer.from(expectedEmail));
-    const pwdOk =
-      data.password.length === expectedPassword.length &&
-      timingSafeEqual(Buffer.from(data.password), Buffer.from(expectedPassword));
-    if (!emailOk || !pwdOk) {
+
+    const ip = ipDaRequisicao();
+    const desde = new Date(Date.now() - JANELA_LOGIN_MIN * 60_000).toISOString();
+
+    // Teto de tentativas (A6). Este endpoint dá acesso a TODAS as academias e
+    // até aqui aceitava força bruta sem qualquer freio.
+    const { count: falhas } = await comTabelasPendentes(supabaseAdmin)
+      .from("master_login_attempts")
+      .select("id", { count: "exact", head: true })
+      .eq("ip", ip)
+      .eq("sucesso", false)
+      .gte("criado_em", desde);
+
+    if ((falhas ?? 0) >= MAX_TENTATIVAS_LOGIN) {
+      await auditar("login mestre bloqueado por excesso de tentativas", { falhas });
+      throw new Error(
+        `Muitas tentativas. Aguarde ${JANELA_LOGIN_MIN} minutos e tente novamente.`,
+      );
+    }
+
+    const emailOk = segredoConfere(data.email.trim().toLowerCase(),
+                                   expectedEmail.trim().toLowerCase());
+    const pwdOk = segredoConfere(data.password, expectedPassword);
+    const ok = emailOk && pwdOk;
+
+    await comTabelasPendentes(supabaseAdmin).from("master_login_attempts").insert({ ip, sucesso: ok });
+
+    if (!ok) {
+      await auditar("login mestre recusado", { tentativas_na_janela: (falhas ?? 0) + 1 });
       throw new Error("E-mail ou senha incorretos");
     }
+
+    await auditar("login mestre autorizado");
     return { token: signToken() };
   });
 
 export const masterListTenants = createServerFn({ method: "POST" })
   .inputValidator((input) => z.object({ token: z.string() }).parse(input))
   .handler(async ({ data }) => {
+    const { assertToken, auditar } = await import("@/lib/master-token.server");
     assertToken(data.token);
     const { data: tenants, error } = await supabaseAdmin
       .from("tenants")
@@ -93,6 +90,7 @@ export const masterGetTenant = createServerFn({ method: "POST" })
     z.object({ token: z.string(), tenantId: z.string().uuid() }).parse(input)
   )
   .handler(async ({ data }) => {
+    const { assertToken, auditar } = await import("@/lib/master-token.server");
     assertToken(data.token);
     const [tenant, alunos, contratos, mensalidades, horarios, graduacoes] = await Promise.all([
       supabaseAdmin.from("tenants").select("*").eq("id", data.tenantId).maybeSingle(),
@@ -147,7 +145,9 @@ export const masterCreateTenant = createServerFn({ method: "POST" })
     z.object({ token: z.string(), tenant: tenantInputSchema }).parse(input)
   )
   .handler(async ({ data }) => {
+    const { assertToken, auditar } = await import("@/lib/master-token.server");
     assertToken(data.token);
+    await auditar("academia criada", { nome: data.tenant.nome });
     const t = data.tenant;
     const cnpj = normalizeCnpj(t.cnpj_cpf);
     await assertCnpjUnique(cnpj);
@@ -175,7 +175,9 @@ export const masterUpdateTenant = createServerFn({ method: "POST" })
     z.object({ token: z.string(), tenantId: z.string().uuid(), tenant: tenantInputSchema }).parse(input)
   )
   .handler(async ({ data }) => {
+    const { assertToken, auditar } = await import("@/lib/master-token.server");
     assertToken(data.token);
+    await auditar("academia alterada", { tenantId: data.tenantId });
     const t = data.tenant;
     const cnpj = normalizeCnpj(t.cnpj_cpf);
     await assertCnpjUnique(cnpj, data.tenantId);
@@ -202,7 +204,9 @@ export const masterToggleTenant = createServerFn({ method: "POST" })
     z.object({ token: z.string(), tenantId: z.string().uuid(), ativo: z.boolean() }).parse(input)
   )
   .handler(async ({ data }) => {
+    const { assertToken, auditar } = await import("@/lib/master-token.server");
     assertToken(data.token);
+    await auditar(data.ativo ? "academia reativada" : "academia desativada", { tenantId: data.tenantId });
     const { error } = await supabaseAdmin.from("tenants").update({ ativo: data.ativo }).eq("id", data.tenantId);
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -213,53 +217,49 @@ export const masterDeleteTenant = createServerFn({ method: "POST" })
     z.object({ token: z.string(), tenantId: z.string().uuid() }).parse(input)
   )
   .handler(async ({ data }) => {
+    const { assertToken, auditar } = await import("@/lib/master-token.server");
     assertToken(data.token);
     const tenantId = data.tenantId;
+    // Registrado ANTES: se a exclusão falhar no meio, o rastro fica.
+    await auditar("EXCLUSAO de academia iniciada", { tenantId });
 
-    // Tables to wipe BEFORE profiles/user_roles/tenants, ordered by dependency.
-    // historico_graduacoes & notificacoes may reference alunos; delete first.
-    const dependentTables = [
-      "historico_graduacoes",
-      "notificacoes",
-      "mensalidades",
-      "contratos",
-      "despesas",
-      "graduacoes",
-      "horarios",
-      "alunos",
-      "modalidades",
-      "planos",
-      "whatsapp_config",
-    ] as const;
+    // Toda a exclusão no banco acontece dentro de master_excluir_tenant, que é
+    // uma única transação (M12). A versão anterior apagava onze tabelas em
+    // sequência com throw próprio em cada passo: uma falha no meio deixava a
+    // academia pela metade, com usuários que ainda logavam e dados já removidos.
+    //
+    // A ordem das exclusões vive na função, não aqui, porque três FKs são
+    // ON DELETE RESTRICT e ditam quem sai primeiro.
+    const { data: resultado, error } = await comTabelasPendentes(supabaseAdmin)
+      .rpc("master_excluir_tenant", { p_tenant_id: tenantId });
+    if (error) throw new Error(`Falha ao excluir a academia: ${error.message}`);
 
-    for (const tbl of dependentTables) {
-      const { error } = await supabaseAdmin.from(tbl).delete().eq("tenant_id", tenantId);
-      if (error) throw new Error(`Falha ao remover ${tbl}: ${error.message}`);
-    }
+    const userIds = resultado?.usuarios ?? [];
 
-    // Collect users of this tenant before removing profiles/roles.
-    const { data: profs, error: pErr } = await supabaseAdmin
-      .from("profiles").select("id").eq("tenant_id", tenantId);
-    if (pErr) throw new Error(pErr.message);
-    const userIds = (profs ?? []).map((p) => p.id);
-
-    const { error: urErr } = await supabaseAdmin
-      .from("user_roles").delete().eq("tenant_id", tenantId);
-    if (urErr) throw new Error(urErr.message);
-
-    const { error: profDelErr } = await supabaseAdmin
-      .from("profiles").delete().eq("tenant_id", tenantId);
-    if (profDelErr) throw new Error(profDelErr.message);
-
-    // Remove auth users so they can no longer log in.
+    // auth.users não está ao alcance da transação: só a API de admin remove.
+    // Neste ponto os dados já foram apagados de forma atômica, então uma falha
+    // aqui deixa no máximo um usuário órfão no Auth — que não consegue mais
+    // usar o sistema, já que perfil e papel não existem mais. Registramos quais
+    // ficaram, em vez de abortar e dar a impressão de que nada foi excluído.
+    const naoRemovidos: string[] = [];
     for (const uid of userIds) {
-      const { error } = await supabaseAdmin.auth.admin.deleteUser(uid);
-      if (error && !/not[_ ]?found/i.test(error.message)) {
-        throw new Error(`Falha ao remover usuário ${uid}: ${error.message}`);
+      const { error: delErr } = await supabaseAdmin.auth.admin.deleteUser(uid);
+      if (delErr && !/not[_ ]?found/i.test(delErr.message)) {
+        naoRemovidos.push(uid);
+        console.error(`[masterDeleteTenant] usuário ${uid} não removido do Auth:`, delErr.message);
       }
     }
 
-    const { error: tErr } = await supabaseAdmin.from("tenants").delete().eq("id", tenantId);
-    if (tErr) throw new Error(tErr.message);
-    return { ok: true, removedUsers: userIds.length };
+    await auditar("EXCLUSAO de academia concluida", {
+      tenantId,
+      nome: resultado?.nome ?? null,
+      usuariosRemovidos: userIds.length - naoRemovidos.length,
+      usuariosNaoRemovidos: naoRemovidos,
+    });
+
+    return {
+      ok: true,
+      removedUsers: userIds.length - naoRemovidos.length,
+      usuariosNaoRemovidos: naoRemovidos,
+    };
   });

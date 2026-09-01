@@ -1,15 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireActiveSubscription } from "@/lib/subscription";
+import { requireAdmin } from "@/lib/tenant-guard";
 
-async function getTenantAdmin(ctx: { supabase: any; userId: string }): Promise<string> {
-  const { data: roles, error } = await ctx.supabase
-    .from("user_roles").select("role, tenant_id").eq("user_id", ctx.userId);
-  if (error) throw new Error(error.message);
-  const admin = (roles ?? []).find((r: any) => r.role === "admin");
-  if (!admin) throw new Error("Apenas administradores podem acessar esta área");
-  return admin.tenant_id as string;
-}
 
 function formatBrPhone(num: string | null): string | null {
   if (!num) return null;
@@ -26,7 +20,7 @@ function formatBrPhone(num: string | null): string | null {
 export const getWhatsappConnection = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const tenantId = await getTenantAdmin(context as any);
+    const tenantId = await requireAdmin(context as any, "Apenas administradores podem gerenciar o WhatsApp");
     const supabase = (context as any).supabase;
     const { data, error } = await supabase
       .from("whatsapp_connections").select("*").eq("tenant_id", tenantId).maybeSingle();
@@ -51,9 +45,9 @@ export const getWhatsappConnection = createServerFn({ method: "POST" })
   });
 
 export const connectWhatsapp = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveSubscription])
   .handler(async ({ context }) => {
-    const tenantId = await getTenantAdmin(context as any);
+    const tenantId = await requireAdmin(context as any, "Apenas administradores podem gerenciar o WhatsApp");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const evo = await import("@/lib/evolution.server");
 
@@ -125,7 +119,7 @@ export const connectWhatsapp = createServerFn({ method: "POST" })
 export const refreshWhatsappStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const tenantId = await getTenantAdmin(context as any);
+    const tenantId = await requireAdmin(context as any, "Apenas administradores podem gerenciar o WhatsApp");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const evo = await import("@/lib/evolution.server");
 
@@ -167,9 +161,9 @@ export const refreshWhatsappStatus = createServerFn({ method: "POST" })
   });
 
 export const disconnectWhatsapp = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveSubscription])
   .handler(async ({ context }) => {
-    const tenantId = await getTenantAdmin(context as any);
+    const tenantId = await requireAdmin(context as any, "Apenas administradores podem gerenciar o WhatsApp");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const evo = await import("@/lib/evolution.server");
 
@@ -185,10 +179,10 @@ export const disconnectWhatsapp = createServerFn({ method: "POST" })
   });
 
 export const sendWhatsappTest = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveSubscription])
   .inputValidator((input) => z.object({ to: z.string().trim().min(8).max(40) }).parse(input))
   .handler(async ({ data, context }) => {
-    const tenantId = await getTenantAdmin(context as any);
+    const tenantId = await requireAdmin(context as any, "Apenas administradores podem gerenciar o WhatsApp");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const evo = await import("@/lib/evolution.server");
 

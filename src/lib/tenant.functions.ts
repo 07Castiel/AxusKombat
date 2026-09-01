@@ -1,21 +1,15 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireActiveSubscription } from "@/lib/subscription";
+import { requireAdmin } from "@/lib/tenant-guard";
 
-async function getTenantAdmin(ctx: { supabase: any; userId: string }) {
-  const { data: roles, error } = await ctx.supabase
-    .from("user_roles").select("role, tenant_id").eq("user_id", ctx.userId);
-  if (error) throw new Error(error.message);
-  const admin = (roles ?? []).find((r: any) => r.role === "admin");
-  if (!admin) throw new Error("Apenas administradores podem alterar a academia");
-  return admin.tenant_id as string;
-}
 
 export const getTenantConfig = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const ctx = context as any;
-    const tenantId = await getTenantAdmin(ctx);
+    const tenantId = await requireAdmin(ctx, "Apenas administradores podem alterar a academia");
     const { data, error } = await ctx.supabase
       .from("tenants").select("*").eq("id", tenantId).maybeSingle();
     if (error) throw new Error(error.message);
@@ -23,7 +17,7 @@ export const getTenantConfig = createServerFn({ method: "POST" })
   });
 
 export const updateTenantConfig = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveSubscription])
   .inputValidator((i) => z.object({
     nome: z.string().min(2).max(120),
     nome_fantasia: z.string().max(120).optional().nullable(),
@@ -41,7 +35,7 @@ export const updateTenantConfig = createServerFn({ method: "POST" })
   }).parse(i))
   .handler(async ({ data, context }) => {
     const ctx = context as any;
-    const tenantId = await getTenantAdmin(ctx);
+    const tenantId = await requireAdmin(ctx, "Apenas administradores podem alterar a academia");
     const { error } = await ctx.supabase.from("tenants").update({
       nome: data.nome,
       nome_fantasia: data.nome_fantasia || null,
@@ -62,7 +56,7 @@ export const updateTenantConfig = createServerFn({ method: "POST" })
   });
 
 export const gerarPortalToken = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveSubscription])
   .inputValidator((i) => z.object({ aluno_id: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
     const ctx = context as any;
