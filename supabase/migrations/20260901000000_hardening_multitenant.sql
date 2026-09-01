@@ -1,4 +1,15 @@
 -- ============================================================================
+-- APLICADA EM 01/09/2026 pelo SQL editor do Lovable Cloud, nao pelo sistema de
+-- migrations. Fica registrada aqui para o repositorio refletir o schema real.
+--
+-- E idempotente (DROP ... IF EXISTS antes de cada CREATE, CREATE OR REPLACE nas
+-- funcoes), entao um `db push` que a execute de novo nao causa dano.
+--
+-- Verificacao: supabase/HARDENING_3_VERIFICAR.sql  -> todas as linhas OK
+-- Desfazer:    supabase/HARDENING_2_ROLLBACK.sql
+-- ============================================================================
+
+-- ============================================================================
 -- HARDENING MULTI-TENANT — fecha C2, C3, C4, C5(SQL), M3 e M4
 --
 -- PREFLIGHT EXECUTADO EM 01/09/2026 — LIBERADO PARA APLICAR.
