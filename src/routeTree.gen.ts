@@ -9,47 +9,38 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as AppRouteImport } from './routes/_app'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as PrecosRouteImport } from './routes/precos'
-import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
-import { Route as AppIndexRouteImport } from './routes/_app/index'
-import { Route as AppAlunosRouteImport } from './routes/_app/alunos'
-import { Route as AppBemVindoRouteImport } from './routes/_app/bem-vindo'
-import { Route as AppConfiguracoesRouteImport } from './routes/_app/configuracoes'
-import { Route as AppDespesasRouteImport } from './routes/_app/despesas'
-import { Route as AppEquipeRouteImport } from './routes/_app/equipe'
-import { Route as AppFinanceiroRouteImport } from './routes/_app/financeiro'
-import { Route as AppGraduacoesRouteImport } from './routes/_app/graduacoes'
-import { Route as AppHorariosRouteImport } from './routes/_app/horarios'
-import { Route as AppModalidadesRouteImport } from './routes/_app/modalidades'
-import { Route as AppNotificacoesRouteImport } from './routes/_app/notificacoes'
-import { Route as AppPlanosRouteImport } from './routes/_app/planos'
-import { Route as AppPresencasRouteImport } from './routes/_app/presencas'
-import { Route as AppRelatoriosRouteImport } from './routes/_app/relatorios'
+import { Route as SignupRouteImport } from './routes/signup'
+import { Route as PrecosRouteImport } from './routes/precos'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as AppRouteImport } from './routes/_app'
 import { Route as AdminMasterIndexRouteImport } from './routes/admin-master.index'
-import { Route as AdminMasterAcessosRouteImport } from './routes/admin-master.acessos'
-import { Route as AdminMasterDashboardRouteImport } from './routes/admin-master.dashboard'
+import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as PortalTokenRouteImport } from './routes/portal.$token'
-import { Route as AdminMasterTenantIdRouteImport } from './routes/admin-master.tenant.$id'
-import { Route as ApiPublicStripeWebhookRouteImport } from './routes/api/public/stripe-webhook'
+import { Route as AdminMasterDashboardRouteImport } from './routes/admin-master.dashboard'
+import { Route as AdminMasterAcessosRouteImport } from './routes/admin-master.acessos'
+import { Route as AppRelatoriosRouteImport } from './routes/_app/relatorios'
+import { Route as AppPresencasRouteImport } from './routes/_app/presencas'
+import { Route as AppPlanosRouteImport } from './routes/_app/planos'
+import { Route as AppNotificacoesRouteImport } from './routes/_app/notificacoes'
+import { Route as AppModalidadesRouteImport } from './routes/_app/modalidades'
+import { Route as AppHorariosRouteImport } from './routes/_app/horarios'
+import { Route as AppGraduacoesRouteImport } from './routes/_app/graduacoes'
+import { Route as AppFinanceiroRouteImport } from './routes/_app/financeiro'
+import { Route as AppEquipeRouteImport } from './routes/_app/equipe'
+import { Route as AppDespesasRouteImport } from './routes/_app/despesas'
+import { Route as AppConfiguracoesRouteImport } from './routes/_app/configuracoes'
+import { Route as AppBemVindoRouteImport } from './routes/_app/bem-vindo'
+import { Route as AppAlunosRouteImport } from './routes/_app/alunos'
 import { Route as ApiPublicTrackVisitRouteImport } from './routes/api/public/track-visit'
-import { Route as ApiPublicHooksDispatchNotificationsRouteImport } from './routes/api/public/hooks/dispatch-notifications'
+import { Route as ApiPublicStripeWebhookRouteImport } from './routes/api/public/stripe-webhook'
+import { Route as AdminMasterTenantIdRouteImport } from './routes/admin-master.tenant.$id'
 import { Route as ApiPublicHooksNotifyMensalidadesRouteImport } from './routes/api/public/hooks/notify-mensalidades'
+import { Route as ApiPublicHooksDispatchNotificationsRouteImport } from './routes/api/public/hooks/dispatch-notifications'
 
-const AppRoute = AppRouteImport.update({
-  id: '/_app',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PrecosRoute = PrecosRouteImport.update({
-  id: '/precos',
-  path: '/precos',
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignupRoute = SignupRouteImport.update({
@@ -57,9 +48,23 @@ const SignupRoute = SignupRouteImport.update({
   path: '/signup',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
-  id: '/sitemap.xml',
-  path: '/sitemap.xml',
+const PrecosRoute = PrecosRouteImport.update({
+  id: '/precos',
+  path: '/precos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppRoute = AppRouteImport.update({
+  id: '/_app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminMasterIndexRoute = AdminMasterIndexRouteImport.update({
+  id: '/admin-master/',
+  path: '/admin-master/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppIndexRoute = AppIndexRouteImport.update({
@@ -67,79 +72,9 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
-const AppAlunosRoute = AppAlunosRouteImport.update({
-  id: '/alunos',
-  path: '/alunos',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppBemVindoRoute = AppBemVindoRouteImport.update({
-  id: '/bem-vindo',
-  path: '/bem-vindo',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppConfiguracoesRoute = AppConfiguracoesRouteImport.update({
-  id: '/configuracoes',
-  path: '/configuracoes',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppDespesasRoute = AppDespesasRouteImport.update({
-  id: '/despesas',
-  path: '/despesas',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppEquipeRoute = AppEquipeRouteImport.update({
-  id: '/equipe',
-  path: '/equipe',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppFinanceiroRoute = AppFinanceiroRouteImport.update({
-  id: '/financeiro',
-  path: '/financeiro',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppGraduacoesRoute = AppGraduacoesRouteImport.update({
-  id: '/graduacoes',
-  path: '/graduacoes',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppHorariosRoute = AppHorariosRouteImport.update({
-  id: '/horarios',
-  path: '/horarios',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppModalidadesRoute = AppModalidadesRouteImport.update({
-  id: '/modalidades',
-  path: '/modalidades',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppNotificacoesRoute = AppNotificacoesRouteImport.update({
-  id: '/notificacoes',
-  path: '/notificacoes',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppPlanosRoute = AppPlanosRouteImport.update({
-  id: '/planos',
-  path: '/planos',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppPresencasRoute = AppPresencasRouteImport.update({
-  id: '/presencas',
-  path: '/presencas',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppRelatoriosRoute = AppRelatoriosRouteImport.update({
-  id: '/relatorios',
-  path: '/relatorios',
-  getParentRoute: () => AppRoute,
-} as any)
-const AdminMasterIndexRoute = AdminMasterIndexRouteImport.update({
-  id: '/admin-master/',
-  path: '/admin-master/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminMasterAcessosRoute = AdminMasterAcessosRouteImport.update({
-  id: '/admin-master/acessos',
-  path: '/admin-master/acessos',
+const PortalTokenRoute = PortalTokenRouteImport.update({
+  id: '/portal/$token',
+  path: '/portal/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminMasterDashboardRoute = AdminMasterDashboardRouteImport.update({
@@ -147,14 +82,79 @@ const AdminMasterDashboardRoute = AdminMasterDashboardRouteImport.update({
   path: '/admin-master/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PortalTokenRoute = PortalTokenRouteImport.update({
-  id: '/portal/$token',
-  path: '/portal/$token',
+const AdminMasterAcessosRoute = AdminMasterAcessosRouteImport.update({
+  id: '/admin-master/acessos',
+  path: '/admin-master/acessos',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminMasterTenantIdRoute = AdminMasterTenantIdRouteImport.update({
-  id: '/admin-master/tenant/$id',
-  path: '/admin-master/tenant/$id',
+const AppRelatoriosRoute = AppRelatoriosRouteImport.update({
+  id: '/relatorios',
+  path: '/relatorios',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPresencasRoute = AppPresencasRouteImport.update({
+  id: '/presencas',
+  path: '/presencas',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPlanosRoute = AppPlanosRouteImport.update({
+  id: '/planos',
+  path: '/planos',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppNotificacoesRoute = AppNotificacoesRouteImport.update({
+  id: '/notificacoes',
+  path: '/notificacoes',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppModalidadesRoute = AppModalidadesRouteImport.update({
+  id: '/modalidades',
+  path: '/modalidades',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppHorariosRoute = AppHorariosRouteImport.update({
+  id: '/horarios',
+  path: '/horarios',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppGraduacoesRoute = AppGraduacoesRouteImport.update({
+  id: '/graduacoes',
+  path: '/graduacoes',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppFinanceiroRoute = AppFinanceiroRouteImport.update({
+  id: '/financeiro',
+  path: '/financeiro',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppEquipeRoute = AppEquipeRouteImport.update({
+  id: '/equipe',
+  path: '/equipe',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDespesasRoute = AppDespesasRouteImport.update({
+  id: '/despesas',
+  path: '/despesas',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppConfiguracoesRoute = AppConfiguracoesRouteImport.update({
+  id: '/configuracoes',
+  path: '/configuracoes',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppBemVindoRoute = AppBemVindoRouteImport.update({
+  id: '/bem-vindo',
+  path: '/bem-vindo',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAlunosRoute = AppAlunosRouteImport.update({
+  id: '/alunos',
+  path: '/alunos',
+  getParentRoute: () => AppRoute,
+} as any)
+const ApiPublicTrackVisitRoute = ApiPublicTrackVisitRouteImport.update({
+  id: '/api/public/track-visit',
+  path: '/api/public/track-visit',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicStripeWebhookRoute = ApiPublicStripeWebhookRouteImport.update({
@@ -162,21 +162,21 @@ const ApiPublicStripeWebhookRoute = ApiPublicStripeWebhookRouteImport.update({
   path: '/api/public/stripe-webhook',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicTrackVisitRoute = ApiPublicTrackVisitRouteImport.update({
-  id: '/api/public/track-visit',
-  path: '/api/public/track-visit',
+const AdminMasterTenantIdRoute = AdminMasterTenantIdRouteImport.update({
+  id: '/admin-master/tenant/$id',
+  path: '/admin-master/tenant/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicHooksDispatchNotificationsRoute =
-  ApiPublicHooksDispatchNotificationsRouteImport.update({
-    id: '/api/public/hooks/dispatch-notifications',
-    path: '/api/public/hooks/dispatch-notifications',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const ApiPublicHooksNotifyMensalidadesRoute =
   ApiPublicHooksNotifyMensalidadesRouteImport.update({
     id: '/api/public/hooks/notify-mensalidades',
     path: '/api/public/hooks/notify-mensalidades',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicHooksDispatchNotificationsRoute =
+  ApiPublicHooksDispatchNotificationsRouteImport.update({
+    id: '/api/public/hooks/dispatch-notifications',
+    path: '/api/public/hooks/dispatch-notifications',
     getParentRoute: () => rootRouteImport,
   } as any)
 
@@ -379,25 +379,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/_app': {
-      id: '/_app'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof AppRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/precos': {
-      id: '/precos'
-      path: '/precos'
-      fullPath: '/precos'
-      preLoaderRoute: typeof PrecosRouteImport
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/signup': {
@@ -407,11 +393,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SignupRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/sitemap.xml': {
-      id: '/sitemap.xml'
-      path: '/sitemap.xml'
-      fullPath: '/sitemap.xml'
-      preLoaderRoute: typeof SitemapDotxmlRouteImport
+    '/precos': {
+      id: '/precos'
+      path: '/precos'
+      fullPath: '/precos'
+      preLoaderRoute: typeof PrecosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_app': {
+      id: '/_app'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin-master/': {
+      id: '/admin-master/'
+      path: '/admin-master'
+      fullPath: '/admin-master/'
+      preLoaderRoute: typeof AdminMasterIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/': {
@@ -421,109 +428,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/alunos': {
-      id: '/_app/alunos'
-      path: '/alunos'
-      fullPath: '/alunos'
-      preLoaderRoute: typeof AppAlunosRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/bem-vindo': {
-      id: '/_app/bem-vindo'
-      path: '/bem-vindo'
-      fullPath: '/bem-vindo'
-      preLoaderRoute: typeof AppBemVindoRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/configuracoes': {
-      id: '/_app/configuracoes'
-      path: '/configuracoes'
-      fullPath: '/configuracoes'
-      preLoaderRoute: typeof AppConfiguracoesRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/despesas': {
-      id: '/_app/despesas'
-      path: '/despesas'
-      fullPath: '/despesas'
-      preLoaderRoute: typeof AppDespesasRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/equipe': {
-      id: '/_app/equipe'
-      path: '/equipe'
-      fullPath: '/equipe'
-      preLoaderRoute: typeof AppEquipeRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/financeiro': {
-      id: '/_app/financeiro'
-      path: '/financeiro'
-      fullPath: '/financeiro'
-      preLoaderRoute: typeof AppFinanceiroRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/graduacoes': {
-      id: '/_app/graduacoes'
-      path: '/graduacoes'
-      fullPath: '/graduacoes'
-      preLoaderRoute: typeof AppGraduacoesRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/horarios': {
-      id: '/_app/horarios'
-      path: '/horarios'
-      fullPath: '/horarios'
-      preLoaderRoute: typeof AppHorariosRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/modalidades': {
-      id: '/_app/modalidades'
-      path: '/modalidades'
-      fullPath: '/modalidades'
-      preLoaderRoute: typeof AppModalidadesRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/notificacoes': {
-      id: '/_app/notificacoes'
-      path: '/notificacoes'
-      fullPath: '/notificacoes'
-      preLoaderRoute: typeof AppNotificacoesRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/planos': {
-      id: '/_app/planos'
-      path: '/planos'
-      fullPath: '/planos'
-      preLoaderRoute: typeof AppPlanosRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/presencas': {
-      id: '/_app/presencas'
-      path: '/presencas'
-      fullPath: '/presencas'
-      preLoaderRoute: typeof AppPresencasRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/relatorios': {
-      id: '/_app/relatorios'
-      path: '/relatorios'
-      fullPath: '/relatorios'
-      preLoaderRoute: typeof AppRelatoriosRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/admin-master/': {
-      id: '/admin-master/'
-      path: '/admin-master'
-      fullPath: '/admin-master/'
-      preLoaderRoute: typeof AdminMasterIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin-master/acessos': {
-      id: '/admin-master/acessos'
-      path: '/admin-master/acessos'
-      fullPath: '/admin-master/acessos'
-      preLoaderRoute: typeof AdminMasterAcessosRouteImport
+    '/portal/$token': {
+      id: '/portal/$token'
+      path: '/portal/$token'
+      fullPath: '/portal/$token'
+      preLoaderRoute: typeof PortalTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin-master/dashboard': {
@@ -533,18 +442,109 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminMasterDashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/portal/$token': {
-      id: '/portal/$token'
-      path: '/portal/$token'
-      fullPath: '/portal/$token'
-      preLoaderRoute: typeof PortalTokenRouteImport
+    '/admin-master/acessos': {
+      id: '/admin-master/acessos'
+      path: '/admin-master/acessos'
+      fullPath: '/admin-master/acessos'
+      preLoaderRoute: typeof AdminMasterAcessosRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin-master/tenant/$id': {
-      id: '/admin-master/tenant/$id'
-      path: '/admin-master/tenant/$id'
-      fullPath: '/admin-master/tenant/$id'
-      preLoaderRoute: typeof AdminMasterTenantIdRouteImport
+    '/_app/relatorios': {
+      id: '/_app/relatorios'
+      path: '/relatorios'
+      fullPath: '/relatorios'
+      preLoaderRoute: typeof AppRelatoriosRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/presencas': {
+      id: '/_app/presencas'
+      path: '/presencas'
+      fullPath: '/presencas'
+      preLoaderRoute: typeof AppPresencasRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/planos': {
+      id: '/_app/planos'
+      path: '/planos'
+      fullPath: '/planos'
+      preLoaderRoute: typeof AppPlanosRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/notificacoes': {
+      id: '/_app/notificacoes'
+      path: '/notificacoes'
+      fullPath: '/notificacoes'
+      preLoaderRoute: typeof AppNotificacoesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/modalidades': {
+      id: '/_app/modalidades'
+      path: '/modalidades'
+      fullPath: '/modalidades'
+      preLoaderRoute: typeof AppModalidadesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/horarios': {
+      id: '/_app/horarios'
+      path: '/horarios'
+      fullPath: '/horarios'
+      preLoaderRoute: typeof AppHorariosRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/graduacoes': {
+      id: '/_app/graduacoes'
+      path: '/graduacoes'
+      fullPath: '/graduacoes'
+      preLoaderRoute: typeof AppGraduacoesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/financeiro': {
+      id: '/_app/financeiro'
+      path: '/financeiro'
+      fullPath: '/financeiro'
+      preLoaderRoute: typeof AppFinanceiroRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/equipe': {
+      id: '/_app/equipe'
+      path: '/equipe'
+      fullPath: '/equipe'
+      preLoaderRoute: typeof AppEquipeRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/despesas': {
+      id: '/_app/despesas'
+      path: '/despesas'
+      fullPath: '/despesas'
+      preLoaderRoute: typeof AppDespesasRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/configuracoes': {
+      id: '/_app/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/configuracoes'
+      preLoaderRoute: typeof AppConfiguracoesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/bem-vindo': {
+      id: '/_app/bem-vindo'
+      path: '/bem-vindo'
+      fullPath: '/bem-vindo'
+      preLoaderRoute: typeof AppBemVindoRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/alunos': {
+      id: '/_app/alunos'
+      path: '/alunos'
+      fullPath: '/alunos'
+      preLoaderRoute: typeof AppAlunosRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/api/public/track-visit': {
+      id: '/api/public/track-visit'
+      path: '/api/public/track-visit'
+      fullPath: '/api/public/track-visit'
+      preLoaderRoute: typeof ApiPublicTrackVisitRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/stripe-webhook': {
@@ -554,18 +554,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicStripeWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/track-visit': {
-      id: '/api/public/track-visit'
-      path: '/api/public/track-visit'
-      fullPath: '/api/public/track-visit'
-      preLoaderRoute: typeof ApiPublicTrackVisitRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/hooks/dispatch-notifications': {
-      id: '/api/public/hooks/dispatch-notifications'
-      path: '/api/public/hooks/dispatch-notifications'
-      fullPath: '/api/public/hooks/dispatch-notifications'
-      preLoaderRoute: typeof ApiPublicHooksDispatchNotificationsRouteImport
+    '/admin-master/tenant/$id': {
+      id: '/admin-master/tenant/$id'
+      path: '/admin-master/tenant/$id'
+      fullPath: '/admin-master/tenant/$id'
+      preLoaderRoute: typeof AdminMasterTenantIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/hooks/notify-mensalidades': {
@@ -573,6 +566,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/hooks/notify-mensalidades'
       fullPath: '/api/public/hooks/notify-mensalidades'
       preLoaderRoute: typeof ApiPublicHooksNotifyMensalidadesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/hooks/dispatch-notifications': {
+      id: '/api/public/hooks/dispatch-notifications'
+      path: '/api/public/hooks/dispatch-notifications'
+      fullPath: '/api/public/hooks/dispatch-notifications'
+      preLoaderRoute: typeof ApiPublicHooksDispatchNotificationsRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
