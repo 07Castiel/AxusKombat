@@ -21,20 +21,21 @@ import { createMiddleware } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 /** Situações em que a academia pode operar normalmente. */
-const STATUS_LIBERADOS = new Set(["active", "trialing"]);
+const STATUS_LIBERADOS = new Set(["active", "past_due", "trialing"]);
 
-export const MSG_PENDENTE =
-  "Sua assinatura ainda não foi concluída. Finalize o pagamento para voltar a usar o sistema.";
 export const MSG_EXPIRADA =
   "Seu período de teste terminou. Escolha um plano para continuar usando o sistema.";
 export const MSG_SUSPENSA =
   "Esta academia está suspensa. Fale com o suporte para reativar o acesso.";
+/** Mantida por compatibilidade com importações antigas. */
+export const MSG_PENDENTE = MSG_EXPIRADA;
 
 export type TenantSituacao = {
   tenantId: string;
   status: string;
   ativo: boolean;
   liberado: boolean;
+  trialEndsAt: string | null;
 };
 
 /**
@@ -59,7 +60,7 @@ export async function lerSituacaoTenant(ctx: {
 
   const { data: tenant, error: erroTenant } = await ctx.supabase
     .from("tenants")
-    .select("id, status, ativo")
+    .select("id, status, ativo, trial_ends_at")
     .eq("id", tenantId)
     .maybeSingle();
   // Falha de leitura não é o mesmo que assinatura vencida. Sem esta distinção,
@@ -70,15 +71,29 @@ export async function lerSituacaoTenant(ctx: {
 
   const status = (tenant.status as string) ?? "active";
   const ativo = tenant.ativo !== false;
-  return { tenantId, status, ativo, liberado: ativo && STATUS_LIBERADOS.has(status) };
+  const trialEndsAt = (tenant.trial_ends_at as string | null) ?? null;
+  return {
+    tenantId,
+    status,
+    ativo,
+    trialEndsAt,
+    liberado: ativo && STATUS_LIBERADOS.has(status) && trialValido(status, trialEndsAt),
+  };
+}
+
+/** Trial só vale enquanto a data de término não passou. */
+export function trialValido(status: string, trialEndsAt: string | null): boolean {
+  if (status !== "trialing") return true;
+  if (!trialEndsAt) return true;
+  return new Date(trialEndsAt).getTime() > Date.now();
 }
 
 /** Traduz a situação em mensagem para o usuário. */
 export function mensagemBloqueio(s: TenantSituacao): string {
   if (!s.ativo) return MSG_SUSPENSA;
-  if (s.status === "pending") return MSG_PENDENTE;
   return MSG_EXPIRADA;
 }
+
 
 /**
  * Exige assinatura válida. Use em toda server function que ESCREVE.

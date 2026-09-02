@@ -129,8 +129,7 @@ function PrecosPage() {
   const [period, setPeriod] = useState<Period>("monthly");
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<PlanKey>("pro");
-  const [isTrial, setIsTrial] = useState(false);
-  const [initialStep, setInitialStep] = useState<1 | 2 | 3>(1);
+  const [modo, setModo] = useState<"trial" | "paid">("paid");
   const [tenantStatus, setTenantStatus] = useState<{
     status: string;
     plan: string | null;
@@ -150,35 +149,15 @@ function PrecosPage() {
       .catch(() => {});
   }, [user, getStatus]);
 
-  // Banner: retomar abre o modal direto no Step 2 com o plano salvo.
-  //
-  // Roda UMA vez. Antes, as dependências incluíam `user`, cujo objeto muda a
-  // cada renovação de token — o modal reabria sozinho e sobrescrevia a escolha
-  // de quem tinha acabado de clicar em "Começar trial gratuito".
-  const retomarAplicado = useRef(false);
-  useEffect(() => {
-    if (retomarAplicado.current) return;
-    if (search.retomar && user && tenantStatus && tenantStatus.status === "pending") {
-      retomarAplicado.current = true;
-      setSelectedPlan((tenantStatus.plan as PlanKey) || "pro");
-      setPeriod((tenantStatus.plan_period as Period) || "monthly");
-      setIsTrial(tenantStatus.is_trial);
-      setInitialStep(2);
-      setModalOpen(true);
-    }
-  }, [search.retomar, user, tenantStatus]);
-
   const openCheckout = (plan: PlanKey, trial = false) => {
     setSelectedPlan(plan);
-    setIsTrial(trial);
-    setInitialStep(user ? 2 : 1);
+    setModo(trial ? "trial" : "paid");
     setModalOpen(true);
   };
 
   const isCurrentPlan = (key: PlanKey) =>
-    tenantStatus &&
-    ["active", "trialing"].includes(tenantStatus.status) &&
-    tenantStatus.plan === key;
+    tenantStatus && tenantStatus.status === "active" && tenantStatus.plan === key;
+
 
   return (
     <div

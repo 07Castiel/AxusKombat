@@ -5,11 +5,15 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 const planSchema = z.enum(["start", "pro", "elite"]);
 const periodSchema = z.enum(["monthly", "annual"]);
 
+// O teste gratuito de 14 dias passou a ser controlado pelo nosso banco
+// (tenants.status = 'trialing' + trial_ends_at). O Stripe só entra quando o
+// usuário decide assinar de verdade — por isso não existe mais `isTrial` aqui
+// nem `trial_period_days` na sessão de checkout.
 const checkoutInput = z.object({
   plan: planSchema,
   period: periodSchema,
-  isTrial: z.boolean().optional().default(false),
 });
+
 
 /**
  * Origem para onde o Stripe devolve o usuário depois do checkout.
@@ -87,7 +91,7 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
     }
 
     const origem = await resolverOrigem();
-    const successUrl = `${origem}/bem-vindo?plano=${data.plan}&trial=${data.isTrial ? "1" : "0"}`;
+    const successUrl = `${origem}/bem-vindo?plano=${data.plan}&trial=0`;
     const cancelUrl = `${origem}/precos`;
 
     const session = await stripe.checkout.sessions.create({
@@ -101,7 +105,7 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
         tenant_id: tenant.id,
         plan: data.plan,
         plan_period: data.period,
-        is_trial: data.isTrial ? "1" : "0",
+        is_trial: "0",
       },
       subscription_data: {
         metadata: {
@@ -109,14 +113,13 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
           plan: data.plan,
           plan_period: data.period,
         },
-        ...(data.isTrial ? { trial_period_days: 14 } : {}),
       },
-      ...(data.isTrial ? { payment_method_collection: "if_required" as const } : {}),
     });
 
     if (!session.url) throw new Error("Stripe não retornou URL de checkout.");
     return { url: session.url };
   });
+
 
 /**
  * Marca o onboarding como concluído.
