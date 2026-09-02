@@ -5,11 +5,15 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 const planSchema = z.enum(["start", "pro", "elite"]);
 const periodSchema = z.enum(["monthly", "annual"]);
 
+// O teste gratuito de 14 dias passou a ser controlado pelo nosso banco
+// (tenants.status = 'trialing' + trial_ends_at). O Stripe só entra quando o
+// usuário decide assinar de verdade — por isso não existe mais `isTrial` aqui
+// nem `trial_period_days` na sessão de checkout.
 const checkoutInput = z.object({
   plan: planSchema,
   period: periodSchema,
-  isTrial: z.boolean().optional().default(false),
 });
+
 
 /**
  * Origem para onde o Stripe devolve o usuário depois do checkout.
