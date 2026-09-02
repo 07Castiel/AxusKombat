@@ -1232,6 +1232,7 @@ export type Database = {
         Args: { p_mensalidade_id: string }
         Returns: number
       }
+      assinatura_ativa: { Args: never; Returns: boolean }
       can_access_categoria: {
         Args: { _cat: Database["public"]["Enums"]["categoria_aluno"] }
         Returns: boolean
@@ -1265,6 +1266,7 @@ export type Database = {
         Args: { p_ate: string; p_de: string }
         Returns: Json
       }
+      tenant_liberado: { Args: { _tenant_id: string }; Returns: boolean }
     }
     Enums: {
       app_role:
