@@ -91,7 +91,7 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
     }
 
     const origem = await resolverOrigem();
-    const successUrl = `${origem}/bem-vindo?plano=${data.plan}&trial=${data.isTrial ? "1" : "0"}`;
+    const successUrl = `${origem}/bem-vindo?plano=${data.plan}&trial=0`;
     const cancelUrl = `${origem}/precos`;
 
     const session = await stripe.checkout.sessions.create({
@@ -105,7 +105,7 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
         tenant_id: tenant.id,
         plan: data.plan,
         plan_period: data.period,
-        is_trial: data.isTrial ? "1" : "0",
+        is_trial: "0",
       },
       subscription_data: {
         metadata: {
@@ -113,14 +113,13 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
           plan: data.plan,
           plan_period: data.period,
         },
-        ...(data.isTrial ? { trial_period_days: 14 } : {}),
       },
-      ...(data.isTrial ? { payment_method_collection: "if_required" as const } : {}),
     });
 
     if (!session.url) throw new Error("Stripe não retornou URL de checkout.");
     return { url: session.url };
   });
+
 
 /**
  * Marca o onboarding como concluído.
