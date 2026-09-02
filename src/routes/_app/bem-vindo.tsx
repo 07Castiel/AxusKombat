@@ -2,16 +2,20 @@ import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router"
 import { useState } from "react";
 import { z } from "zod";
 import { useServerFn } from "@tanstack/react-start";
-import { completeOnboarding } from "@/lib/billing.functions";
+import { completeOnboarding, getMyTenantStatus } from "@/lib/billing.functions";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { flagDeBusca } from "@/lib/utils";
 import { useEffect } from "react";
 
-// O Stripe devolve ?plano=pro&trial=1 — o router faz JSON.parse e entrega
+// O Stripe devolve ?plano=pro&trial=0 — o router faz JSON.parse e entrega
 // `trial` como número. O schema anterior exigia string e derrubava a tela de
 // boas-vindas no retorno do checkout. Ver flagDeBusca em @/lib/utils.
+//
+// Os parâmetros são só um palpite inicial: quem chega aqui pelo cadastro (o
+// caminho normal agora) não tem nenhum deles na URL. A palavra final é a do
+// banco, lida logo abaixo.
 const searchSchema = z.object({
   plano: z
     .unknown()
@@ -25,24 +29,44 @@ export const Route = createFileRoute("/_app/bem-vindo")({
   component: BemVindoPage,
 });
 
+type SituacaoTenant = {
+  status: string;
+  plan: string | null;
+  trial_ends_at: string | null;
+};
+
 function BemVindoPage() {
   const navigate = useNavigate();
   const search = useSearch({ from: "/_app/bem-vindo" });
   const { refresh } = useAuth();
   const [loading, setLoading] = useState(false);
   const complete = useServerFn(completeOnboarding);
+  const getStatus = useServerFn(getMyTenantStatus);
+  const [tenant, setTenant] = useState<SituacaoTenant | null>(null);
 
-  const isTrial = search.trial;
-  const planoNome = (search.plano || "pro").toUpperCase();
-
-  // Calcula data final do trial (hoje + 14 dias)
-  const trialEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
-  const trialEndStr = trialEnd.toLocaleDateString("pt-BR");
-
-  // Auto-refresh do auth ao montar (status já mudou via webhook)
+  // Auto-refresh do auth ao montar (status pode ter mudado via webhook)
   useEffect(() => {
     refresh().catch(() => {});
   }, [refresh]);
+
+  useEffect(() => {
+    getStatus()
+      .then((t) => {
+        if (t) setTenant(t as SituacaoTenant);
+      })
+      .catch(() => {});
+  }, [getStatus]);
+
+  // Enquanto o banco não responde: quem volta do Stripe traz ?plano na URL;
+  // quem acabou de se cadastrar não traz nada e está em teste.
+  const isTrial = tenant ? tenant.status === "trialing" : search.plano ? search.trial : true;
+  const planoNome = (tenant?.plan || search.plano || "pro").toUpperCase();
+
+  // Data real do fim do teste, vinda do banco. Antes era calculada como hoje +
+  // 14 dias no navegador, o que mentia para quem abrisse a tela dias depois.
+  const trialEndStr = tenant?.trial_ends_at
+    ? new Date(tenant.trial_ends_at).toLocaleDateString("pt-BR")
+    : null;
 
   const handleAccess = async () => {
     setLoading(true);
@@ -75,7 +99,13 @@ function BemVindoPage() {
             <>
               Seu teste gratuito do plano <strong>{planoNome}</strong> está ativo.
               <br />
-              Aproveite o sistema completo até <strong>{trialEndStr}</strong>.
+              {trialEndStr ? (
+                <>
+                  Aproveite o sistema completo até <strong>{trialEndStr}</strong>.
+                </>
+              ) : (
+                <>Aproveite o sistema completo pelos próximos 14 dias.</>
+              )}
             </>
           ) : (
             <>

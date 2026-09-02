@@ -29,6 +29,15 @@ interface AuthCtx {
   roles: AppRole[];
   permissoes: PermissionsMap;
   loading: boolean;
+  /**
+   * Já houve ao menos uma tentativa de carregar o perfil deste usuário.
+   *
+   * Sem isso, `profile === null` significa duas coisas opostas — "ainda
+   * carregando" e "não existe" — e a tela protegida só sabe mostrar spinner.
+   * Quem entra logo depois do cadastro, se o perfil não vier, fica girando
+   * para sempre sem botão de sair.
+   */
+  profileCarregado: boolean;
   isAdmin: boolean;
   isProfessorKids: boolean;
   isProfessorAdulto: boolean;
@@ -45,14 +54,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [loading, setLoading] = useState(true);
+  const [profileCarregado, setProfileCarregado] = useState(false);
 
   const loadUserData = async (uid: string) => {
-    const [{ data: prof }, { data: rls }] = await Promise.all([
-      supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
-      supabase.from("user_roles").select("role").eq("user_id", uid),
-    ]);
-    setProfile(prof as Profile | null);
-    setRoles(((rls as { role: AppRole }[]) ?? []).map((r) => r.role));
+    try {
+      const [{ data: prof }, { data: rls }] = await Promise.all([
+        supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
+        supabase.from("user_roles").select("role").eq("user_id", uid),
+      ]);
+      setProfile(prof as Profile | null);
+      setRoles(((rls as { role: AppRole }[]) ?? []).map((r) => r.role));
+    } finally {
+      setProfileCarregado(true);
+    }
   };
 
   useEffect(() => {
@@ -60,10 +74,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
+        setProfileCarregado(false);
         setTimeout(() => { loadUserData(s.user.id); }, 0);
       } else {
         setProfile(null);
         setRoles([]);
+        setProfileCarregado(false);
       }
     });
 
@@ -78,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value: AuthCtx = {
-    user, session, profile, roles, loading,
+    user, session, profile, roles, loading, profileCarregado,
     permissoes: lerPermissoes(profile?.permissions),
     isAdmin: roles.includes("admin"),
     isProfessorKids: roles.includes("professor_kids"),

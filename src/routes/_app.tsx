@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
-import { Loader2, Lock, Sparkles } from "lucide-react";
+import { Loader2, Lock, Sparkles, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_app")({
@@ -36,7 +36,7 @@ function liberado(s: Situacao): boolean {
 }
 
 function AppRouteComponent() {
-  const { user, loading, profile, signOut } = useAuth();
+  const { user, loading, profile, profileCarregado, signOut } = useAuth();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [situacao, setSituacao] = useState<Situacao | null>(null);
@@ -80,7 +80,38 @@ function AppRouteComponent() {
     }
   }, [situacao, pathname, navigate]);
 
-  if (loading || !user || !profile || !checado || !situacao) {
+  if (loading || !user || (!profile && !profileCarregado)) {
+    return (
+      <div className="min-h-screen grid place-items-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Sessão válida sem perfil: o gatilho de cadastro falhou ou a leitura foi
+  // negada. Antes esse caso caía no mesmo `return` do spinner e o app girava
+  // para sempre — outra tela presa, só que sem nem uma mensagem.
+  if (!profile) {
+    return (
+      <div className="min-h-screen grid place-items-center bg-background px-4">
+        <div className="max-w-md w-full text-center p-8 rounded-lg border border-border bg-card">
+          <AlertTriangle className="mx-auto h-12 w-12 text-primary" />
+          <h1 className="font-display text-2xl tracking-wider mt-5 text-foreground">
+            NÃO ENCONTRAMOS SEU CADASTRO
+          </h1>
+          <p className="mt-3 text-muted-foreground">
+            Sua conta existe, mas o perfil da academia não foi carregado. Entre novamente ou fale
+            com o suporte se continuar assim.
+          </p>
+          <Button className="mt-6 w-full h-11" onClick={() => signOut()}>
+            Sair da conta
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!checado || !situacao) {
     return (
       <div className="min-h-screen grid place-items-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
