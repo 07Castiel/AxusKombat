@@ -14,7 +14,6 @@ const checkoutInput = z.object({
   period: periodSchema,
 });
 
-
 /**
  * Origem para onde o Stripe devolve o usuário depois do checkout.
  *
@@ -105,7 +104,6 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
         tenant_id: tenant.id,
         plan: data.plan,
         plan_period: data.period,
-        is_trial: "0",
       },
       subscription_data: {
         metadata: {
@@ -119,7 +117,6 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
     if (!session.url) throw new Error("Stripe não retornou URL de checkout.");
     return { url: session.url };
   });
-
 
 /**
  * Marca o onboarding como concluído.

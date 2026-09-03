@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -91,8 +91,10 @@ const PLANS: PlanDef[] = [
 // Tolerante de propósito: ver flagDeBusca em @/lib/utils. O schema anterior
 // exigia a string "true" e derrubava a rota quando o router entregava o
 // booleano true.
+//
+// `?retomar=true` saiu junto com o estado `pending`: não existe mais cadastro
+// pela metade esperando pagamento para ser "retomado".
 const searchSchema = z.object({
-  retomar: z.unknown().optional().transform(flagDeBusca),
   expirado: z.unknown().optional().transform(flagDeBusca),
 });
 
@@ -158,7 +160,6 @@ function PrecosPage() {
   const isCurrentPlan = (key: PlanKey) =>
     tenantStatus && tenantStatus.status === "active" && tenantStatus.plan === key;
 
-
   return (
     <div
       className="dark min-h-screen"
@@ -185,20 +186,6 @@ function PrecosPage() {
 
       <main className="max-w-6xl mx-auto px-4 py-10">
         {/* Banners condicionais */}
-        {search.retomar && (
-          <div
-            className="mb-8 p-4 rounded"
-            style={{
-              background: "#1a0000",
-              border: "1px solid #8B0000",
-              color: "#fff",
-              fontFamily: "Rajdhani, system-ui, sans-serif",
-            }}
-          >
-            <strong className="font-semibold">Continue de onde parou.</strong> Sua academia está
-            cadastrada — falta apenas concluir o pagamento para liberar o acesso.
-          </div>
-        )}
         {search.expirado && (
           <div
             className="mb-8 p-4 rounded"
@@ -224,30 +211,33 @@ function PrecosPage() {
           </p>
         </div>
 
-        {/* Trial CTA */}
-        <div
-          className="max-w-3xl mx-auto mb-10 p-6 rounded text-center"
-          style={{
-            background: "#1a0000",
-            border: "1px solid #8B0000",
-          }}
-        >
-          <p className="font-display text-xl tracking-wide mb-2">
-            TESTE 14 DIAS GRÁTIS NO PLANO PRO
-          </p>
-          <p className="text-white/80 text-sm mb-4">
-            Sem cobrança hoje. Cartão exigido apenas se você decidir continuar.
-          </p>
-          <button
-            onClick={() => openCheckout("pro", true)}
-            className="px-6 py-3 rounded font-semibold transition-colors"
-            style={{ background: RED, color: "#fff" }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = RED_HOVER)}
-            onMouseLeave={(e) => (e.currentTarget.style.background = RED)}
+        {/* Trial CTA — só para quem ainda não tem conta. Quem já está logado
+            já nasceu em teste; para esse o caminho é assinar. */}
+        {!user && (
+          <div
+            className="max-w-3xl mx-auto mb-10 p-6 rounded text-center"
+            style={{
+              background: "#1a0000",
+              border: "1px solid #8B0000",
+            }}
           >
-            Começar trial gratuito
-          </button>
-        </div>
+            <p className="font-display text-xl tracking-wide mb-2">
+              TESTE 14 DIAS GRÁTIS NO PLANO PRO
+            </p>
+            <p className="text-white/80 text-sm mb-4">
+              Acesso completo por 14 dias, sem cartão de crédito.
+            </p>
+            <button
+              onClick={() => openCheckout("pro", true)}
+              className="px-6 py-3 rounded font-semibold transition-colors"
+              style={{ background: RED, color: "#fff" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = RED_HOVER)}
+              onMouseLeave={(e) => (e.currentTarget.style.background = RED)}
+            >
+              Começar teste gratuito
+            </button>
+          </div>
+        )}
 
         {/* Toggle mensal/anual */}
         <div className="flex items-center justify-center gap-3 mb-8">
@@ -321,9 +311,7 @@ function PrecosPage() {
         onOpenChange={setModalOpen}
         plan={selectedPlan}
         period={period}
-        isTrial={isTrial}
-        onEscolherTrial={() => setIsTrial(true)}
-        initialStep={initialStep}
+        modo={modo}
       />
     </div>
   );
@@ -426,25 +414,27 @@ const stepOneSchema = z
     path: ["confirm"],
   });
 
+/**
+ * `trial` = só criar a conta e entrar no sistema. Nenhuma etapa de pagamento,
+ * nenhuma chamada ao Stripe.
+ * `paid`  = criar a conta (se necessário), revisar o pedido e ir ao Stripe.
+ */
 function CheckoutModal({
   open,
   onOpenChange,
   plan,
   period,
-  isTrial,
-  onEscolherTrial,
-  initialStep,
+  modo,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   plan: PlanKey;
   period: Period;
-  isTrial: boolean;
-  onEscolherTrial: () => void;
-  initialStep: 1 | 2 | 3;
+  modo: "trial" | "paid";
 }) {
   const { user } = useAuth();
-  const [step, setStep] = useState<1 | 2 | 3>(initialStep);
+  const navigate = useNavigate();
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [form, setForm] = useState({
     nome: "",
     tenantNome: "",
@@ -456,8 +446,10 @@ function CheckoutModal({
   const checkout = useServerFn(createCheckoutSession);
 
   useEffect(() => {
-    if (open) setStep(user ? (Math.max(initialStep, 2) as 2 | 3) : initialStep);
-  }, [open, user, initialStep]);
+    if (!open) return;
+    // No trial existe uma etapa só. No pago, quem já está logado pula o cadastro.
+    setStep(modo === "trial" ? 1 : user ? 2 : 1);
+  }, [open, user, modo]);
 
   const planDef = useMemo(() => PLANS.find((p) => p.key === plan)!, [plan]);
   const value = period === "monthly" ? planDef.monthly : planDef.annual;
@@ -477,12 +469,13 @@ function CheckoutModal({
         password: form.password,
         options: {
           emailRedirectTo: `${window.location.origin}/`,
+          // Sem flag de trial aqui: o teste de 14 dias é decidido pelo banco
+          // (handle_new_user grava status 'trialing' + trial_ends_at).
           data: {
             nome_completo: form.nome,
             tenant_nome: form.tenantNome,
             plan,
             plan_period: period,
-            is_trial: isTrial,
           },
         },
       });
@@ -503,6 +496,13 @@ function CheckoutModal({
         toast.success("Cadastro criado! Faça login para continuar.");
         return;
       }
+      if (modo === "trial") {
+        // Direto para o sistema. O teste de 14 dias já está valendo.
+        onOpenChange(false);
+        toast.success("Conta criada! Seu teste de 14 dias começou.");
+        navigate({ to: "/" });
+        return;
+      }
       setStep(2);
     } catch (err) {
       toast.error(translateError(err));
@@ -515,7 +515,7 @@ function CheckoutModal({
     setLoading(true);
     try {
       const { url } = await checkout({
-        data: { plan, period, isTrial },
+        data: { plan, period },
       });
       window.location.href = url;
     } catch (err) {
@@ -524,7 +524,7 @@ function CheckoutModal({
     }
   };
 
-  const stepLabel = `Etapa ${step} de 3`;
+  const stepLabel = modo === "trial" ? "Teste gratuito de 14 dias" : `Etapa ${step} de 3`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -605,8 +605,19 @@ function CheckoutModal({
                 className="w-full h-11"
                 style={{ background: RED, color: "#fff" }}
               >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Continuar"}
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : modo === "trial" ? (
+                  "Criar conta e começar"
+                ) : (
+                  "Continuar"
+                )}
               </Button>
+              {modo === "trial" && (
+                <p className="text-xs text-center text-white/50">
+                  Nenhum dado de pagamento é pedido agora.
+                </p>
+              )}
               <p className="text-xs text-center text-white/50">
                 Já tem conta?{" "}
                 <Link to="/login" className="text-white hover:underline">
@@ -638,31 +649,6 @@ function CheckoutModal({
                   </span>
                 </div>
               </div>
-
-              {isTrial ? (
-                <div
-                  className="p-3 rounded text-sm"
-                  style={{ background: "#1a0000", border: "1px solid #8B0000" }}
-                >
-                  <strong>R$ 0,00 hoje.</strong> Cobrança de {formatBRL(value)}
-                  {suffix} após 14 dias de teste. Cancele a qualquer momento antes disso sem custo.
-                </div>
-              ) : (
-                // Sem esta saída, quem chega por /precos?retomar=true fica preso
-                // no fluxo pago: o modal abre por cima da página e o botão do
-                // trial fica atrás dele, inalcançável.
-                <button
-                  type="button"
-                  onClick={onEscolherTrial}
-                  className="w-full p-3 rounded text-sm text-left transition-colors hover:bg-white/[0.04]"
-                  style={{ background: "#141414", border: "1px solid rgba(255,255,255,0.10)" }}
-                >
-                  <strong>Prefiro testar 14 dias grátis antes.</strong>
-                  <span className="block text-white/60 mt-0.5">
-                    Sem cobrança hoje. Cartão exigido só se você decidir continuar.
-                  </span>
-                </button>
-              )}
 
               <div className="flex gap-2">
                 <Button

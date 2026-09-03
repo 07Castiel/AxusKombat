@@ -39,14 +39,12 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
         const clienteDoEvento =
           (event.data.object as { customer?: string | null } | null)?.customer ?? null;
 
-        const { error: dupErr } = await dbPendente
-          .from("stripe_webhook_events")
-          .insert({
-            event_id: event.id,
-            event_type: event.type,
-            event_created: new Date(event.created * 1000).toISOString(),
-            customer_id: clienteDoEvento,
-          });
+        const { error: dupErr } = await dbPendente.from("stripe_webhook_events").insert({
+          event_id: event.id,
+          event_type: event.type,
+          event_created: new Date(event.created * 1000).toISOString(),
+          customer_id: clienteDoEvento,
+        });
         if (dupErr) {
           // 23505 = unique_violation. Já processado: responde 200 para o Stripe
           // parar de reentregar.
@@ -77,15 +75,25 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
           }
         }
 
-        const updateByCustomer = async (
-          customerId: string,
-          patch: Record<string, unknown>,
-        ) => {
-          await (supabaseAdmin.from("tenants") as unknown as {
-            update: (p: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<unknown> };
-          })
+        // O erro do update é verificado de propósito: o supabase-js devolve
+        // { error } em vez de lançar, e um CHECK recusando o status novo
+        // deixaria a assinatura parada no status antigo sem nenhum sinal.
+        // Lançando aqui, o handler responde 500 e o Stripe reentrega.
+        const updateByCustomer = async (customerId: string, patch: Record<string, unknown>) => {
+          const { error } = await (
+            supabaseAdmin.from("tenants") as unknown as {
+              update: (p: Record<string, unknown>) => {
+                eq: (c: string, v: string) => Promise<{ error: { message: string } | null }>;
+              };
+            }
+          )
             .update(patch)
             .eq("stripe_customer_id", customerId);
+          if (error) {
+            throw new Error(
+              `Falha ao atualizar tenant do customer ${customerId}: ${error.message}`,
+            );
+          }
         };
 
         try {
@@ -111,13 +119,15 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                 }
               }
 
+              // trial_ends_at é zerado de propósito: quem assinou não depende
+              // mais do teste gratuito de 14 dias para ter acesso.
               await updateByCustomer(session.customer, {
                 status,
                 stripe_subscription_id: stripeSubId,
                 trial_ends_at: trialEndsAt,
                 plan: session.metadata?.plan ?? null,
                 plan_period: session.metadata?.plan_period ?? null,
-                is_trial: session.metadata?.is_trial === "1",
+                is_trial: status === "trialing",
               });
               break;
             }
@@ -138,24 +148,35 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                 status: string;
                 trial_end: number | null;
               };
-              const badStates = ["past_due", "canceled", "unpaid", "incomplete_expired"];
-              if (badStates.includes(sub.status)) {
-                await updateByCustomer(sub.customer, { status: "trial_expired" });
+              // O status do Stripe é traduzido para o vocabulário do tenant
+              // ('trialing' | 'active' | 'past_due' | 'canceled' | 'expired').
+              // Antes tudo que dava errado virava 'trial_expired', o que
+              // confundia inadimplência com teste vencido — e 'past_due', que
+              // aqui continua liberado, derrubava o acesso de quem já pagava.
+              if (sub.status === "past_due") {
+                await updateByCustomer(sub.customer, { status: "past_due" });
+              } else if (["canceled", "unpaid", "incomplete_expired"].includes(sub.status)) {
+                await updateByCustomer(sub.customer, { status: "canceled", is_trial: false });
               } else if (sub.status === "trialing") {
+                // Assinatura antiga, criada quando o trial ainda era do Stripe.
+                // trial_ends_at só é sobrescrito quando o Stripe manda a data:
+                // gravar null aqui faria o gatilho do banco conceder mais 14
+                // dias de teste do nada.
                 await updateByCustomer(sub.customer, {
                   status: "trialing",
-                  trial_ends_at: sub.trial_end
-                    ? new Date(sub.trial_end * 1000).toISOString()
-                    : null,
+                  is_trial: true,
+                  ...(sub.trial_end
+                    ? { trial_ends_at: new Date(sub.trial_end * 1000).toISOString() }
+                    : {}),
                 });
               } else if (sub.status === "active") {
-                await updateByCustomer(sub.customer, { status: "active" });
+                await updateByCustomer(sub.customer, { status: "active", is_trial: false });
               }
               break;
             }
             case "customer.subscription.deleted": {
               const sub = event.data.object as { customer: string };
-              await updateByCustomer(sub.customer, { status: "trial_expired" });
+              await updateByCustomer(sub.customer, { status: "canceled", is_trial: false });
               break;
             }
             default:

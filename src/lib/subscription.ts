@@ -4,7 +4,7 @@
  * Até aqui o paywall existia só no navegador: `tenants.status` era lido no
  * useEffect de _app.tsx e no onSubmit de login.tsx, e nada mais. Ignorar o
  * redirect — ou simplesmente chamar as server functions direto — dava acesso
- * completo com assinatura `pending` ou `trial_expired`.
+ * completo com o teste já vencido.
  *
  * IMPORTANTE: este middleware sozinho NÃO fecha o C6. Boa parte das telas
  * escreve direto no Supabase pelo navegador (alunos, planos, modalidades,
@@ -27,8 +27,6 @@ export const MSG_EXPIRADA =
   "Seu período de teste terminou. Escolha um plano para continuar usando o sistema.";
 export const MSG_SUSPENSA =
   "Esta academia está suspensa. Fale com o suporte para reativar o acesso.";
-/** Mantida por compatibilidade com importações antigas. */
-export const MSG_PENDENTE = MSG_EXPIRADA;
 
 export type TenantSituacao = {
   tenantId: string;
@@ -94,13 +92,12 @@ export function mensagemBloqueio(s: TenantSituacao): string {
   return MSG_EXPIRADA;
 }
 
-
 /**
  * Exige assinatura válida. Use em toda server function que ESCREVE.
  *
  * Não aplicar em billing.functions.ts: createCheckoutSession e
- * completeOnboarding precisam funcionar justamente quando o status é
- * `pending` — é como o cliente sai desse estado.
+ * completeOnboarding precisam funcionar justamente com o teste vencido — é
+ * por elas que o cliente sai desse estado.
  */
 export const requireActiveSubscription = createMiddleware({ type: "function" })
   .middleware([requireSupabaseAuth])
