@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireActiveSubscription } from "@/lib/subscription";
 import { requireAdmin, requirePermissao } from "@/lib/tenant-guard";
+import { fusoDoTenant, hojeNoFuso } from "@/lib/data-tenant";
 
 export const registrarPagamento = createServerFn({ method: "POST" })
   .middleware([requireActiveSubscription])
@@ -53,10 +54,12 @@ export const reabrirMensalidade = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ctx = context as any;
     await requirePermissao(ctx, "pagamentos");
-    const today = new Date().toISOString().slice(0, 10);
     const { data: m } = await ctx.supabase.from("mensalidades")
-      .select("data_vencimento").eq("id", data.mensalidade_id).maybeSingle();
-    const next = m && m.data_vencimento < today ? "vencido" : "pendente";
+      .select("data_vencimento, tenant_id").eq("id", data.mensalidade_id).maybeSingle();
+    // Data no fuso da academia, não em UTC: reabrir uma mensalidade que vence
+    // hoje, às 21h de Brasília, marcava ela como já vencida.
+    const hoje = hojeNoFuso(m ? await fusoDoTenant(ctx.supabase, m.tenant_id) : undefined);
+    const next = m && m.data_vencimento < hoje ? "vencido" : "pendente";
     const { error } = await ctx.supabase.from("mensalidades").update({
       status: next,
       data_pagamento: null,
@@ -84,7 +87,7 @@ export const processarMensalidadesAgora = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     const ctx = context as any;
     const tenantId = await requireAdmin(ctx);
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = hojeNoFuso(await fusoDoTenant(ctx.supabase, tenantId));
 
     const { data: vencidas, error: eVenc } = await ctx.supabase
       .from("mensalidades")

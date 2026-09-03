@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireActiveSubscription } from "@/lib/subscription";
 import { requireAdmin } from "@/lib/tenant-guard";
+import { fusoDoTenant, hojeNoFuso } from "@/lib/data-tenant";
 
 
 // ============ SETTINGS ============
@@ -46,7 +47,7 @@ export const saveNotificationSettings = createServerFn({ method: "POST" })
     // reagendar tudo pendente do tenant após mudança de settings
     const { data: mens } = await supabaseAdmin.from("mensalidades")
       .select("id").eq("tenant_id", tenantId).eq("status", "pendente")
-      .gte("data_vencimento", new Date().toISOString().slice(0, 10));
+      .gte("data_vencimento", hojeNoFuso(await fusoDoTenant(supabaseAdmin, tenantId)));
     for (const m of (mens ?? []) as any[]) {
       await supabaseAdmin.rpc("cancelar_notificacoes_mensalidade", {
         p_mensalidade_id: m.id,
