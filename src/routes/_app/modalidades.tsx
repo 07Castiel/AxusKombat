@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { useSomenteLeitura } from "@/hooks/use-somente-leitura";
 import { PageHeader } from "@/components/PageHeader";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Card } from "@/components/ui/card";
@@ -34,6 +35,7 @@ const EMPTY = { nome: "", descricao: "", termo_graduacao: "Faixa", ativo: true }
 
 function ModalidadesPage() {
   const { profile } = useAuth();
+  const somenteLeitura = useSomenteLeitura();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -104,7 +106,7 @@ function ModalidadesPage() {
         title="Modalidades"
         description="Artes marciais oferecidas pela academia"
         actions={
-          <Button className="gradient-primary text-primary-foreground" onClick={startCreate}>
+          <Button className="gradient-primary text-primary-foreground" onClick={startCreate} disabled={somenteLeitura.ativo} title={somenteLeitura.motivo || undefined}>
             <Plus className="h-4 w-4 mr-2"/>Nova modalidade
           </Button>
         }
@@ -141,7 +143,7 @@ function ModalidadesPage() {
         <Card className="gradient-card border-border p-12 text-center">
           <Swords className="h-12 w-12 mx-auto text-metal mb-4" />
           <p className="text-muted-foreground mb-4">Nenhuma modalidade cadastrada ainda.</p>
-          <Button className="gradient-primary text-primary-foreground" onClick={startCreate}>
+          <Button className="gradient-primary text-primary-foreground" onClick={startCreate} disabled={somenteLeitura.ativo} title={somenteLeitura.motivo || undefined}>
             <Plus className="h-4 w-4 mr-2"/>Adicionar Modalidade
           </Button>
         </Card>

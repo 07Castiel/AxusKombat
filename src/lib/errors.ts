@@ -53,6 +53,14 @@ export function translateError(err: AnyError, fallback = FALLBACK): string {
   const code = (e?.code ?? "").toString();
   const lower = raw.toLowerCase().trim();
 
+  // P0001 é o código de toda RAISE EXCEPTION do plpgsql sem SQLSTATE próprio,
+  // ou seja: as regras de negócio que o nosso próprio banco levanta, já com
+  // texto escrito para o usuário ("Seu período de teste terminou. Escolha um
+  // plano..."). Trocar isso pelo genérico do mapa jogava fora justamente a
+  // parte útil, e quem estivesse em somente leitura só via "Operação bloqueada
+  // por uma regra do sistema".
+  if (code === "P0001" && raw && raw.length < 200) return raw;
+
   if (code && PG_CODE_MAP[code]) return PG_CODE_MAP[code];
 
   for (const key of Object.keys(AUTH_MAP)) {

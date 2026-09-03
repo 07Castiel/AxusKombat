@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { useSomenteLeitura } from "@/hooks/use-somente-leitura";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -55,6 +56,7 @@ type FormState = typeof EMPTY;
 
 function AlunosPage() {
   const { profile, isAdmin } = useAuth();
+  const somenteLeitura = useSomenteLeitura();
   const qc = useQueryClient();
   const upsertContratoFn = useServerFn(upsertContratoAtivo);
   const cancelarContratoFn = useServerFn(cancelarContrato);
@@ -275,7 +277,7 @@ function AlunosPage() {
         title="Alunos"
         description={`${alunos.length} alunos cadastrados`}
         actions={
-          <Button className="gradient-primary text-primary-foreground" onClick={startCreate}>
+          <Button className="gradient-primary text-primary-foreground" onClick={startCreate} disabled={somenteLeitura.ativo} title={somenteLeitura.motivo || undefined}>
             <Plus className="h-4 w-4 mr-2"/>Novo aluno
           </Button>
         }
