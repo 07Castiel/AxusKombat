@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { useSomenteLeitura } from "@/hooks/use-somente-leitura";
 import { PageHeader } from "@/components/PageHeader";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Card } from "@/components/ui/card";
@@ -46,6 +47,7 @@ const EMPTY = {
 
 function HorariosPage() {
   const { profile, isAdmin } = useAuth();
+  const somenteLeitura = useSomenteLeitura();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -146,7 +148,7 @@ function HorariosPage() {
         description="Grade semanal de aulas"
         actions={
           isAdmin && (
-            <Button className="gradient-primary text-primary-foreground" onClick={startCreate}>
+            <Button className="gradient-primary text-primary-foreground" onClick={startCreate} disabled={somenteLeitura.ativo} title={somenteLeitura.motivo || undefined}>
               <Plus className="h-4 w-4 mr-2"/>Novo horário
             </Button>
           )

@@ -19,9 +19,11 @@
  */
 import { createMiddleware } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { tenantLiberado, trialValido } from "@/lib/acesso-tenant";
 
-/** Situações em que a academia pode operar normalmente. */
-const STATUS_LIBERADOS = new Set(["active", "past_due", "trialing"]);
+// Reexportado porque a regra mora em acesso-tenant.ts (compartilhada com a
+// rota de cliente), mas quem importa daqui não precisa saber disso.
+export { trialValido };
 
 export const MSG_EXPIRADA =
   "Seu período de teste terminou. Escolha um plano para continuar usando o sistema.";
@@ -75,15 +77,8 @@ export async function lerSituacaoTenant(ctx: {
     status,
     ativo,
     trialEndsAt,
-    liberado: ativo && STATUS_LIBERADOS.has(status) && trialValido(status, trialEndsAt),
+    liberado: tenantLiberado({ status, ativo, trialEndsAt }),
   };
-}
-
-/** Trial só vale enquanto a data de término não passou. */
-export function trialValido(status: string, trialEndsAt: string | null): boolean {
-  if (status !== "trialing") return true;
-  if (!trialEndsAt) return true;
-  return new Date(trialEndsAt).getTime() > Date.now();
 }
 
 /** Traduz a situação em mensagem para o usuário. */

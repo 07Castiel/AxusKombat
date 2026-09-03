@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { useSomenteLeitura } from "@/hooks/use-somente-leitura";
 import { PageHeader } from "@/components/PageHeader";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Card } from "@/components/ui/card";
@@ -48,6 +49,7 @@ const EMPTY = {
 
 function PlanosPage() {
   const { profile } = useAuth();
+  const somenteLeitura = useSomenteLeitura();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -142,7 +144,7 @@ function PlanosPage() {
         title="Planos"
         description="Configure planos e valores"
         actions={
-          <Button className="gradient-primary text-primary-foreground" onClick={startCreate}>
+          <Button className="gradient-primary text-primary-foreground" onClick={startCreate} disabled={somenteLeitura.ativo} title={somenteLeitura.motivo || undefined}>
             <Plus className="h-4 w-4 mr-2"/>Novo plano
           </Button>
         }
@@ -200,7 +202,7 @@ function PlanosPage() {
         <Card className="gradient-card border-border p-12 text-center">
           <Wallet className="h-12 w-12 mx-auto text-metal mb-4" />
           <p className="text-muted-foreground mb-4">Nenhum plano cadastrado ainda.</p>
-          <Button className="gradient-primary text-primary-foreground" onClick={startCreate}>
+          <Button className="gradient-primary text-primary-foreground" onClick={startCreate} disabled={somenteLeitura.ativo} title={somenteLeitura.motivo || undefined}>
             <Plus className="h-4 w-4 mr-2"/>Criar plano
           </Button>
         </Card>

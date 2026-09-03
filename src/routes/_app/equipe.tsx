@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Plus, Pencil, KeyRound, Power, Trash2, Search } from "lucide-react";
 
 import { useAuth } from "@/hooks/use-auth";
+import { useSomenteLeitura } from "@/hooks/use-somente-leitura";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -50,6 +51,7 @@ type Row = {
 
 function EquipePage() {
   const { isAdmin, user, loading } = useAuth();
+  const somenteLeitura = useSomenteLeitura();
   const navigate = useNavigate();
   const qc = useQueryClient();
 
@@ -191,7 +193,7 @@ function EquipePage() {
         title="Professores e Funcionários"
         description="Equipe da sua academia"
         actions={
-          <Button onClick={openCreate}>
+          <Button onClick={openCreate} disabled={somenteLeitura.ativo} title={somenteLeitura.motivo || undefined}>
             <Plus className="h-4 w-4" /> Novo funcionário
           </Button>
         }

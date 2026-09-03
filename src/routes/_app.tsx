@@ -5,6 +5,17 @@ import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Loader2, Lock, Sparkles, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { SomenteLeituraProvider } from "@/hooks/use-somente-leitura";
+import { diasRestantesDeTeste, tenantLiberado } from "@/lib/acesso-tenant";
+
+// Mensagens repetidas de propósito. subscription.ts é o dono delas no servidor,
+// mas importar aquele arquivo aqui traria createMiddleware e o auth-middleware
+// para dentro do bundle do navegador — o mesmo tipo de import server-only que
+// já derrubou /precos duas vezes neste projeto.
+const MSG_TESTE_TERMINADO =
+  "Você continua com acesso aos seus dados, mas não é possível criar nem alterar registros até assinar um plano.";
+const MSG_SUSPENSA =
+  "Você pode consultar e exportar seus dados, mas não fazer alterações. Fale com o suporte para reativar o acesso.";
 
 export const Route = createFileRoute("/_app")({
   component: AppRouteComponent,
@@ -17,22 +28,10 @@ type Situacao = {
   onboarding_completed: boolean;
 };
 
-const STATUS_LIBERADOS = ["active", "past_due", "trialing"];
-
-function diasRestantes(fim: string | null): number | null {
-  if (!fim) return null;
-  const ms = new Date(fim).getTime() - Date.now();
-  return Math.ceil(ms / 86_400_000);
-}
-
+// A regra vem de acesso-tenant.ts, a mesma que o servidor usa. Ver o cabeçalho
+// daquele arquivo para o porquê de não haver uma cópia aqui.
 function liberado(s: Situacao): boolean {
-  if (s.ativo === false) return false;
-  if (!STATUS_LIBERADOS.includes(s.status)) return false;
-  if (s.status === "trialing") {
-    const d = diasRestantes(s.trial_ends_at);
-    return d === null || d > 0;
-  }
-  return true;
+  return tenantLiberado({ status: s.status, ativo: s.ativo, trialEndsAt: s.trial_ends_at });
 }
 
 function AppRouteComponent() {
@@ -119,57 +118,54 @@ function AppRouteComponent() {
     );
   }
 
-  // Bloqueio: acontece DENTRO do app, sem redirect duro. O usuário navega,
-  // enxerga a mensagem e consegue sair — o loop antigo vinha de mandar para
-  // /precos com window.location.href.
-  if (!liberado(situacao)) {
-    return (
+  // Bloqueio de escrita, não de acesso: a academia continua navegando e
+  // consultando os próprios dados. A tela cheia de antes trancava o sistema
+  // inteiro atrás de um "Assinar agora" — segurava dado de cliente como
+  // alavanca de cobrança, e a regra do servidor (subscription.ts) sempre disse
+  // o contrário: bloqueia ESCRITA, libera LEITURA.
+  const bloqueado = !liberado(situacao);
+  const suspensa = situacao.ativo === false;
+  const dias =
+    !bloqueado && situacao.status === "trialing"
+      ? diasRestantesDeTeste(situacao.trial_ends_at)
+      : null;
+
+  return (
+    <SomenteLeituraProvider
+      valor={{ ativo: bloqueado, motivo: suspensa ? MSG_SUSPENSA : MSG_TESTE_TERMINADO }}
+    >
       <AppLayout>
-        <div className="min-h-[70vh] grid place-items-center px-4">
-          <div className="max-w-md w-full text-center p-8 rounded-lg border border-border bg-card">
-            <Lock className="mx-auto h-12 w-12 text-primary" />
-            <h1 className="font-display text-2xl tracking-wider mt-5 text-foreground">
-              {situacao.ativo === false ? "ACADEMIA SUSPENSA" : "SEU TESTE TERMINOU"}
-            </h1>
-            <p className="mt-3 text-muted-foreground">
-              {situacao.ativo === false
-                ? "Fale com o suporte para reativar o acesso da sua academia."
-                : "Escolha um plano para voltar a usar o sistema. Seus dados continuam salvos."}
+        {bloqueado && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3">
+            <p className="text-sm text-foreground flex items-start gap-2">
+              <Lock className="h-4 w-4 mt-0.5 shrink-0 text-destructive" />
+              <span>
+                <strong>{suspensa ? "Academia suspensa." : "Seu teste terminou."}</strong>{" "}
+                {suspensa ? MSG_SUSPENSA : MSG_TESTE_TERMINADO}
+              </span>
             </p>
-            {situacao.ativo !== false && (
-              <Button asChild className="mt-6 w-full h-11">
+            {!suspensa && (
+              <Button asChild size="sm" className="h-8">
                 <Link to="/precos">Assinar agora</Link>
               </Button>
             )}
-            <Button
-              variant="ghost"
-              className="mt-2 w-full text-muted-foreground"
-              onClick={() => signOut()}
-            >
-              Sair da conta
+          </div>
+        )}
+
+        {dias !== null && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/10 px-4 py-2.5">
+            <p className="text-sm text-foreground flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary" />
+              Teste gratuito — {dias === 1 ? "último dia" : `${dias} dias restantes`}.
+            </p>
+            <Button asChild size="sm" className="h-8">
+              <Link to="/precos">Assinar agora</Link>
             </Button>
           </div>
-        </div>
+        )}
+
+        <Outlet />
       </AppLayout>
-    );
-  }
-
-  const dias = situacao.status === "trialing" ? diasRestantes(situacao.trial_ends_at) : null;
-
-  return (
-    <AppLayout>
-      {dias !== null && (
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/10 px-4 py-2.5">
-          <p className="text-sm text-foreground flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" />
-            Teste gratuito — {dias === 1 ? "último dia" : `${dias} dias restantes`}.
-          </p>
-          <Button asChild size="sm" className="h-8">
-            <Link to="/precos">Assinar agora</Link>
-          </Button>
-        </div>
-      )}
-      <Outlet />
-    </AppLayout>
+    </SomenteLeituraProvider>
   );
 }
