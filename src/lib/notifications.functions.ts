@@ -347,15 +347,21 @@ export const resendPendingAfterReconnect = createServerFn({ method: "POST" })
     for (const n of rows) {
       if (!n.destinatario) {
         falhas++;
-        await supabaseAdmin.from("notificacoes").update({
+        // Não lança: derrubar o lote inteiro por causa de uma linha faria as
+        // outras notificações deixarem de ser enviadas. Fica no log.
+        const { error: eSemTel } = await supabaseAdmin.from("notificacoes").update({
           status: "falhou", erro: "Aluno sem telefone", erro_codigo: "sem_telefone",
           proxima_tentativa: null,
         }).eq("id", n.id);
+        if (eSemTel) console.error(`[notificacoes] ${n.id}: status não gravado: ${eSemTel.message}`);
         continue;
       }
       const r = await sendWhatsappByTenant(tenantId, n.destinatario, n.mensagem);
       if (r.ok) enviadas++; else falhas++;
-      await supabaseAdmin.from("notificacoes").update({
+      // Também não lança, pelo mesmo motivo — mas aqui o custo de perder a
+      // gravação é maior: a mensagem foi ENVIADA e, se o status não gravar, a
+      // próxima rodada reenvia para o mesmo aluno.
+      const { error: eStatus } = await supabaseAdmin.from("notificacoes").update({
         status: r.ok ? "enviada" : "falhou",
         enviada_em: r.ok ? new Date().toISOString() : null,
         erro: r.ok ? null : (r.error ?? "Erro desconhecido"),
@@ -363,6 +369,12 @@ export const resendPendingAfterReconnect = createServerFn({ method: "POST" })
         tentativas: (n.tentativas ?? 0) + 1,
         proxima_tentativa: null,
       }).eq("id", n.id);
+      if (eStatus) {
+        console.error(
+          `[notificacoes] ${n.id} foi ${r.ok ? "ENVIADA" : "processada"} mas o status não gravou ` +
+            `(${eStatus.message}). Risco de reenvio na próxima rodada.`,
+        );
+      }
     }
     return { total: rows.length, enviadas, falhas };
   });

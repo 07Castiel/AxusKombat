@@ -355,13 +355,20 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
         }
 
         if (runId) {
-          await supabaseAdmin.from("notification_worker_runs").update({
-            finished_at: new Date().toISOString(),
-            scanned: summary.scanned,
-            sent: summary.sent,
-            failed: summary.failed,
-            skipped: summary.skipped_window + summary.skipped_config,
-          }).eq("id", runId);
+          // Registro de execução: se não gravar, a rodada fica eternamente
+          // "em andamento" no painel. Não lança — o trabalho já foi feito e as
+          // mensagens já saíram; derrubar aqui só faria o cron tentar de novo.
+          const { error: eRun } = await supabaseAdmin
+            .from("notification_worker_runs").update({
+              finished_at: new Date().toISOString(),
+              scanned: summary.scanned,
+              sent: summary.sent,
+              failed: summary.failed,
+              skipped: summary.skipped_window + summary.skipped_config,
+            }).eq("id", runId);
+          if (eRun) {
+            console.error(`[dispatch] rodada ${runId} não pôde ser fechada: ${eRun.message}`);
+          }
         }
 
         return new Response(JSON.stringify({ ok: true, summary, ranAt: new Date().toISOString() }), {

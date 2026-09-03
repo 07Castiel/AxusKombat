@@ -92,9 +92,17 @@ export const createStaff = createServerFn({ method: "POST" })
 
     // Desfaz o cadastro pela metade. Sem isto, uma falha no meio deixa um
     // usuário no Auth que consegue logar e não tem perfil nem academia.
+    // Caminho de erro: aqui NÃO se lança. Falhar na limpeza esconderia o motivo
+    // original, que é o que o admin precisa ler. Fica registrado para quem for
+    // investigar sobras no banco.
     const desfazer = async (motivo: string): Promise<never> => {
-      await supabaseAdmin.from("user_roles").delete().eq("user_id", uid);
-      await supabaseAdmin.from("profiles").delete().eq("id", uid);
+      const { error: eP } = await supabaseAdmin.from("user_roles").delete().eq("user_id", uid);
+      const { error: ePr } = await supabaseAdmin.from("profiles").delete().eq("id", uid);
+      if (eP || ePr) {
+        console.error(
+          `[staff] limpeza incompleta do usuário ${uid}: ${eP?.message ?? ""} ${ePr?.message ?? ""}`.trim(),
+        );
+      }
       await supabaseAdmin.auth.admin.deleteUser(uid).catch(() => {});
       throw new Error(motivo);
     };
@@ -105,7 +113,9 @@ export const createStaff = createServerFn({ method: "POST" })
     const tenantOrfao =
       prof?.tenant_id && prof.tenant_id !== tenantId ? prof.tenant_id : null;
 
-    await supabaseAdmin.from("user_roles").delete().eq("user_id", uid);
+    const { error: eLimpaPapeis } = await supabaseAdmin
+      .from("user_roles").delete().eq("user_id", uid);
+    if (eLimpaPapeis) await desfazer(`Falha ao preparar os papéis: ${eLimpaPapeis.message}`);
 
     // upsert cobre os dois mundos: com o trigger novo o perfil ainda não
     // existe; com o antigo, existe e precisa ser reapontado.
@@ -164,16 +174,40 @@ export const updateStaff = createServerFn({ method: "POST" })
       .from("profiles").select("tenant_id").eq("id", data.user_id).maybeSingle();
     if (!prof || prof.tenant_id !== tenantId) throw new Error("Usuário não pertence à sua academia");
 
-    await supabaseAdmin.from("profiles").update({
+    const { error: ePerfil } = await supabaseAdmin.from("profiles").update({
       nome_completo: data.nome_completo,
       telefone: data.telefone ?? null,
       permissions: data.permissions,
     }).eq("id", data.user_id);
+    if (ePerfil) throw new Error(`Falha ao salvar os dados do usuário: ${ePerfil.message}`);
 
-    await supabaseAdmin.from("user_roles").delete().eq("user_id", data.user_id);
-    await supabaseAdmin.from("user_roles").insert({
-      user_id: data.user_id, tenant_id: tenantId, role: data.role,
-    });
+    // Insere ANTES de apagar, de propósito.
+    //
+    // Na ordem anterior (apaga tudo, depois insere) uma falha no insert deixava
+    // o funcionário com ZERO papéis. Como toda policy de RLS depende de
+    // is_admin()/is_professor_*(), ele perdia acesso a tudo — e a tela dizia
+    // "salvo com sucesso", porque nenhum dos dois erros era verificado.
+    //
+    // Invertendo, o pior caso é ficar com dois papéis por um instante, e o erro
+    // aparece para o admin tentar de novo. Nunca zero.
+    const { error: eNovoPapel } = await supabaseAdmin
+      .from("user_roles")
+      .upsert(
+        { user_id: data.user_id, tenant_id: tenantId, role: data.role },
+        { onConflict: "user_id,tenant_id,role" },
+      );
+    if (eNovoPapel) throw new Error(`Falha ao definir o papel do usuário: ${eNovoPapel.message}`);
+
+    const { error: ePapeisAntigos } = await supabaseAdmin
+      .from("user_roles")
+      .delete()
+      .eq("user_id", data.user_id)
+      .neq("role", data.role);
+    if (ePapeisAntigos) {
+      throw new Error(
+        `O papel novo foi aplicado, mas os antigos não puderam ser removidos: ${ePapeisAntigos.message}`,
+      );
+    }
     return { ok: true };
   });
 
@@ -192,7 +226,9 @@ export const toggleStaffActive = createServerFn({ method: "POST" })
       .from("profiles").select("tenant_id").eq("id", data.user_id).maybeSingle();
     if (!prof || prof.tenant_id !== tenantId) throw new Error("Usuário não pertence à sua academia");
 
-    await supabaseAdmin.from("profiles").update({ ativo: data.ativo }).eq("id", data.user_id);
+    const { error: eAtivo } = await supabaseAdmin
+      .from("profiles").update({ ativo: data.ativo }).eq("id", data.user_id);
+    if (eAtivo) throw new Error(`Falha ao alterar o acesso do usuário: ${eAtivo.message}`);
     // Block access at auth level too
     await supabaseAdmin.auth.admin.updateUserById(data.user_id, {
       ban_duration: data.ativo ? "none" : "876000h",
