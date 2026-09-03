@@ -12,7 +12,7 @@ import { PasswordInput } from "@/components/PasswordInput";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { translateError } from "@/lib/errors";
-import { flagDeBusca } from "@/lib/utils";
+import { flagDeBuscaOpcional } from "@/lib/utils";
 import { Check, Loader2, ChevronDown, ChevronUp, ArrowLeft } from "lucide-react";
 import logo from "@/assets/axus-kombat-logo.png";
 
@@ -95,7 +95,7 @@ const PLANS: PlanDef[] = [
 // `?retomar=true` saiu junto com o estado `pending`: não existe mais cadastro
 // pela metade esperando pagamento para ser "retomado".
 const searchSchema = z.object({
-  expirado: z.unknown().optional().transform(flagDeBusca),
+  expirado: z.unknown().optional().transform(flagDeBuscaOpcional),
 });
 
 export const Route = createFileRoute("/precos")({

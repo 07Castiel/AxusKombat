@@ -47,3 +47,15 @@ export const toISODate = (d: Date) => d.toISOString().slice(0, 10);
  */
 export const flagDeBusca = (v: unknown): boolean =>
   v === true || v === "true" || v === "1" || v === 1;
+
+/**
+ * Mesma leitura, para uso em `validateSearch`: devolve `true` ou `undefined`,
+ * nunca `false`.
+ *
+ * O router serializa de volta na URL tudo que o schema devolve. Com `false`,
+ * abrir /precos disparava um 307 para /precos?expirado=false a cada visita, e
+ * /bem-vindo estampava ?trial=false na barra de endereços justamente para quem
+ * tinha acabado de entrar no teste. `undefined` simplesmente não aparece.
+ */
+export const flagDeBuscaOpcional = (v: unknown): true | undefined =>
+  flagDeBusca(v) || undefined;
