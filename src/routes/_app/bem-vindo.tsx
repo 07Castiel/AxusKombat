@@ -6,7 +6,7 @@ import { completeOnboarding, getMyTenantStatus } from "@/lib/billing.functions";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { flagDeBusca } from "@/lib/utils";
+import { flagDeBuscaOpcional } from "@/lib/utils";
 import { useEffect } from "react";
 
 // O Stripe devolve ?plano=pro&trial=0 — o router faz JSON.parse e entrega
@@ -21,7 +21,7 @@ const searchSchema = z.object({
     .unknown()
     .optional()
     .transform((v) => (typeof v === "string" ? v : undefined)),
-  trial: z.unknown().optional().transform(flagDeBusca),
+  trial: z.unknown().optional().transform(flagDeBuscaOpcional),
 });
 
 export const Route = createFileRoute("/_app/bem-vindo")({
