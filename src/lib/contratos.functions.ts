@@ -68,7 +68,13 @@ export const upsertContratoAtivo = createServerFn({ method: "POST" })
             status: venc < hoje ? "vencido" : "pendente",
           };
           if (valorMudou) patch.valor = data.valor_mensalidade;
-          await ctx.supabase.from("mensalidades").update(patch).eq("id", m.id);
+          const { error: eMens } = await ctx.supabase
+            .from("mensalidades").update(patch).eq("id", m.id);
+          if (eMens) {
+            throw new Error(
+              `Contrato salvo, mas a mensalidade ${m.competencia} não pôde ser atualizada: ${eMens.message}`,
+            );
+          }
         }
       }
 

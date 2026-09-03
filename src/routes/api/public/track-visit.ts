@@ -171,6 +171,11 @@ export const Route = createFileRoute("/api/public/track-visit")({
           if (error) {
             // Sem `context: { row }`: a linha carrega IP e página, e system_logs
             // é lido por outras telas. Guardar só o código já basta para depurar.
+            //
+            // O erro deste insert é ignorado de propósito — é a única escrita do
+            // projeto em que isso é correto. Já estamos no caminho de falha, o
+            // chamador é telemetria anônima, e falhar aqui só trocaria um erro
+            // registrado por um erro perdido.
             await supabaseAdmin.from("system_logs").insert({
               level: "error",
               source: "track-visit",

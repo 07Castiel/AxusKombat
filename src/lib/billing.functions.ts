@@ -83,10 +83,19 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
         metadata: { tenant_id: tenant.id },
       });
       customerId = customer.id;
-      await supabaseAdmin
+      // Se a gravação falha em silêncio, o customer existe no Stripe mas o
+      // tenant não sabe dele: o próximo checkout cria um SEGUNDO customer, e o
+      // webhook — que casa por stripe_customer_id — passa a atualizar o tenant
+      // errado, ou nenhum, e a assinatura nunca ativa.
+      const { error: eCustomer } = await supabaseAdmin
         .from("tenants")
         .update({ stripe_customer_id: customerId })
         .eq("id", tenant.id);
+      if (eCustomer) {
+        throw new Error(
+          `Cadastro de cobrança criado, mas não foi possível vinculá-lo à academia: ${eCustomer.message}. Tente novamente.`,
+        );
+      }
     }
 
     const origem = await resolverOrigem();
@@ -132,10 +141,14 @@ export const completeOnboarding = createServerFn({ method: "POST" })
       .maybeSingle();
     if (!profile?.tenant_id) throw new Error("Tenant não encontrado.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    await supabaseAdmin
+    // Sem esta checagem, uma falha aqui é invisível e o usuário fica preso num
+    // vai-e-volta: _app.tsx vê onboarding_completed = false e manda de novo
+    // para /bem-vindo, que é justamente a tela de onde ele acabou de sair.
+    const { error } = await supabaseAdmin
       .from("tenants")
       .update({ onboarding_completed: true })
       .eq("id", profile.tenant_id);
+    if (error) throw new Error(`Falha ao concluir a configuração inicial: ${error.message}`);
     return { ok: true };
   });
 

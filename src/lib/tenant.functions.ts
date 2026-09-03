@@ -64,9 +64,20 @@ export const gerarPortalToken = createServerFn({ method: "POST" })
       .from("profiles").select("tenant_id").eq("id", ctx.userId).maybeSingle();
     if (!prof) throw new Error("Perfil não encontrado");
     const token = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().slice(0, 8).replace(/-/g, "");
-    const { error } = await ctx.supabase.from("alunos")
+    // O filtro por tenant_id é redundante com o RLS, e é essa a intenção: se a
+    // policy de alunos_update mudar, a escrita continua presa à academia de
+    // quem chamou.
+    //
+    // O .select() existe para saber se alguma linha foi atingida. Sem ele, um
+    // aluno de outra academia (ou um id inexistente) devolvia error: null e
+    // ZERO linhas — e a função entregava um token que nunca foi gravado, com o
+    // admin copiando um link de portal que não abre.
+    const { data: atualizados, error } = await ctx.supabase.from("alunos")
       .update({ portal_token: token })
-      .eq("id", data.aluno_id);
+      .eq("id", data.aluno_id)
+      .eq("tenant_id", prof.tenant_id)
+      .select("id");
     if (error) throw new Error(error.message);
+    if (!atualizados?.length) throw new Error("Aluno não encontrado nesta academia.");
     return { token };
   });

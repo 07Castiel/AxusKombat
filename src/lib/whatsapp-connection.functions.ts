@@ -54,10 +54,11 @@ export const connectWhatsapp = createServerFn({ method: "POST" })
     const instanceName = evo.makeInstanceName(tenantId);
 
     // Ensure row exists
-    await supabaseAdmin.from("whatsapp_connections").upsert(
+    const { error: eLinha } = await supabaseAdmin.from("whatsapp_connections").upsert(
       { tenant_id: tenantId, instance_name: instanceName, status: "conectando" },
       { onConflict: "tenant_id" },
     );
+    if (eLinha) throw new Error(`Falha ao registrar a conexão: ${eLinha.message}`);
 
     // Check if instance exists on Evolution side
     let qr: string | null = null;
@@ -98,11 +99,12 @@ export const connectWhatsapp = createServerFn({ method: "POST" })
       }
     }
 
-    await supabaseAdmin.from("whatsapp_connections").update({
+    const { error: eQr } = await supabaseAdmin.from("whatsapp_connections").update({
       status: "conectando",
       connected: false,
       last_qr_at: new Date().toISOString(),
     }).eq("tenant_id", tenantId);
+    if (eQr) throw new Error(`Falha ao registrar o estado da conexão: ${eQr.message}`);
 
     if (!qr) {
       console.error("[whatsapp.connect] no QR returned", { instanceName, lastErr, info });
@@ -137,7 +139,9 @@ export const refreshWhatsappStatus = createServerFn({ method: "POST" })
       update.phone_number = phone;
       update.last_connection = new Date().toISOString();
     }
-    await supabaseAdmin.from("whatsapp_connections").update(update).eq("tenant_id", tenantId);
+    const { error: eStatus } = await supabaseAdmin
+      .from("whatsapp_connections").update(update).eq("tenant_id", tenantId);
+    if (eStatus) throw new Error(`Falha ao gravar o status da conexão: ${eStatus.message}`);
 
     // NÃO reenviamos automaticamente. Apenas contamos as mensagens que falharam
     // durante a desconexão para que o usuário decida no diálogo de reconexão.
@@ -171,9 +175,10 @@ export const disconnectWhatsapp = createServerFn({ method: "POST" })
       .from("whatsapp_connections").select("instance_name").eq("tenant_id", tenantId).maybeSingle();
     if (row) await evo.logoutInstance((row as any).instance_name);
 
-    await supabaseAdmin.from("whatsapp_connections").update({
+    const { error: eLogout } = await supabaseAdmin.from("whatsapp_connections").update({
       status: "desconectado", connected: false,
     }).eq("tenant_id", tenantId);
+    if (eLogout) throw new Error(`Desconectado, mas o status não foi gravado: ${eLogout.message}`);
 
     return { ok: true };
   });
