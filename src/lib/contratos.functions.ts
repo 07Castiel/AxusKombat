@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireActiveSubscription } from "@/lib/subscription";
 import { requirePermissao } from "@/lib/tenant-guard";
+import { fusoDoTenant, hojeNoFuso, inicioDoMesNoFuso } from "@/lib/data-tenant";
 
 const contratoInput = z.object({
   aluno_id: z.string().uuid(),
@@ -49,7 +50,8 @@ export const upsertContratoAtivo = createServerFn({ method: "POST" })
       const diaMudou = Number(existing.dia_vencimento) !== Number(data.dia_vencimento);
       const valorMudou = Number(existing.valor_mensalidade) !== Number(data.valor_mensalidade);
       if (diaMudou || valorMudou) {
-        const inicioMes = new Date().toISOString().slice(0, 7) + "-01";
+        const fuso = await fusoDoTenant(ctx.supabase, tenantId);
+        const inicioMes = inicioDoMesNoFuso(fuso);
         const { data: abertas } = await ctx.supabase
           .from("mensalidades")
           .select("id, competencia, desconto")
@@ -62,7 +64,7 @@ export const upsertContratoAtivo = createServerFn({ method: "POST" })
           const ultimoDia = new Date(Date.UTC(ano, mes, 0)).getUTCDate();
           const dia = Math.min(data.dia_vencimento, ultimoDia);
           const venc = `${ano}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
-          const hoje = new Date().toISOString().slice(0, 10);
+          const hoje = hojeNoFuso(fuso);
           const patch: Record<string, unknown> = {
             data_vencimento: venc,
             status: venc < hoje ? "vencido" : "pendente",
@@ -110,7 +112,10 @@ export const cancelarContrato = createServerFn({ method: "POST" })
     const ctx = context as any;
     await requirePermissao(ctx, "pagamentos");
 
-    const today = new Date().toISOString().slice(0, 10);
+    // A data de encerramento é a do calendário da academia, não a do servidor.
+    const { data: c } = await ctx.supabase.from("contratos")
+      .select("tenant_id").eq("id", data.contrato_id).maybeSingle();
+    const today = hojeNoFuso(c ? await fusoDoTenant(ctx.supabase, c.tenant_id) : undefined);
     const { error } = await ctx.supabase.from("contratos").update({
       status: "cancelado",
       data_fim: today,
