@@ -22,27 +22,43 @@ apresentação). Os dois rodam com `bun run test`.
 
 ## Diagnóstico de dados
 
-`diagnostico_frequencia_semanal.sql` é **somente leitura** e responde se a meta
-cadastrada nos planos é confiável: quantos estão nulos, zerados, fora de 1–7, se
-o nome do plano contradiz a coluna, e se a frequência cadastrada bate com o que
-os alunos daquele plano realmente treinam.
+`frequencia_semanal` é a meta que `frequencia_aluno()` usa como denominador. Se
+ela estiver errada no banco, a matemática correta produz números errados. O
+diagnóstico é **somente leitura** e vive como função, criada em
+`supabase/migrations/20260906180000_diagnostico_frequencia_semanal.sql`:
 
-Cole o arquivo inteiro no SQL Editor do Supabase e execute. É **uma consulta
-só**: o editor mostra o resultado de um único statement, então uma versão em
-vários SELECTs exibiria apenas um deles. Toda seção começa por uma linha de
-resumo calculada por agregado — agregado sem `GROUP BY` devolve uma linha mesmo
-sobre zero linhas de entrada, então nenhuma seção pode sumir. Silêncio nunca
-significa "não rodou". A coluna `Situação` classifica cada linha em OK,
-CONFERIR ou CORRIGIR, e as que pedem ação aparecem primeiro dentro da seção.
+```sql
+select * from diagnostico_frequencia_semanal();
+```
 
-O arquivo tem **um único ponto e vírgula**, no fim da consulta, e nada depois
-dele. Isso é deliberado: editores que removem comentários antes de dividir o
-script por `;` podem transformar um comando comentado em SQL executável, e um
-script de diagnóstico não pode carregar DDL nem em comentário.
+**Por que função e não script.** O relatório já existiu como um `.sql` para
+colar no editor, e não funcionava. O editor SQL da Lovable quebra scripts longos
+em pedaços e envia cada um separado: com a consulta em CTEs ele mandou um
+fragmento começando em `FROM public.contratos c`, e o Postgres respondeu
+`syntax error at or near "FROM" LINE 1`. Antes disso, numa versão em sete
+`SELECT`s, ele exibia o resultado de um só e escondia os outros seis. Nenhuma
+reescrita de sintaxe resolve — o problema não é a SQL. Com uma linha só, não há
+o que quebrar.
+
+Nove seções, cada uma começando por um resumo calculado por agregado — agregado
+sem `GROUP BY` devolve uma linha mesmo sobre zero linhas de entrada, então
+nenhuma seção some. A coluna `situacao` classifica em OK, CONFERIR ou CORRIGIR,
+e as que pedem ação vêm primeiro dentro da seção.
+
+A função **não é** `SECURITY DEFINER`: no editor SQL (postgres/service_role) o
+RLS não se aplica e o relatório cobre todas as academias do banco; chamada por
+um usuário autenticado, recorta para a academia dele. A coluna `detalhe` do
+veredito informa quantas academias entraram na conta.
+
+### Resumo rápido
+
+Se quiser só a resposta essencial sem depender da migração estar aplicada,
+`RESUMO_RAPIDO.sql` é um `SELECT` de treze linhas que lista cada plano e sua
+situação. Curto o bastante para nenhum editor conseguir quebrar.
 
 ### Travar a coluna, depois de corrigir tudo
 
-Só quando a seção 4 do diagnóstico vier "Nenhum plano invalido":
+Só quando a seção 4 vier "Nenhum plano invalido":
 
 ```sql
 ALTER TABLE public.planos
@@ -52,18 +68,6 @@ ALTER TABLE public.planos
 
 Com a seção 4 ainda listando planos, esse CHECK passaria a barrar **qualquer**
 edição dos planos legados — inclusive mudar só o preço.
-
-## Rodando
-
-Precisa de um Postgres 16 local. `rebuild.sh` derruba e recria o banco,
-aplica todas as migrações em ordem e semeia 4 academias de teste.
-
-Duas adaptações são necessárias fora do Supabase, e nenhuma toca no que está
-sob teste: `pg_cron`/`pg_net` não existem (as linhas de `CREATE EXTENSION` são
-comentadas) e o schema `storage` é stubado. O bootstrap também aplica o
-`ALTER DEFAULT PRIVILEGES ... GRANT ALL ON FUNCTIONS TO ... authenticated`
-que todo projeto Supabase tem — sem ele nem o RLS comum funciona, porque as
-policies chamam `get_current_tenant()` e o caller precisa de EXECUTE nela.
 
 ## Volume medido (Postgres 16, 16 semanas de histórico)
 
