@@ -85,6 +85,15 @@ export const planoSchema = z.object({
     .nonnegative("Valor não pode ser negativo.")
     .max(999999, "Valor muito alto."),
   duracao: z.string().min(1, "Selecione a duração."),
+  // Sem isto o campo passava direto: a tela mandava Number("") = 0 quando o
+  // admin apagava a frequência, e o 0 ia para o banco (a coluna não tem CHECK).
+  // Meta 0 quebra qualquer conta de frequência — dividia por zero em
+  // frequencia_aluno() e derrubava a tela de presenças da academia inteira.
+  frequencia_semanal: z.coerce
+    .number({ invalid_type_error: "Frequência semanal deve ser um número." })
+    .int("Frequência semanal deve ser um número inteiro.")
+    .min(1, "Frequência semanal deve ser de no mínimo 1 dia.")
+    .max(7, "Frequência semanal não pode passar de 7 dias."),
   dias_personalizado: z.union([z.coerce.number().int().positive("Informe um número de dias válido."), z.literal(null), z.undefined()]).optional(),
   categoria: z.enum(["adulto", "kids"]),
   modalidades: z.array(z.string()).default([]),

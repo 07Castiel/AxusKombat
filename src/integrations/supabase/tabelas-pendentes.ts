@@ -114,29 +114,49 @@ export type FrequenciaLinha = {
   ritmo_semanal: number;
   /** O mesmo, na janela anterior (3x maior). `null` sem histórico. */
   ritmo_base_semanal: number | null;
+  /** `null` quando não houve presença DENTRO do histórico analisado (janela +
+   *  linha de base, 112 dias no padrão). Não significa "nunca treinou": quem
+   *  parou antes disso também vem null, e para efeito de frequência os dois
+   *  casos são o mesmo. Ficha que precise da data exata consulta `presencas`
+   *  daquele aluno direto — é uma leitura barata para um id só. */
   ultima_presenca: string | null;
-  /** Dias COM CHAMADA desde o último treino — não dias de calendário. */
+  /** Oportunidades perdidas: dias em que houve chamada NA CATEGORIA dele desde
+   *  o último treino. Não são dias de calendário, e nunca contam dias
+   *  anteriores à matrícula. Zero quando ninguém registrou chamada. */
   dias_sem_treinar: number;
+  /** Dias de calendário desde o último treino; `null` sem presença no
+   *  histórico analisado. O par com `dias_sem_treinar` é o que denuncia dado
+   *  velho: 0 oportunidade perdida com 14 dias corridos quer dizer que ninguém
+   *  fez chamada, não que ele treinou. */
+  dias_corridos_sem_treinar: number | null;
   /** 7 / meta_semanal: o intervalo normal entre treinos deste aluno. */
   gap_esperado: number;
   /** Entrou dentro da janela; ainda não teve tempo de formar rotina. */
   em_carencia: boolean;
   dias_desde_entrada: number;
+  /** A categoria dele teve chamada suficiente no período para sustentar
+   *  conclusão (fator > 0,5). `false` obriga a tela a dizer "dados
+   *  insuficientes" em vez de mostrar o aluno numa lista de risco. */
+  confiavel: boolean;
 };
 
 /** Retorno de frequencia_aluno(uuid, int) — 20260906120000. */
 export type FrequenciaAluno = {
   janela: { dias: number; de: string; ate: string; fuso: string };
+  /** Uma entrada POR CATEGORIA. A operação é medida por categoria porque a
+   *  interrupção quase nunca é da academia inteira: férias escolares param o
+   *  kids e o adulto continua. */
   operacao: {
+    categoria: "adulto" | "kids";
     dias_com_chamada: number;
     dias_por_semana: number;
     dias_esperados: number;
-    /** Quanto a academia de fato operou, 0..1. `null` sem grade ativa. */
+    /** Quanto a categoria de fato operou, 0..1. `null` sem grade ativa. */
     fator: number | null;
-    /** Abaixo de metade dos dias esperados com chamada, os números saem mas não
+    /** Metade ou menos dos dias esperados com chamada: os números saem mas não
      *  sustentam conclusão sobre ninguém — a tela precisa dizer isso. */
     confiavel: boolean;
-  };
+  }[];
   alunos: FrequenciaLinha[];
 };
 

@@ -15,13 +15,24 @@
 --
 --   1. Dia sem NENHUMA chamada não é falta de ninguém. Se o professor esquecer
 --      a chamada, ou a academia fechar no feriado, o dia sai da conta em vez de
---      marcar a turma inteira como ausente.
+--      marcar a turma inteira como ausente. Medido POR CATEGORIA: férias
+--      escolares param o kids e o adulto continua, e uma guarda medida na
+--      academia inteira não enxerga isso.
 --   2. Dias distintos, nunca COUNT(*). Duas modalidades na mesma terça são um
 --      dia de treino, porque o plano é vendido em dias por semana.
---   3. A meta encolhe junto com a operação. Se a academia rodou metade dos dias
---      esperados no período, a expectativa cai na mesma proporção.
---   4. Aluno recém-matriculado sai marcado como em carência, para o consumidor
---      não pontuar quem ainda não teve tempo de criar rotina.
+--   3. A meta encolhe junto com a operação da categoria. Se ela rodou metade
+--      dos dias esperados, a expectativa cai na mesma proporção.
+--   4. Aluno recém-matriculado sai marcado como em carência, e não responde por
+--      dias de aula anteriores à própria matrícula.
+--
+-- Duas leituras de sumiço, de propósito:
+--
+--   dias_sem_treinar          oportunidades perdidas — chamadas DA CATEGORIA
+--                             dele desde o último treino.
+--   dias_corridos_sem_treinar dias de calendário desde o último treino.
+--
+-- O par é o que denuncia dado velho. Zero oportunidade perdida com 14 dias
+-- corridos não quer dizer que ele treinou: quer dizer que ninguém fez chamada.
 --
 -- DECISÃO DE SEGURANÇA: frequencia_aluno() NÃO é SECURITY DEFINER.
 --
@@ -32,6 +43,35 @@
 -- recorte, então o resultado é internamente consistente para cada papel, ainda
 -- que admin e professor vejam totais diferentes. Com SECURITY DEFINER a função
 -- devolveria a academia inteira para qualquer papel.
+--
+-- ---------------------------------------------------------------------------
+-- OPERAÇÃO
+--
+-- Idempotente: pode rodar quantas vezes for preciso (CREATE INDEX IF NOT
+-- EXISTS, CREATE OR REPLACE FUNCTION, DROP POLICY IF EXISTS + CREATE).
+-- Verificado rodando três vezes seguidas: o estado final é o mesmo.
+--
+-- Não altera nenhuma linha de dado: zero INSERT/UPDATE/DELETE/TRUNCATE.
+--
+-- LOCK: os dois CREATE INDEX pegam SHARE em `presencas` e bloqueiam ESCRITA
+-- (não leitura) enquanto constroem — a chamada do dia trava, a tela de
+-- consulta não. Em 240 mil linhas isso é da ordem de um segundo. Numa base
+-- muito maior, rode os dois índices fora desta transação com CREATE INDEX
+-- CONCURRENTLY antes de aplicar o resto (CONCURRENTLY não roda dentro de
+-- BEGIN/COMMIT). O DROP/CREATE POLICY pega ACCESS EXCLUSIVE por instantes.
+--
+-- ROLLBACK (não há arquivo separado; migrations/ não usa essa convenção):
+--
+--   DROP FUNCTION IF EXISTS public.frequencia_aluno(uuid, integer);
+--   DROP FUNCTION IF EXISTS public.fuso_do_tenant(uuid);
+--   DROP INDEX IF EXISTS public.idx_presencas_tenant_data;
+--   DROP INDEX IF EXISTS public.idx_presencas_aluno_data;
+--   -- e reaplicar presencas_select como está em 20260701033153
+--
+-- Derrubar só as funções é seguro a qualquer momento: nada no schema depende
+-- delas, e o único chamador é uma server function. Reverter a policy devolve
+-- o custo de RLS por linha descrito abaixo.
+-- ---------------------------------------------------------------------------
 
 BEGIN;
 
@@ -48,6 +88,53 @@ CREATE INDEX IF NOT EXISTS idx_presencas_tenant_data
 
 CREATE INDEX IF NOT EXISTS idx_presencas_aluno_data
   ON public.presencas (aluno_id, data) WHERE presente;
+
+
+
+-- ============================================================================
+-- presencas_select: as funções do RLS avaliadas UMA vez, não uma por linha
+--
+-- O predicado é o MESMO de 20260701033153 — mesmas funções, mesmos papéis,
+-- mesmas categorias. A única mudança é envolver as chamadas sem argumento em
+-- `(SELECT f())`. Isso não altera semântica: são funções STABLE sem parâmetro,
+-- e o valor é idêntico. O que muda é o plano — o Postgres passa a avaliá-las
+-- como InitPlan (uma vez por consulta) em vez de por linha varrida.
+--
+-- Isto não era visível até agora porque a tela de chamada lê um horário de um
+-- dia — algumas dezenas de linhas. frequencia_aluno() é a primeira leitura que
+-- varre a tabela inteira por período, e nessa escala o custo aparece inteiro.
+--
+-- Medido em Postgres 16 local, academia de 5.000 alunos e 240.000 presenças:
+--
+--   SELECT count(*) sobre presencas       23.942 ms  ->    245 ms
+--   frequencia_aluno() lista completa     58.071 ms  ->  3.846 ms
+--   frequencia_aluno() de um aluno         5.986 ms  ->     35 ms
+--
+-- O EXISTS do professor continua correlacionado (depende de presencas.aluno_id
+-- e não pode ser içado); só as funções de papel saem do laço.
+--
+-- As outras 48 policies do schema têm o mesmo ganho disponível pela mesma
+-- reescrita. Não foram tocadas aqui de propósito: esta migração mexe só na
+-- tabela que a leitura nova passou a varrer.
+-- ============================================================================
+
+DROP POLICY IF EXISTS presencas_select ON public.presencas;
+
+CREATE POLICY presencas_select ON public.presencas FOR SELECT TO authenticated
+USING (
+  tenant_id = (SELECT public.get_current_tenant()) AND (
+    (SELECT public.is_admin())
+    OR (SELECT public.is_recepcao())
+    OR EXISTS (
+      SELECT 1 FROM public.alunos a
+      WHERE a.id = presencas.aluno_id
+      AND (
+        ((SELECT public.is_professor_kids())   AND a.categoria = 'kids')
+        OR ((SELECT public.is_professor_adulto()) AND a.categoria = 'adulto')
+      )
+    )
+  )
+);
 
 
 -- ============================================================================
@@ -121,10 +208,7 @@ DECLARE
   v_inicio      date;
   v_semanas     numeric;
   v_semanas_bl  numeric;   -- semanas da janela anterior (linha de base)
-  v_dias_op     integer;   -- dias em que houve chamada na janela
-  v_dias_semana integer;   -- dias por semana em que a academia abre
-  v_esperados   numeric;   -- dias de operação esperados na janela
-  v_fator       numeric;   -- o quanto a academia de fato operou (0..1)
+  v_operacao    jsonb;
   v_alunos      jsonb;
 BEGIN
   IF v_tenant IS NULL THEN
@@ -146,37 +230,67 @@ BEGIN
   v_semanas    := v_janela / 7.0;
   v_semanas_bl := (v_janela * 3) / 7.0;
 
-  -- GUARDA 1 — dias em que a academia registrou qualquer chamada.
-  -- Uma linha basta, presente ou ausente: o que ela prova é que a chamada
-  -- aconteceu. Dia sem nenhuma linha não existiu para efeito de cobrança.
-  SELECT count(DISTINCT p.data) INTO v_dias_op
-    FROM public.presencas p
-   WHERE p.tenant_id = v_tenant
-     AND p.data BETWEEN v_inicio AND v_hoje;
-
-  -- Quantos dias por semana esta academia abre, segundo a grade ativa.
-  SELECT count(DISTINCT h.dia) INTO v_dias_semana
-    FROM public.horarios h
-   WHERE h.tenant_id = v_tenant AND h.ativo;
-
-  v_esperados := v_semanas * COALESCE(NULLIF(v_dias_semana, 0), 0);
-
-  -- GUARDA 3 — a expectativa acompanha a operação real. Academia que rodou
-  -- metade dos dias esperados no período cobra metade da meta.
-  v_fator := CASE
-               WHEN v_esperados > 0 THEN LEAST(v_dias_op / v_esperados, 1)
-               ELSE NULL
-             END;
-
   WITH
-  -- Os dias de chamada, um a um: `dias_sem_treinar` conta quantos deles
-  -- passaram desde o último treino do aluno, e não dias de calendário. É o que
-  -- impede que duas semanas sem chamada virem duas semanas de sumiço.
+  -- Todas as categorias do enum: a operação é medida POR CATEGORIA, e uma
+  -- categoria sem grade nenhuma ainda precisa aparecer para o aluno dela
+  -- receber "não avaliável" em vez de um numero inventado.
+  -- Pedindo um aluno só, mede-se só a categoria dele. Restringir aqui (e não
+  -- em cada CTE) mantém dias_operacao, grade e operacao coerentes entre si:
+  -- antes o envelope reportava "adulto: 0 chamadas, não confiável" numa
+  -- consulta de aluno kids — a categoria não tinha sido medida, e o envelope
+  -- afirmava que ela não operou.
+  categorias AS (
+    SELECT v FROM unnest(enum_range(NULL::categoria_aluno)) v
+     WHERE p_aluno_id IS NULL
+        OR v = (SELECT a.categoria FROM public.alunos a WHERE a.id = p_aluno_id)
+  ),
+  -- GUARDA 1 — dias em que a academia registrou chamada, POR CATEGORIA.
+  --
+  -- Uma linha basta, presente ou ausente: o que ela prova e que a chamada
+  -- aconteceu. Dia sem nenhuma linha nao existiu para efeito de cobranca.
+  --
+  -- Por categoria, e nao por academia inteira, porque a interrupcao quase
+  -- nunca e da academia toda: ferias escolares param o kids e o adulto
+  -- continua. Medindo o tenant inteiro, o fator ficava em 1.00 e a turma de
+  -- kids inteira aparecia com metade da aderencia e dias de sumico que nunca
+  -- tiveram aula para perder.
+  --
+  -- O ramo `categoria IS NULL` é defensivo: hoje horarios.categoria é NOT NULL
+  -- com default 'adulto', então ele não dispara. Fica pela mesma convenção que
+  -- portal_aluno_dados() já adota (horário sem categoria serve a todas), para
+  -- o dia em que a coluna virar opcional — e para não silenciar uma categoria
+  -- inteira se isso acontecer.
   dias_operacao AS (
-    SELECT DISTINCT p.data
+    SELECT c.v AS categoria, p.data
       FROM public.presencas p
+      JOIN public.horarios h ON h.id = p.horario_id
+      JOIN categorias c ON h.categoria IS NULL OR h.categoria = c.v
      WHERE p.tenant_id = v_tenant
        AND p.data BETWEEN v_inicio AND v_hoje
+     GROUP BY 1, 2
+  ),
+  grade AS (
+    SELECT c.v AS categoria, count(DISTINCT h.dia) AS dias_semana
+      FROM public.horarios h
+      JOIN categorias c ON h.categoria IS NULL OR h.categoria = c.v
+     WHERE h.tenant_id = v_tenant AND h.ativo
+     GROUP BY 1
+  ),
+  -- GUARDA 3 — a expectativa acompanha a operacao real da categoria.
+  operacao AS (
+    SELECT c.v AS categoria,
+           COALESCE(g.dias_semana, 0)              AS dias_por_semana,
+           COALESCE(o.dias, 0)                     AS dias_com_chamada,
+           v_semanas * COALESCE(g.dias_semana, 0)  AS dias_esperados,
+           CASE WHEN COALESCE(g.dias_semana, 0) > 0
+                THEN LEAST(COALESCE(o.dias, 0) / (v_semanas * g.dias_semana), 1)
+                ELSE NULL
+           END AS fator
+      FROM categorias c
+      LEFT JOIN grade g ON g.categoria = c.v
+      LEFT JOIN (SELECT categoria, count(*) AS dias FROM dias_operacao GROUP BY 1) o
+             ON o.categoria = c.v
+     WHERE COALESCE(g.dias_semana, 0) > 0 OR COALESCE(o.dias, 0) > 0
   ),
   base AS (
     SELECT a.id, a.nome_completo, a.categoria, a.data_entrada
@@ -197,11 +311,12 @@ BEGIN
   ),
   -- GUARDA 2 — dias distintos, nunca COUNT(*).
   janela AS (
-    SELECT p.aluno_id, count(DISTINCT p.data) AS dias
+    SELECT p.aluno_id, count(DISTINCT p.data) AS dias, min(p.data) AS primeira
       FROM public.presencas p
      WHERE p.tenant_id = v_tenant
        AND p.presente
        AND p.data BETWEEN v_inicio AND v_hoje
+       AND (p_aluno_id IS NULL OR p.aluno_id = p_aluno_id)
      GROUP BY p.aluno_id
   ),
   -- O hábito anterior do aluno, na janela imediatamente anterior (3x maior).
@@ -213,16 +328,23 @@ BEGIN
        AND p.presente
        AND p.data >= v_inicio - (v_janela * 3)
        AND p.data <  v_inicio
+       AND (p_aluno_id IS NULL OR p.aluno_id = p_aluno_id)
      GROUP BY p.aluno_id
   ),
-  -- Sem recorte de janela: quem sumiu há mais tempo que ela precisa de uma
-  -- data, não de um NULL.
+  -- Última presença dentro do histórico analisado (janela + linha de base).
+  --
+  -- O limite inferior importa: sem ele este agregado varria TODA a história de
+  -- presenças da academia a cada chamada, e ficava mais lento a cada mês de
+  -- operação. Quem não treina há mais que o histórico analisado sai com
+  -- ultima_presenca NULL — que para efeito de frequência já é o pior caso
+  -- possível, e o consumidor distingue "nunca apareceu" por dias_desde_entrada.
   ultima AS (
     SELECT p.aluno_id, max(p.data) AS data
       FROM public.presencas p
      WHERE p.tenant_id = v_tenant
        AND p.presente
-       AND p.data <= v_hoje
+       AND p.data BETWEEN v_inicio - (v_janela * 3) AND v_hoje
+       AND (p_aluno_id IS NULL OR p.aluno_id = p_aluno_id)
      GROUP BY p.aluno_id
   ),
   calc AS (
@@ -233,8 +355,10 @@ BEGIN
       b.data_entrada,
       u.data AS ultima_presenca,
       COALESCE(j.dias, 0) AS dias_treinados,
+      j.primeira AS primeira_presenca,
       COALESCE(lb.dias, 0) AS dias_base,
       mp.frequencia_semanal AS meta_contratada,
+      op.fator,
       -- Média semanal do período anterior. Média e não mediana de propósito:
       -- a mediana sobre as semanas OBSERVADAS ignora as semanas em que o aluno
       -- não apareceu (elas não geram linha), e puxaria a meta para cima
@@ -244,78 +368,126 @@ BEGIN
           THEN GREATEST(1, round(lb.dias / v_semanas_bl)::integer)
         ELSE NULL
       END AS meta_historica,
-      -- Nunca antes da matrícula: ninguém falta a aula que aconteceu antes de
-      -- ser aluno. Sem isto, quem entrou anteontem e ainda não treinou herda a
-      -- janela inteira de dias de chamada como sumiço.
+      -- Dias de chamada DA CATEGORIA DELE desde o último treino. Nunca antes
+      -- da matrícula: ninguém falta a aula que aconteceu antes de ser aluno.
       (SELECT count(*)
          FROM dias_operacao d
-        WHERE (u.data IS NULL OR d.data > u.data)
+        WHERE d.categoria = b.categoria
+          AND (u.data IS NULL OR d.data > u.data)
           AND d.data >= b.data_entrada) AS dias_sem_treinar
     FROM base b
     LEFT JOIN janela     j  ON j.aluno_id  = b.id
     LEFT JOIN linha_base lb ON lb.aluno_id = b.id
     LEFT JOIN ultima     u  ON u.aluno_id  = b.id
     LEFT JOIN meta_plano mp ON mp.aluno_id = b.id
+    LEFT JOIN operacao   op ON op.categoria = b.categoria
   ),
   final AS (
     SELECT
       c.*,
-      COALESCE(c.meta_contratada, c.meta_historica, 1) AS meta,
+      -- NULLIF + GREATEST + LEAST porque `planos.frequencia_semanal` é um
+      -- integer solto: sem CHECK no banco e sem validação no planoSchema, e a
+      -- tela de planos grava Number("") = 0 quando o admin apaga o campo.
+      -- Meta 0 dividia por zero em gap_esperado e derrubava a leitura da
+      -- academia inteira; negativo produzia expectativa negativa. Zero ou menos
+      -- conta como "não informado" e cai no histórico. Teto de 7 porque não
+      -- existe treinar 8 dias numa semana.
+      LEAST(7, GREATEST(1, COALESCE(
+        NULLIF(GREATEST(c.meta_contratada, 0), 0),
+        c.meta_historica,
+        1))) AS meta,
       CASE
-        WHEN c.meta_contratada IS NOT NULL THEN 'plano'
-        WHEN c.meta_historica  IS NOT NULL THEN 'historico'
+        WHEN COALESCE(c.meta_contratada, 0) > 0 THEN 'plano'
+        WHEN c.meta_historica IS NOT NULL       THEN 'historico'
         ELSE 'padrao'
       END AS meta_origem,
       -- Quem se matriculou dentro da janela só responde pelo tempo em que já
       -- era aluno. Cobrar as 4 semanas de quem entrou há 5 dias devolvia 25% de
       -- aderência para alguém em dia — número errado na tela, mesmo com a
       -- carência avisando para não pontuar.
-      LEAST(v_janela, GREATEST(1, (v_hoje - c.data_entrada) + 1)) / 7.0
-        AS semanas_aluno
+      --
+      -- O início efetivo é o MENOR entre a matrícula e a primeira presença do
+      -- período, recortado pela janela. Sem isso, uma data_entrada digitada no
+      -- futuro (erro de cadastro comum) encolhia o tempo de casa para 1 dia e
+      -- devolvia ritmo de 56 treinos por semana — número plausível na conta e
+      -- absurdo na realidade. Presença é prova de que o aluno já existia: onde
+      -- a matrícula contradiz o registro, vale o registro.
+      (v_hoje - GREATEST(
+                  v_inicio,
+                  LEAST(c.data_entrada, COALESCE(c.primeira_presenca, v_hoje))
+                ) + 1) / 7.0 AS semanas_aluno
     FROM calc c
   )
-  SELECT COALESCE(jsonb_agg(linha ORDER BY (linha->>'dias_sem_treinar')::int DESC,
-                                   linha->>'nome_completo'), '[]'::jsonb)
-    INTO v_alunos
-    FROM (
-      SELECT jsonb_build_object(
-        'aluno_id',           f.id,
-        'nome_completo',      f.nome_completo,
-        'categoria',          f.categoria,
-        'meta_semanal',       f.meta,
-        'meta_origem',        f.meta_origem,
-        'dias_treinados',     f.dias_treinados,
-        -- A meta traduzida para a janela, já encolhida pelo fator de operação
-        -- e pelo tempo de casa do aluno.
-        'dias_esperados',     CASE WHEN v_fator IS NOT NULL
-                                   THEN round(f.meta * f.semanas_aluno * v_fator, 1)
-                                   ELSE NULL END,
-        -- NULL quando não há expectativa a cobrar: academia sem grade ativa,
-        -- sem nenhuma chamada no período, ou expectativa menor que um dia
-        -- inteiro de treino — abaixo disso a razão não tem resolução (treinar
-        -- uma vez dá 100%, nenhuma dá 0%, e nem uma nem outra significa nada).
-        -- Ausência de dado, não 100%.
-        'aderencia',          CASE WHEN v_fator IS NOT NULL
-                                    AND f.meta * f.semanas_aluno * v_fator >= 1
-                                   THEN round(LEAST(f.dias_treinados /
-                                        (f.meta * f.semanas_aluno * v_fator), 1), 3)
-                                   ELSE NULL END,
-        -- Sem teto: é o que deixa a queda de 4x para 2x aparecer, já que pela
-        -- régua do contrato ela é invisível.
-        'ritmo_semanal',      round(f.dias_treinados / f.semanas_aluno, 2),
-        'ritmo_base_semanal', CASE WHEN f.dias_base > 0
-                                   THEN round(f.dias_base / v_semanas_bl, 2)
-                                   ELSE NULL END,
-        'ultima_presenca',    f.ultima_presenca,
-        'dias_sem_treinar',   f.dias_sem_treinar,
-        'gap_esperado',       round(7.0 / f.meta, 2),
-        -- GUARDA 4 — quem entrou há menos de uma janela ainda não teve tempo de
-        -- formar rotina. Os números vão junto; o consumidor é que não pontua.
-        'em_carencia',        f.data_entrada > v_hoje - v_janela,
-        'dias_desde_entrada', (v_hoje - f.data_entrada)
-      ) AS linha
-      FROM final f
-    ) linhas;
+  SELECT
+    (SELECT COALESCE(jsonb_agg(jsonb_build_object(
+       'categoria',        o.categoria,
+       'dias_com_chamada', o.dias_com_chamada,
+       'dias_por_semana',  o.dias_por_semana,
+       'dias_esperados',   round(o.dias_esperados, 1),
+       'fator',            CASE WHEN o.fator IS NOT NULL THEN round(o.fator, 3) END,
+       -- Metade ou menos dos dias esperados com chamada: os números saem, mas
+       -- não sustentam conclusão sobre ninguém, e a tela tem que dizer isso em
+       -- vez de mostrar uma lista de risco. Uma semana esquecida em quatro dá
+       -- 0,75 e segue utilizável; duas semanas dá 0,50 e não segue.
+       'confiavel',        COALESCE(o.fator > 0.5, false)
+     ) ORDER BY o.categoria), '[]'::jsonb) FROM operacao o),
+    (SELECT COALESCE(jsonb_agg(l.linha ORDER BY l.ord_gap DESC, l.ord_nome), '[]'::jsonb)
+       FROM (
+         SELECT
+           f.dias_sem_treinar AS ord_gap,
+           f.nome_completo    AS ord_nome,
+           jsonb_build_object(
+             'aluno_id',           f.id,
+             'nome_completo',      f.nome_completo,
+             'categoria',          f.categoria,
+             'meta_semanal',       f.meta,
+             'meta_origem',        f.meta_origem,
+             'dias_treinados',     f.dias_treinados,
+             -- A meta traduzida para a janela, já encolhida pelo fator de
+             -- operação da categoria e pelo tempo de casa do aluno.
+             'dias_esperados',     CASE WHEN f.fator IS NOT NULL
+                                        THEN round(f.meta * f.semanas_aluno * f.fator, 1)
+                                        ELSE NULL END,
+             -- NULL quando não há expectativa a cobrar: categoria sem grade
+             -- ativa, sem chamada no período, ou expectativa menor que um dia
+             -- inteiro de treino — abaixo disso a razão não tem resolução
+             -- (treinar uma vez dá 100%, nenhuma dá 0%, e nem uma nem outra
+             -- significa nada). Ausência de dado, não 100%.
+             'aderencia',          CASE WHEN f.fator IS NOT NULL
+                                         AND f.meta * f.semanas_aluno * f.fator >= 1
+                                        THEN round(LEAST(f.dias_treinados /
+                                             (f.meta * f.semanas_aluno * f.fator), 1), 3)
+                                        ELSE NULL END,
+             -- Sem teto: é o que deixa a queda de 4x para 2x aparecer, já que
+             -- pela régua do contrato ela é invisível.
+             'ritmo_semanal',      round(f.dias_treinados / f.semanas_aluno, 2),
+             'ritmo_base_semanal', CASE WHEN f.dias_base > 0
+                                        THEN round(f.dias_base / v_semanas_bl, 2)
+                                        ELSE NULL END,
+             'ultima_presenca',    f.ultima_presenca,
+             -- Oportunidades perdidas: chamadas da categoria dele desde o
+             -- último treino. Zero quando a academia não registrou nada.
+             'dias_sem_treinar',   f.dias_sem_treinar,
+             -- Dias de calendário desde o último treino. O par com o de cima é
+             -- o que denuncia dado velho: 0 oportunidade perdida com 14 dias
+             -- corridos significa que ninguém fez chamada, não que ele treinou.
+             'dias_corridos_sem_treinar', (v_hoje - f.ultima_presenca),
+             'gap_esperado',       round(7.0 / f.meta, 2),
+             -- GUARDA 4 — quem entrou há menos de uma janela ainda não teve
+             -- tempo de formar rotina. Os números vão junto; o consumidor é
+             -- que não pontua.
+             'em_carencia',        f.data_entrada > v_hoje - v_janela,
+             -- GREATEST(0): matrícula futura é erro de cadastro da tela de
+             -- alunos, não um número negativo para a tela de frequência
+             -- renderizar. em_carencia já marca a linha como não pontuável.
+             'dias_desde_entrada', GREATEST(0, (v_hoje - f.data_entrada)),
+             -- A categoria dele teve chamada suficiente para sustentar
+             -- conclusão? Repetido por linha porque é por categoria.
+             'confiavel',          COALESCE(f.fator > 0.5, false)
+           ) AS linha
+         FROM final f
+       ) l)
+  INTO v_operacao, v_alunos;
 
   RETURN jsonb_build_object(
     'janela', jsonb_build_object(
@@ -324,18 +496,8 @@ BEGIN
       'ate',   v_hoje,
       'fuso',  v_fuso
     ),
-    'operacao', jsonb_build_object(
-      'dias_com_chamada',   v_dias_op,
-      'dias_por_semana',    v_dias_semana,
-      'dias_esperados',     round(v_esperados, 1),
-      'fator',              CASE WHEN v_fator IS NOT NULL
-                                 THEN round(v_fator, 3) ELSE NULL END,
-      -- Menos de metade dos dias esperados com chamada: os números saem, mas
-      -- não sustentam conclusão sobre ninguém. Quem consome tem que dizer isso
-      -- na tela em vez de mostrar uma lista de risco.
-      'confiavel',          COALESCE(v_fator >= 0.5, false)
-    ),
-    'alunos', v_alunos
+    'operacao', v_operacao,
+    'alunos',   v_alunos
   );
 END;
 $$;

@@ -53,12 +53,21 @@ export const togglePresenca = createServerFn({ method: "POST" })
  *
  * O RPC não é SECURITY DEFINER: o RLS continua valendo dentro dele, então um
  * professor kids recebe números calculados só sobre alunos kids.
+ *
+ * Devolve `null` quando o perfil de quem chama não resolve um tenant — que é
+ * diferente de `alunos: []` (tenant resolvido, nenhum aluno visível). Quem
+ * consome precisa separar os dois: o primeiro é sessão inválida, o segundo é
+ * lista vazia.
  */
 export const frequenciaAluno = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i) => z.object({
     aluno_id: z.string().uuid().nullish(),
-    dias: z.number().int().min(7).max(365).default(28),
+    // coerce porque o valor costuma vir de <select>/querystring como string —
+    // z.number() puro rejeitaria "28". Os limites repetem os do SQL de
+    // propósito: o RPC também é alcançável direto do navegador via
+    // supabase.rpc(), então a guarda real é a de lá; esta só falha mais cedo.
+    dias: z.coerce.number().int().min(7).max(365).default(28),
   }).parse(i))
   .handler(async ({ data, context }) => {
     const ctx = context as any;

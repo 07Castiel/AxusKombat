@@ -88,6 +88,7 @@ function PlanosPage() {
       duracao: form.duracao,
       dias_personalizado: form.duracao === "personalizado" ? form.dias_personalizado : undefined,
       categoria: form.categoria,
+      frequencia_semanal: form.frequencia_semanal,
       modalidades: form.modalidades.split(",").map((s) => s.trim()).filter(Boolean),
       descricao: form.descricao,
     });
@@ -97,7 +98,7 @@ function PlanosPage() {
       nome: form.nome,
       descricao: form.descricao || null,
       categoria: form.categoria,
-      frequencia_semanal: Number(form.frequencia_semanal),
+      frequencia_semanal: parsed.data.frequencia_semanal,
       duracao: form.duracao,
       dias_personalizado: form.duracao === "personalizado" ? Number(form.dias_personalizado) : null,
       valor: Number(form.valor),
