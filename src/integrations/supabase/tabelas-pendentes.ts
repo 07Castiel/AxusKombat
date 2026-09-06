@@ -13,6 +13,7 @@
  *
  * Criadas em: supabase/HARDENING_4_APLICAR.sql (tabelas)
  *             supabase/HARDENING_7_APLICAR.sql (funcoes de agregacao)
+ *             supabase/migrations/20260906120000_frequencia_aluno_com_guardas.sql
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -92,6 +93,53 @@ type NotificacaoEscrita = {
   reivindicado_em: string | null;
 };
 
+/** Uma linha de aluno em frequencia_aluno(). Medidas, nunca veredito. */
+export type FrequenciaLinha = {
+  aluno_id: string;
+  nome_completo: string;
+  categoria: "adulto" | "kids";
+  /** Dias por semana contratados. */
+  meta_semanal: number;
+  /** De onde saiu a meta: o plano, o hábito do próprio aluno, ou o padrão 1. */
+  meta_origem: "plano" | "historico" | "padrao";
+  /** Dias DISTINTOS com presença na janela — duas aulas no mesmo dia são um dia. */
+  dias_treinados: number;
+  /** Meta traduzida para a janela, já encolhida pela operação real e pelo
+   *  tempo de casa do aluno. `null` quando não há expectativa a cobrar. */
+  dias_esperados: number | null;
+  /** 0..1. `null` quando a expectativa é menor que um dia de treino, ou quando
+   *  a academia não tem grade ativa nem chamada no período — não é 100%. */
+  aderencia: number | null;
+  /** Dias por semana na janela, SEM teto: é o que deixa a queda aparecer. */
+  ritmo_semanal: number;
+  /** O mesmo, na janela anterior (3x maior). `null` sem histórico. */
+  ritmo_base_semanal: number | null;
+  ultima_presenca: string | null;
+  /** Dias COM CHAMADA desde o último treino — não dias de calendário. */
+  dias_sem_treinar: number;
+  /** 7 / meta_semanal: o intervalo normal entre treinos deste aluno. */
+  gap_esperado: number;
+  /** Entrou dentro da janela; ainda não teve tempo de formar rotina. */
+  em_carencia: boolean;
+  dias_desde_entrada: number;
+};
+
+/** Retorno de frequencia_aluno(uuid, int) — 20260906120000. */
+export type FrequenciaAluno = {
+  janela: { dias: number; de: string; ate: string; fuso: string };
+  operacao: {
+    dias_com_chamada: number;
+    dias_por_semana: number;
+    dias_esperados: number;
+    /** Quanto a academia de fato operou, 0..1. `null` sem grade ativa. */
+    fator: number | null;
+    /** Abaixo de metade dos dias esperados com chamada, os números saem mas não
+     *  sustentam conclusão sobre ninguém — a tela precisa dizer isso. */
+    confiavel: boolean;
+  };
+  alunos: FrequenciaLinha[];
+};
+
 /** Retorno de master_excluir_tenant(uuid) — M12. */
 export type ExclusaoTenant = { nome: string; usuarios: string[] };
 
@@ -120,6 +168,10 @@ export type PendingDatabase = {
     Functions: {
       dashboard_resumo: Fn<Record<string, never>, DashboardResumo>;
       relatorio_periodo: Fn<{ p_de: string; p_ate: string }, RelatorioPeriodo>;
+      frequencia_aluno: Fn<
+        { p_aluno_id: string | null; p_dias: number },
+        FrequenciaAluno
+      >;
       master_excluir_tenant: Fn<{ p_tenant_id: string }, ExclusaoTenant>;
       reivindicar_notificacoes: Fn<
         {
