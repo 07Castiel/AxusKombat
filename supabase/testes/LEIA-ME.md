@@ -5,7 +5,7 @@ contra um Postgres real, com **o schema de produção inteiro e as 52 policies d
 RLS aplicadas** — não contra stubs. Os testes rodam como `authenticated` com
 `request.jwt.claim.sub` setado, então o RLS é exercido de verdade.
 
-80 asserções, cobrindo:
+96 asserções, cobrindo:
 
 | Arquivo | O que cobre |
 |---|---|
@@ -14,6 +14,18 @@ RLS aplicadas** — não contra stubs. Os testes rodam como `authenticated` com
 | `t45_tenant_perm.sql` | isolamento entre academias (com e sem `p_aluno_id`) e os 6 papéis reais |
 | `t6_fuso.sql` | fuso válido/inválido/ausente, vazamento entre tenants, virada de data entre UTC+14 e UTC-11 |
 | `t8_modulos.sql` | prova que a policy reescrita devolve **o mesmo conjunto de linhas** papel a papel, e que os outros módulos não regridem |
+| `t9_integracao_ui.sql` | os caminhos de consulta das telas: uma chamada por ficha, uma pelo painel inteiro, isolamento entre academias pela rota `/aluno/$id`, e o financeiro sem acesso a presença |
+
+O lado React é testado em `src/components/FrequenciaAluno.test.tsx` (renderização
+real via `react-dom/server`) e `src/lib/frequencia.test.ts` (regras de
+apresentação). Os dois rodam com `bun run test`.
+
+## Diagnóstico de dados
+
+`diagnostico_frequencia_semanal.sql` é **somente leitura** e responde se a meta
+cadastrada nos planos é confiável: quantos estão nulos, zerados, fora de 1–7, se
+o nome do plano contradiz a coluna, e se a frequência cadastrada bate com o que
+os alunos daquele plano realmente treinam. Rode no SQL Editor do Supabase.
 
 ## Rodando
 

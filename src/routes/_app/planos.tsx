@@ -109,6 +109,10 @@ function PlanosPage() {
       ? await supabase.from("planos").update(payload).eq("id", editingId)
       : await supabase.from("planos").insert(payload);
     if (error) { toast.error(translateError(error)); return; }
+    // frequencia_semanal do plano e a meta que a frequencia usa: mudar o plano
+    // muda a expectativa de todo aluno com contrato nele.
+    qc.invalidateQueries({ queryKey: ["frequencia-aluno"] });
+    qc.invalidateQueries({ queryKey: ["frequencia-painel"] });
     toast.success(editingId ? "Plano atualizado" : "Plano criado");
     setOpen(false);
     qc.invalidateQueries({ queryKey: ["planos"] });

@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import {
   comTabelasPendentes,
@@ -20,6 +21,9 @@ import {
   Loader2,
 } from "lucide-react";
 import { fmtMoney, fmtDate } from "@/lib/utils";
+import { FrequenciaPainel } from "@/components/FrequenciaPainel";
+import { frequenciaAluno } from "@/lib/presencas.functions";
+import { PAPEIS_DE_PRESENCA } from "@/lib/acesso-telas";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 
 export const Route = createFileRoute("/_app/")({
@@ -36,8 +40,28 @@ export const Route = createFileRoute("/_app/")({
   }),
 });
 
+const DIAS_FREQUENCIA = 28;
+
 function Dashboard() {
-  const { profile } = useAuth();
+  const { profile, roles } = useAuth();
+  const buscarFrequencia = useServerFn(frequenciaAluno);
+
+  // Mesmo motivo da ficha: o RLS de `presencas` nao devolve linha para o
+  // financeiro, e um bloco zerado daria a entender que ninguem esta treinando.
+  const podeVerFrequencia = roles.some((r) => PAPEIS_DE_PRESENCA.includes(r));
+
+  // UMA chamada para a academia inteira. `aluno_id: null` devolve todos os
+  // alunos ativos que o papel de quem olha pode ver — o painel nunca chama a
+  // RPC por aluno, que e exatamente o N+1 que ela existe para evitar.
+  const {
+    data: frequencia,
+    isLoading: carregandoFrequencia,
+    error: erroFrequencia,
+  } = useQuery({
+    queryKey: ["frequencia-painel", profile?.tenant_id, DIAS_FREQUENCIA],
+    enabled: !!profile?.tenant_id && podeVerFrequencia,
+    queryFn: () => buscarFrequencia({ data: { aluno_id: null, dias: DIAS_FREQUENCIA } }),
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard", profile?.tenant_id],
@@ -155,6 +179,17 @@ function Dashboard() {
           accent="text-primary"
         />
       </div>
+
+      {podeVerFrequencia && (
+      <div className="mb-6">
+        <FrequenciaPainel
+          dados={frequencia}
+          carregando={carregandoFrequencia}
+          erro={erroFrequencia}
+          dias={DIAS_FREQUENCIA}
+        />
+      </div>
+      )}
 
       <div className="grid lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2 p-6 gradient-card border-border">

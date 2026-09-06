@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
@@ -452,7 +452,13 @@ function AlunosPage() {
               return (
                 <TableRow key={a.id}>
                   <TableCell className="font-medium">
-                    {a.nome_completo}
+                    <Link
+                      to="/aluno/$id"
+                      params={{ id: a.id }}
+                      className="hover:text-primary underline-offset-4 hover:underline"
+                    >
+                      {a.nome_completo}
+                    </Link>
                     {a.telefone && <div className="text-xs text-muted-foreground">{a.telefone}</div>}
                   </TableCell>
                   <TableCell className="text-sm">

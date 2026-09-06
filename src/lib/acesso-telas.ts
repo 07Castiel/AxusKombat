@@ -12,6 +12,7 @@
  *   /relatorios   -> le mensalidades + despesas, entao o menor denominador
  *   /planos       -> planos_admin_all e admin-only para escrita, e a tela e de
  *                    edicao: abrir em modo quebrado seria pior que barrar
+ *   /presencas    -> presencas_select      (admin, recepcao, professores)
  */
 import type { AppRole } from "@/hooks/use-auth";
 import type { PermissionModule } from "@/lib/permissoes";
@@ -24,11 +25,34 @@ export const TODOS_OS_PAPEIS: readonly AppRole[] = [
   "professor_kids",
 ];
 
+/**
+ * Quem enxerga presenca. Espelha presencas_select (20260701033153), que NAO
+ * inclui financeiro — nem para ler, nem para escrever.
+ *
+ * A exclusao e deliberada e nao um esquecimento: presenca e dado pessoal de
+ * comportamento, de menores inclusive, e as telas do financeiro (mensalidades,
+ * despesas, relatorios) nao consomem frequencia. Decisao de retencao a partir
+ * de quem esta sumindo e de admin e recepcao, que ja enxergam.
+ *
+ * Ate esta branch /presencas estava em TODOS_OS_PAPEIS, o que quebrava a regra
+ * do cabecalho deste arquivo: a tabela ficava MAIS permissiva que o RLS, e o
+ * financeiro abria a chamada para ver uma tela vazia sem entender por que.
+ */
+export const PAPEIS_DE_PRESENCA: readonly AppRole[] = [
+  "admin",
+  "recepcao",
+  "professor_adulto",
+  "professor_kids",
+];
+
 export const ACESSO_TELAS = {
   "/": TODOS_OS_PAPEIS,
   "/alunos": TODOS_OS_PAPEIS,
+  // A ficha responde ao mesmo papel e ao mesmo modulo da lista: quem pode ver
+  // a lista pode abrir a ficha, e quem nao pode ver nem chega ao link.
+  "/aluno/$id": TODOS_OS_PAPEIS,
   "/horarios": TODOS_OS_PAPEIS,
-  "/presencas": TODOS_OS_PAPEIS,
+  "/presencas": PAPEIS_DE_PRESENCA,
   "/graduacoes": TODOS_OS_PAPEIS,
 
   "/financeiro": ["admin", "recepcao", "financeiro"],
@@ -59,6 +83,7 @@ export function papeisDaTela(tela: TelaProtegida): readonly AppRole[] {
  */
 export const MODULO_DA_TELA: Partial<Record<TelaProtegida, PermissionModule>> = {
   "/alunos": "alunos",
+  "/aluno/$id": "alunos",
   "/presencas": "alunos",
   "/financeiro": "pagamentos",
   "/despesas": "pagamentos",

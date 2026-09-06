@@ -30,3 +30,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# diretorio de trabalho do rebuild.sh dos testes: copias das migrations
+supabase/testes/mig/

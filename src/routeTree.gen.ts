@@ -35,6 +35,7 @@ import { Route as AppAlunosRouteImport } from './routes/_app/alunos'
 import { Route as ApiPublicTrackVisitRouteImport } from './routes/api/public/track-visit'
 import { Route as ApiPublicStripeWebhookRouteImport } from './routes/api/public/stripe-webhook'
 import { Route as AdminMasterTenantIdRouteImport } from './routes/admin-master.tenant.$id'
+import { Route as AppAlunoIdRouteImport } from './routes/_app/aluno.$id'
 import { Route as ApiPublicHooksNotifyMensalidadesRouteImport } from './routes/api/public/hooks/notify-mensalidades'
 import { Route as ApiPublicHooksDispatchNotificationsRouteImport } from './routes/api/public/hooks/dispatch-notifications'
 
@@ -167,6 +168,11 @@ const AdminMasterTenantIdRoute = AdminMasterTenantIdRouteImport.update({
   path: '/admin-master/tenant/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppAlunoIdRoute = AppAlunoIdRouteImport.update({
+  id: '/aluno/$id',
+  path: '/aluno/$id',
+  getParentRoute: () => AppRoute,
+} as any)
 const ApiPublicHooksNotifyMensalidadesRoute =
   ApiPublicHooksNotifyMensalidadesRouteImport.update({
     id: '/api/public/hooks/notify-mensalidades',
@@ -203,6 +209,7 @@ export interface FileRoutesByFullPath {
   '/admin-master/dashboard': typeof AdminMasterDashboardRoute
   '/portal/$token': typeof PortalTokenRoute
   '/admin-master/': typeof AdminMasterIndexRoute
+  '/aluno/$id': typeof AppAlunoIdRoute
   '/admin-master/tenant/$id': typeof AdminMasterTenantIdRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/api/public/track-visit': typeof ApiPublicTrackVisitRoute
@@ -232,6 +239,7 @@ export interface FileRoutesByTo {
   '/portal/$token': typeof PortalTokenRoute
   '/': typeof AppIndexRoute
   '/admin-master': typeof AdminMasterIndexRoute
+  '/aluno/$id': typeof AppAlunoIdRoute
   '/admin-master/tenant/$id': typeof AdminMasterTenantIdRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/api/public/track-visit': typeof ApiPublicTrackVisitRoute
@@ -263,6 +271,7 @@ export interface FileRoutesById {
   '/portal/$token': typeof PortalTokenRoute
   '/_app/': typeof AppIndexRoute
   '/admin-master/': typeof AdminMasterIndexRoute
+  '/_app/aluno/$id': typeof AppAlunoIdRoute
   '/admin-master/tenant/$id': typeof AdminMasterTenantIdRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
   '/api/public/track-visit': typeof ApiPublicTrackVisitRoute
@@ -294,6 +303,7 @@ export interface FileRouteTypes {
     | '/admin-master/dashboard'
     | '/portal/$token'
     | '/admin-master/'
+    | '/aluno/$id'
     | '/admin-master/tenant/$id'
     | '/api/public/stripe-webhook'
     | '/api/public/track-visit'
@@ -323,6 +333,7 @@ export interface FileRouteTypes {
     | '/portal/$token'
     | '/'
     | '/admin-master'
+    | '/aluno/$id'
     | '/admin-master/tenant/$id'
     | '/api/public/stripe-webhook'
     | '/api/public/track-visit'
@@ -353,6 +364,7 @@ export interface FileRouteTypes {
     | '/portal/$token'
     | '/_app/'
     | '/admin-master/'
+    | '/_app/aluno/$id'
     | '/admin-master/tenant/$id'
     | '/api/public/stripe-webhook'
     | '/api/public/track-visit'
@@ -561,6 +573,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminMasterTenantIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app/aluno/$id': {
+      id: '/_app/aluno/$id'
+      path: '/aluno/$id'
+      fullPath: '/aluno/$id'
+      preLoaderRoute: typeof AppAlunoIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/api/public/hooks/notify-mensalidades': {
       id: '/api/public/hooks/notify-mensalidades'
       path: '/api/public/hooks/notify-mensalidades'
@@ -593,6 +612,7 @@ interface AppRouteChildren {
   AppPresencasRoute: typeof AppPresencasRoute
   AppRelatoriosRoute: typeof AppRelatoriosRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppAlunoIdRoute: typeof AppAlunoIdRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -610,6 +630,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppPresencasRoute: AppPresencasRoute,
   AppRelatoriosRoute: AppRelatoriosRoute,
   AppIndexRoute: AppIndexRoute,
+  AppAlunoIdRoute: AppAlunoIdRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

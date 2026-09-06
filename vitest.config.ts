@@ -8,6 +8,9 @@ export default defineConfig({
   plugins: [tsConfigPaths()],
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts"],
+    // .tsx entrou junto por causa de FrequenciaAluno.test.tsx: a distincao
+    // entre "0%" e "Sem dados suficientes" so se prova renderizando. Usa
+    // react-dom/server, que ja e dependencia — nenhum runner de DOM novo.
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
   },
 });
