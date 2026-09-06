@@ -29,10 +29,29 @@ os alunos daquele plano realmente treinam.
 
 Cole o arquivo inteiro no SQL Editor do Supabase e execute. É **uma consulta
 só**: o editor mostra o resultado de um único statement, então uma versão em
-vários SELECTs exibiria apenas um deles. Toda seção sempre devolve pelo menos
-uma linha — quando não há problema, a linha diz isso. Silêncio nunca significa
-"não rodou". A coluna `Situação` classifica cada linha em OK, CONFERIR ou
-CORRIGIR, e as que pedem ação aparecem primeiro dentro de cada seção.
+vários SELECTs exibiria apenas um deles. Toda seção começa por uma linha de
+resumo calculada por agregado — agregado sem `GROUP BY` devolve uma linha mesmo
+sobre zero linhas de entrada, então nenhuma seção pode sumir. Silêncio nunca
+significa "não rodou". A coluna `Situação` classifica cada linha em OK,
+CONFERIR ou CORRIGIR, e as que pedem ação aparecem primeiro dentro da seção.
+
+O arquivo tem **um único ponto e vírgula**, no fim da consulta, e nada depois
+dele. Isso é deliberado: editores que removem comentários antes de dividir o
+script por `;` podem transformar um comando comentado em SQL executável, e um
+script de diagnóstico não pode carregar DDL nem em comentário.
+
+### Travar a coluna, depois de corrigir tudo
+
+Só quando a seção 4 do diagnóstico vier "Nenhum plano invalido":
+
+```sql
+ALTER TABLE public.planos
+  ADD CONSTRAINT planos_frequencia_semanal_valida
+  CHECK (frequencia_semanal IS NULL OR frequencia_semanal BETWEEN 1 AND 7);
+```
+
+Com a seção 4 ainda listando planos, esse CHECK passaria a barrar **qualquer**
+edição dos planos legados — inclusive mudar só o preço.
 
 ## Rodando
 
