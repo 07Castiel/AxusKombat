@@ -25,7 +25,14 @@ apresentação). Os dois rodam com `bun run test`.
 `diagnostico_frequencia_semanal.sql` é **somente leitura** e responde se a meta
 cadastrada nos planos é confiável: quantos estão nulos, zerados, fora de 1–7, se
 o nome do plano contradiz a coluna, e se a frequência cadastrada bate com o que
-os alunos daquele plano realmente treinam. Rode no SQL Editor do Supabase.
+os alunos daquele plano realmente treinam.
+
+Cole o arquivo inteiro no SQL Editor do Supabase e execute. É **uma consulta
+só**: o editor mostra o resultado de um único statement, então uma versão em
+vários SELECTs exibiria apenas um deles. Toda seção sempre devolve pelo menos
+uma linha — quando não há problema, a linha diz isso. Silêncio nunca significa
+"não rodou". A coluna `Situação` classifica cada linha em OK, CONFERIR ou
+CORRIGIR, e as que pedem ação aparecem primeiro dentro de cada seção.
 
 ## Rodando
 
