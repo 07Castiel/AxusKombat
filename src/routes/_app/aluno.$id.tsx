@@ -66,7 +66,7 @@ function FichaAluno() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("contratos")
-        .select("*, planos(nome, frequencia_semanal)")
+        .select("*, planos(nome)")
         .eq("aluno_id", id)
         .in("status", ["ativo", "pausado"])
         .order("data_inicio", { ascending: false })
@@ -166,15 +166,12 @@ function FichaAluno() {
                 rotulo="Mensalidade"
                 valor={fmtMoney(Number(c.valor_mensalidade))}
               />
-              <Info
-                icone={CalendarDays}
-                rotulo="Frequência contratada"
-                valor={
-                  c.planos?.frequencia_semanal
-                    ? `${c.planos.frequencia_semanal}x por semana`
-                    : null
-                }
-              />
+              {/* A frequência contratada NÃO aparece aqui de propósito. Ela já
+                  é mostrada na seção de frequência, como "Meta semanal · do
+                  plano contratado", e vem da RPC. Ter o mesmo número em dois
+                  lugares, um do contrato em cache e outro da RPC, permitia a
+                  ficha exibir "2x por semana" ao lado de "meta de 3x por
+                  semana" logo depois de alguém editar o plano. Uma fonte só. */}
               <Info icone={CalendarDays} rotulo="Vencimento" valor={`Dia ${c.dia_vencimento}`} />
             </dl>
           ) : (

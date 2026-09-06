@@ -113,6 +113,11 @@ function PlanosPage() {
     // muda a expectativa de todo aluno com contrato nele.
     qc.invalidateQueries({ queryKey: ["frequencia-aluno"] });
     qc.invalidateQueries({ queryKey: ["frequencia-painel"] });
+    // O nome do plano chega a ficha e a lista de alunos embutido no contrato
+    // (`planos(nome)`), entao renomear um plano deixava as duas telas com o
+    // nome antigo ate o cache expirar.
+    qc.invalidateQueries({ queryKey: ["contrato-aluno"] });
+    qc.invalidateQueries({ queryKey: ["contratos-ativos"] });
     toast.success(editingId ? "Plano atualizado" : "Plano criado");
     setOpen(false);
     qc.invalidateQueries({ queryKey: ["planos"] });
