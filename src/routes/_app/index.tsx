@@ -23,7 +23,9 @@ import {
 import { fmtMoney, fmtDate } from "@/lib/utils";
 import { FrequenciaPainel } from "@/components/FrequenciaPainel";
 import { frequenciaAluno } from "@/lib/presencas.functions";
-import { PAPEIS_DE_PRESENCA } from "@/lib/acesso-telas";
+import { PAPEIS_DE_PRESENCA, PAPEIS_DE_RISCO } from "@/lib/acesso-telas";
+import { RiscoPainel } from "@/components/RiscoPainel";
+import { riscoEvasao } from "@/lib/risco.functions";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 
 export const Route = createFileRoute("/_app/")({
@@ -45,6 +47,12 @@ const DIAS_FREQUENCIA = 28;
 function Dashboard() {
   const { profile, roles } = useAuth();
   const buscarFrequencia = useServerFn(frequenciaAluno);
+  const buscarRisco = useServerFn(riscoEvasao);
+
+  // Admin e recepcao. A risco_evasao() ja degrada sozinha por papel (o RLS de
+  // mensalidades nao devolve linha para professor), mas um bloco dizendo
+  // "pagamento nao medido" para quem nunca vai poder medi-lo e ruido.
+  const podeVerRisco = roles.some((r) => PAPEIS_DE_RISCO.includes(r));
 
   // Mesmo motivo da ficha: o RLS de `presencas` nao devolve linha para o
   // financeiro, e um bloco zerado daria a entender que ninguem esta treinando.
@@ -61,6 +69,17 @@ function Dashboard() {
     queryKey: ["frequencia-painel", profile?.tenant_id, DIAS_FREQUENCIA],
     enabled: !!profile?.tenant_id && podeVerFrequencia,
     queryFn: () => buscarFrequencia({ data: { aluno_id: null, dias: DIAS_FREQUENCIA } }),
+  });
+
+  // Mesma forma: UMA chamada para a academia inteira, soma feita no Postgres.
+  const {
+    data: risco,
+    isLoading: carregandoRisco,
+    error: erroRisco,
+  } = useQuery({
+    queryKey: ["risco-painel", profile?.tenant_id, DIAS_FREQUENCIA],
+    enabled: !!profile?.tenant_id && podeVerRisco,
+    queryFn: () => buscarRisco({ data: { aluno_id: null, dias: DIAS_FREQUENCIA } }),
   });
 
   const { data, isLoading } = useQuery({
@@ -179,6 +198,12 @@ function Dashboard() {
           accent="text-primary"
         />
       </div>
+
+      {podeVerRisco && (
+      <div className="mb-6">
+        <RiscoPainel dados={risco} carregando={carregandoRisco} erro={erroRisco} />
+      </div>
+      )}
 
       {podeVerFrequencia && (
       <div className="mb-6">
