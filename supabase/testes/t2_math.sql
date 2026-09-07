@@ -1,6 +1,12 @@
 \echo '### ITEM 2 — auditoria matematica'
 \echo '-- 2.1 metas degeneradas no banco (0, negativa, absurda, NULL)'
 BEGIN;
+-- O CHECK planos_frequencia_semanal_1_a_7 agora impede que estes valores
+-- entrem pela porta da frente, e e para isso que ele existe. A defesa dentro
+-- da frequencia_aluno() continua sendo testada: ela vale para linha gravada
+-- antes do CHECK, e para o dia em que alguem soltar a constraint. Cai dentro
+-- da transacao, entao o ROLLBACK no fim devolve a constraint.
+ALTER TABLE planos DROP CONSTRAINT planos_frequencia_semanal_1_a_7;
 UPDATE planos SET frequencia_semanal=0    WHERE id='02000000-0000-0000-0000-000000000002';
 UPDATE planos SET frequencia_semanal=-3   WHERE id='03000000-0000-0000-0000-000000000003';
 UPDATE planos SET frequencia_semanal=1000 WHERE id='04000000-0000-0000-0000-000000000004';

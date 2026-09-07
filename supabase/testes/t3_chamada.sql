@@ -49,9 +49,15 @@ SELECT t_ok('3c aluno em dia NAO vira risco: semTr 0 mas corridos 14',
 RESET ROLE; ROLLBACK;
 
 -- 3d) METADE das chamadas ausentes (dias alternados)
+--
+-- A paridade e sobre o numero do dia CORRIDO, nao sobre o dia do mes. Com
+-- `extract(day from data) % 2` a alternancia quebrava na virada de mes — 31/08
+-- e 01/09 sao ambos impares, dois dias seguidos sobreviviam e o fator subia
+-- para 0,536, acima do 0,5. O teste passava ou falhava conforme a data em que
+-- fosse rodado.
 BEGIN;
 DELETE FROM presencas WHERE tenant_id=:C::uuid
-   AND data > (now() AT TIME ZONE 'UTC')::date - 28 AND (extract(day from data)::int % 2)=0;
+   AND data > (now() AT TIME ZONE 'UTC')::date - 28 AND ((data - DATE '2000-01-01') % 2)=0;
 SET request.jwt.claim.sub = '44444444-0000-0000-0000-000000000001'; SET ROLE authenticated;
 SELECT t_ok('3d metade das chamadas ausentes -> confiavel=false',
   (o->>'confiavel')='false', 'fator='||(o->>'fator'))

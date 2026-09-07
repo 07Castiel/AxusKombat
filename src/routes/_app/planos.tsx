@@ -240,7 +240,12 @@ function PlanosPage() {
       ) : (
         <Card className="gradient-card border-border overflow-hidden">
           <Table>
-            <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Descrição</TableHead><TableHead>Valor</TableHead><TableHead>Duração</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
+            {/* "Treinos/semana" fica ao lado de "Duração" de proposito: sao as
+                duas colunas que se confundem, e essa e a meta semanal que a
+                leitura de frequencia usa como denominador. Ficava so dentro do
+                dialogo de edicao — foi assim que "Adulto - TRIMESTRAL" passou a
+                ter 3 (de 3 meses) sem ninguem ver. */}
+            <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Descrição</TableHead><TableHead>Valor</TableHead><TableHead>Duração</TableHead><TableHead>Treinos/semana</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
             <TableBody>
               {planos.map((p: any) => (
                 <TableRow key={p.id} className={!p.ativo ? "opacity-50" : ""}>
@@ -249,6 +254,13 @@ function PlanosPage() {
                   <TableCell className="font-semibold text-primary">{fmtMoney(Number(p.valor))}</TableCell>
                   <TableCell className="capitalize text-sm">
                     {p.duracao === "personalizado" ? `${p.dias_personalizado ?? "?"} dias` : p.duracao}
+                  </TableCell>
+                  <TableCell className="text-sm tabular-nums">
+                    {p.frequencia_semanal ? (
+                      `${p.frequencia_semanal}x`
+                    ) : (
+                      <span className="text-muted-foreground italic">não combinado</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <button onClick={() => toggleAtivo(p.id, p.ativo)} className={`px-2 py-1 rounded text-[10px] uppercase font-semibold tracking-wider ${p.ativo ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}>
