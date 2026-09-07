@@ -141,6 +141,43 @@ export type FrequenciaLinha = {
 };
 
 /** Retorno de frequencia_aluno(uuid, int) — 20260906120000. */
+/**
+ * Uma linha de risco_evasao(). Espelha o envelope do RPC.
+ *
+ * `risco` é `null` — não zero — quando nenhum sinal de COMPORTAMENTO pôde ser
+ * medido. Contrato e tempo de casa existem sempre; sozinhos eles davam nota
+ * cheia sobre um denominador de 40, e o aluno matriculado hoje aparecia em
+ * primeiro lugar por ser novo. Sem pagamento nem frequência não há leitura de
+ * risco, e a tela precisa dizer isso em vez de mostrar um número.
+ */
+export type RiscoLinha = {
+  id: string;
+  nome_completo: string;
+  categoria: "adulto" | "kids";
+  /** 0..100 sobre o peso do que DEU para medir. `null` sem sinal de comportamento. */
+  risco: number | null;
+  /** Fração do peso total (130) que foi medida. 0,31 é o piso estrutural. */
+  cobertura: number;
+  /** Pontos por componente. `null` = não medido, e o peso sai do denominador. */
+  componentes: {
+    atraso: number | null;
+    reincidencia: number | null;
+    contrato: number;
+    tempo_casa: number;
+    frequencia: number | null;
+  };
+  /** O porquê, em fatos conferíveis. É isto que a tela mostra, não só a nota. */
+  motivos: string[];
+  /** O que não pôde ser medido, para o gestor saber sobre quanta ignorância decide. */
+  nao_medido: string[];
+};
+
+export type RiscoEvasao = {
+  janela: { ate: string; dias: number; fuso: string };
+  peso_total: number;
+  alunos: RiscoLinha[];
+};
+
 export type FrequenciaAluno = {
   janela: { dias: number; de: string; ate: string; fuso: string };
   /** Uma entrada POR CATEGORIA. A operação é medida por categoria porque a
@@ -191,6 +228,10 @@ export type PendingDatabase = {
       frequencia_aluno: Fn<
         { p_aluno_id: string | null; p_dias: number },
         FrequenciaAluno
+      >;
+      risco_evasao: Fn<
+        { p_aluno_id: string | null; p_dias: number },
+        RiscoEvasao
       >;
       master_excluir_tenant: Fn<{ p_tenant_id: string }, ExclusaoTenant>;
       reivindicar_notificacoes: Fn<

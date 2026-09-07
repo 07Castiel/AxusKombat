@@ -45,6 +45,22 @@ export const PAPEIS_DE_PRESENCA: readonly AppRole[] = [
   "professor_kids",
 ];
 
+/**
+ * Quem enxerga a leitura de risco de evasao.
+ *
+ * A risco_evasao() NAO e SECURITY DEFINER, entao cada papel ja recebe so os
+ * componentes que o RLS dele libera: professor nao le mensalidades (atraso e
+ * reincidencia voltam NULL), financeiro nao le presencas (frequencia volta
+ * NULL). A funcao degrada com honestidade sozinha.
+ *
+ * Mas uma tela que mostra "cobertura 0,31, pagamento nao medido" para o
+ * professor nao informa nada — e o sinal dominante hoje e inadimplencia, que e
+ * dado financeiro. Admin e recepcao sao os unicos papeis que enxergam as duas
+ * metades, e sao os mesmos a quem a decisao de retencao ja cabe (ver
+ * PAPEIS_DE_PRESENCA acima).
+ */
+export const PAPEIS_DE_RISCO: readonly AppRole[] = ["admin", "recepcao"];
+
 export const ACESSO_TELAS = {
   "/": TODOS_OS_PAPEIS,
   "/alunos": TODOS_OS_PAPEIS,
