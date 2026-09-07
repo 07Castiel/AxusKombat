@@ -96,6 +96,10 @@ function PresencasPage() {
     try {
       await toggleFn({ data: { horario_id: horarioId, aluno_id: alunoId, data, presente }});
       qc.invalidateQueries({ queryKey: ["presencas", horarioId, data] });
+      // A chamada muda a frequencia: sem isto a ficha do aluno e o painel
+      // continuariam mostrando o numero anterior ate o cache expirar.
+      qc.invalidateQueries({ queryKey: ["frequencia-aluno", alunoId] });
+      qc.invalidateQueries({ queryKey: ["frequencia-painel"] });
     } catch (err: any) { toast.error(translateError(err)); }
     finally { setSaving(null); }
   };

@@ -39,7 +39,10 @@ const EMPTY = {
   nome: "",
   descricao: "",
   categoria: "adulto" as Categoria,
-  frequencia_semanal: "1",
+  // Vazio, nao "1". O "1" chegava ao banco como meta semanal sem ninguem
+  // ter digitado nada, e 1 e a meta mais baixa possivel: infla a aderencia
+  // de todo aluno do plano e esconde justamente quem esta sumindo.
+  frequencia_semanal: "",
   duracao: "mensal" as Duracao,
   dias_personalizado: "",
   valor: "",
@@ -69,7 +72,7 @@ function PlanosPage() {
       nome: p.nome,
       descricao: p.descricao ?? "",
       categoria: p.categoria,
-      frequencia_semanal: String(p.frequencia_semanal ?? 1),
+      frequencia_semanal: p.frequencia_semanal ? String(p.frequencia_semanal) : "",
       duracao: p.duracao,
       dias_personalizado: p.dias_personalizado ? String(p.dias_personalizado) : "",
       valor: String(p.valor),
@@ -88,6 +91,7 @@ function PlanosPage() {
       duracao: form.duracao,
       dias_personalizado: form.duracao === "personalizado" ? form.dias_personalizado : undefined,
       categoria: form.categoria,
+      frequencia_semanal: form.frequencia_semanal,
       modalidades: form.modalidades.split(",").map((s) => s.trim()).filter(Boolean),
       descricao: form.descricao,
     });
@@ -97,7 +101,7 @@ function PlanosPage() {
       nome: form.nome,
       descricao: form.descricao || null,
       categoria: form.categoria,
-      frequencia_semanal: Number(form.frequencia_semanal),
+      frequencia_semanal: parsed.data.frequencia_semanal ?? null,
       duracao: form.duracao,
       dias_personalizado: form.duracao === "personalizado" ? Number(form.dias_personalizado) : null,
       valor: Number(form.valor),
@@ -108,6 +112,15 @@ function PlanosPage() {
       ? await supabase.from("planos").update(payload).eq("id", editingId)
       : await supabase.from("planos").insert(payload);
     if (error) { toast.error(translateError(error)); return; }
+    // frequencia_semanal do plano e a meta que a frequencia usa: mudar o plano
+    // muda a expectativa de todo aluno com contrato nele.
+    qc.invalidateQueries({ queryKey: ["frequencia-aluno"] });
+    qc.invalidateQueries({ queryKey: ["frequencia-painel"] });
+    // O nome do plano chega a ficha e a lista de alunos embutido no contrato
+    // (`planos(nome)`), entao renomear um plano deixava as duas telas com o
+    // nome antigo ate o cache expirar.
+    qc.invalidateQueries({ queryKey: ["contrato-aluno"] });
+    qc.invalidateQueries({ queryKey: ["contratos-ativos"] });
     toast.success(editingId ? "Plano atualizado" : "Plano criado");
     setOpen(false);
     qc.invalidateQueries({ queryKey: ["planos"] });
@@ -178,7 +191,25 @@ function PlanosPage() {
               {form.duracao === "personalizado" && (
                 <div><Label>Dias *</Label><Input type="number" min={1} required value={form.dias_personalizado} onChange={(e)=>setForm({...form, dias_personalizado: e.target.value})}/></div>
               )}
-              <div><Label>Frequência/semana</Label><Input type="number" min={1} max={7} value={form.frequencia_semanal} onChange={(e)=>setForm({...form, frequencia_semanal: e.target.value})}/></div>
+              {/* Fica ao lado de "Duração", e em producao dois planos vieram
+                  com a duracao em meses digitada aqui ("Plano Mensal" com 1,
+                  "Adulto - TRIMESTRAL" com 3). O rotulo e a dica separam os
+                  dois campos, e vazio agora e aceito. */}
+              <div>
+                <Label>Treinos por semana</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={7}
+                  placeholder="Deixe vazio se não houver"
+                  value={form.frequencia_semanal}
+                  onChange={(e) => setForm({ ...form, frequencia_semanal: e.target.value })}
+                />
+                <p className="text-muted-foreground mt-1 text-xs leading-snug">
+                  Quantas vezes o aluno treina por semana (1 a 7). Não é a duração do plano. Vazio:
+                  a meta sai do histórico do próprio aluno.
+                </p>
+              </div>
               <div><Label>Valor (R$) *</Label><Input type="number" step="0.01" required value={form.valor} onChange={(e)=>setForm({...form, valor: e.target.value})}/></div>
               <div><Label>Status</Label>
                 <Select value={form.ativo ? "ativo" : "inativo"} onValueChange={(v) => setForm({...form, ativo: v === "ativo"})}>
@@ -209,7 +240,12 @@ function PlanosPage() {
       ) : (
         <Card className="gradient-card border-border overflow-hidden">
           <Table>
-            <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Descrição</TableHead><TableHead>Valor</TableHead><TableHead>Duração</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
+            {/* "Treinos/semana" fica ao lado de "Duração" de proposito: sao as
+                duas colunas que se confundem, e essa e a meta semanal que a
+                leitura de frequencia usa como denominador. Ficava so dentro do
+                dialogo de edicao — foi assim que "Adulto - TRIMESTRAL" passou a
+                ter 3 (de 3 meses) sem ninguem ver. */}
+            <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Descrição</TableHead><TableHead>Valor</TableHead><TableHead>Duração</TableHead><TableHead>Treinos/semana</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
             <TableBody>
               {planos.map((p: any) => (
                 <TableRow key={p.id} className={!p.ativo ? "opacity-50" : ""}>
@@ -218,6 +254,13 @@ function PlanosPage() {
                   <TableCell className="font-semibold text-primary">{fmtMoney(Number(p.valor))}</TableCell>
                   <TableCell className="capitalize text-sm">
                     {p.duracao === "personalizado" ? `${p.dias_personalizado ?? "?"} dias` : p.duracao}
+                  </TableCell>
+                  <TableCell className="text-sm tabular-nums">
+                    {p.frequencia_semanal ? (
+                      `${p.frequencia_semanal}x`
+                    ) : (
+                      <span className="text-muted-foreground italic">não combinado</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <button onClick={() => toggleAtivo(p.id, p.ativo)} className={`px-2 py-1 rounded text-[10px] uppercase font-semibold tracking-wider ${p.ativo ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}>

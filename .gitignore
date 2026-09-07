@@ -7,6 +7,16 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Variaveis de ambiente. O .env estava VERSIONADO: hoje ele so carrega valores
+# publicos por design (URL, project id e a publishable key, que ja vai no bundle
+# do navegador), entao nao houve vazamento. O risco era o proximo passo: o
+# .env.example manda colocar SUPABASE_SERVICE_ROLE_KEY, STRIPE_SECRET_KEY,
+# CRON_SECRET, MASTER_ADMIN_PASSWORD e MASTER_TOKEN_SECRET nesse mesmo arquivo,
+# e qualquer `git add -A` depois disso publicaria os cinco.
+.env
+.env.*
+!.env.example
+
 node_modules
 dist
 dist-ssr
@@ -30,3 +40,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# diretorio de trabalho do rebuild.sh dos testes: copias das migrations
+supabase/testes/mig/

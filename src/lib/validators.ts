@@ -85,6 +85,28 @@ export const planoSchema = z.object({
     .nonnegative("Valor não pode ser negativo.")
     .max(999999, "Valor muito alto."),
   duracao: z.string().min(1, "Selecione a duração."),
+  // Quantas vezes POR SEMANA o aluno treina. Nada a ver com `duracao`, que é
+  // de quantos meses é o contrato e mora na coluna ao lado.
+  //
+  // Vazio é uma resposta válida e vira NULL: existe plano vendido por duração,
+  // sem número de treinos combinado. Para esses, frequencia_aluno() estima a
+  // meta pelo histórico do próprio aluno e a ficha diz "estimada pelo
+  // histórico do aluno" — melhor do que um número inventado, que vira
+  // denominador de aderência de todo mundo naquele plano.
+  //
+  // Quando vem preenchido, tem que ser 1 a 7. Antes o campo passava direto:
+  // a tela mandava Number("") = 0, o 0 ia para o banco (a coluna não tem
+  // CHECK), e meta 0 dividia por zero em frequencia_aluno() derrubando a
+  // leitura da academia inteira.
+  frequencia_semanal: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? null : v),
+    z.coerce
+      .number({ invalid_type_error: "Frequência semanal deve ser um número." })
+      .int("Frequência semanal deve ser um número inteiro.")
+      .min(1, "Frequência semanal deve ser de no mínimo 1 dia.")
+      .max(7, "Frequência semanal não pode passar de 7 dias.")
+      .nullable(),
+  ),
   dias_personalizado: z.union([z.coerce.number().int().positive("Informe um número de dias válido."), z.literal(null), z.undefined()]).optional(),
   categoria: z.enum(["adulto", "kids"]),
   modalidades: z.array(z.string()).default([]),
