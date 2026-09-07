@@ -39,7 +39,10 @@ const EMPTY = {
   nome: "",
   descricao: "",
   categoria: "adulto" as Categoria,
-  frequencia_semanal: "1",
+  // Vazio, nao "1". O "1" chegava ao banco como meta semanal sem ninguem
+  // ter digitado nada, e 1 e a meta mais baixa possivel: infla a aderencia
+  // de todo aluno do plano e esconde justamente quem esta sumindo.
+  frequencia_semanal: "",
   duracao: "mensal" as Duracao,
   dias_personalizado: "",
   valor: "",
@@ -69,7 +72,7 @@ function PlanosPage() {
       nome: p.nome,
       descricao: p.descricao ?? "",
       categoria: p.categoria,
-      frequencia_semanal: String(p.frequencia_semanal ?? 1),
+      frequencia_semanal: p.frequencia_semanal ? String(p.frequencia_semanal) : "",
       duracao: p.duracao,
       dias_personalizado: p.dias_personalizado ? String(p.dias_personalizado) : "",
       valor: String(p.valor),
@@ -98,7 +101,7 @@ function PlanosPage() {
       nome: form.nome,
       descricao: form.descricao || null,
       categoria: form.categoria,
-      frequencia_semanal: parsed.data.frequencia_semanal,
+      frequencia_semanal: parsed.data.frequencia_semanal ?? null,
       duracao: form.duracao,
       dias_personalizado: form.duracao === "personalizado" ? Number(form.dias_personalizado) : null,
       valor: Number(form.valor),
@@ -188,7 +191,25 @@ function PlanosPage() {
               {form.duracao === "personalizado" && (
                 <div><Label>Dias *</Label><Input type="number" min={1} required value={form.dias_personalizado} onChange={(e)=>setForm({...form, dias_personalizado: e.target.value})}/></div>
               )}
-              <div><Label>Frequência/semana</Label><Input type="number" min={1} max={7} value={form.frequencia_semanal} onChange={(e)=>setForm({...form, frequencia_semanal: e.target.value})}/></div>
+              {/* Fica ao lado de "Duração", e em producao dois planos vieram
+                  com a duracao em meses digitada aqui ("Plano Mensal" com 1,
+                  "Adulto - TRIMESTRAL" com 3). O rotulo e a dica separam os
+                  dois campos, e vazio agora e aceito. */}
+              <div>
+                <Label>Treinos por semana</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={7}
+                  placeholder="Deixe vazio se não houver"
+                  value={form.frequencia_semanal}
+                  onChange={(e) => setForm({ ...form, frequencia_semanal: e.target.value })}
+                />
+                <p className="text-muted-foreground mt-1 text-xs leading-snug">
+                  Quantas vezes o aluno treina por semana (1 a 7). Não é a duração do plano. Vazio:
+                  a meta sai do histórico do próprio aluno.
+                </p>
+              </div>
               <div><Label>Valor (R$) *</Label><Input type="number" step="0.01" required value={form.valor} onChange={(e)=>setForm({...form, valor: e.target.value})}/></div>
               <div><Label>Status</Label>
                 <Select value={form.ativo ? "ativo" : "inativo"} onValueChange={(v) => setForm({...form, ativo: v === "ativo"})}>
