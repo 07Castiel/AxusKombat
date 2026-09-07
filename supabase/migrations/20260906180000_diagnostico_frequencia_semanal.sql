@@ -61,8 +61,14 @@ AS $$
         WHEN p.frequencia_semanal > 7     THEN 'acima_de_7'
         ELSE 'ok'
       END AS estado,
-      -- "2x semana", "3 vezes por semana", "Plano 4X" -> 2, 3, 4
-      (regexp_match(p.nome, '(\d+)\s*(?:x|vez)', 'i'))[1]::int AS nome_sugere
+      -- "2x semana", "3 vezes por semana", "4X/semana" -> 2, 3, 4.
+      --
+      -- A palavra "semana" e obrigatoria. Sem ela, "Mensal 12x no cartao"
+      -- casava com 12 e o relatorio mandava corrigir um plano correto — um
+      -- diagnostico que manda alterar dado certo e pior do que um que cala.
+      -- Nome que nao fala de semana cai em "nome nao diz nada" (CONFERIR).
+      (regexp_match(p.nome, '(\d+)\s*(?:x|vezes?)[\s/]*(?:por[\s/]+)?semana', 'i'))[1]::int
+        AS nome_sugere
     FROM public.planos p
   ),
   uso AS (
@@ -154,14 +160,12 @@ AS $$
     SELECT 2, '2. DISTRIBUICAO',
       'Frequencia = ' || COALESCE(ps.freq::text, 'NULL'),
       count(*) || ' plano(s)',
-      count(*) FILTER (WHERE ps.ativo) || ' ativo(s)'
-        || CASE WHEN ps.freq = 1
-                THEN ' - atencao: 1 e o valor inicial do formulario' ELSE '' END,
-      CASE
-        WHEN ps.freq IS NULL OR ps.freq NOT BETWEEN 1 AND 7 THEN 'CORRIGIR'
-        WHEN ps.freq = 1 THEN 'CONFERIR'
-        ELSE 'OK'
-      END
+      count(*) FILTER (WHERE ps.ativo) || ' ativo(s)',
+      -- Só distribuicao: quem julga se o numero esta certo e a secao 3, que
+      -- compara com o nome do plano. Marcar todo freq=1 como suspeito aqui
+      -- daria falso positivo em plano legitimamente 1x por semana.
+      CASE WHEN ps.freq IS NULL OR ps.freq NOT BETWEEN 1 AND 7
+           THEN 'CORRIGIR' ELSE 'OK' END
     FROM plano_status ps
     GROUP BY ps.freq
 
@@ -174,7 +178,7 @@ AS $$
       END,
       count(*) || ' plano(s)',
       'o nome do plano e o que foi vendido ao aluno',
-      CASE WHEN count(*) = 0 THEN 'OK' ELSE 'CONFERIR' END
+      CASE WHEN count(*) = 0 THEN 'OK' ELSE 'CORRIGIR' END
     FROM plano_status ps
     WHERE ps.nome_sugere IS NOT NULL AND ps.nome_sugere IS DISTINCT FROM ps.freq
 
@@ -182,9 +186,20 @@ AS $$
     SELECT 3, '3. NOME vs COLUNA', ps.nome,
       'nome diz ' || ps.nome_sugere || ', coluna diz ' || COALESCE(ps.freq::text, 'NULL'),
       CASE WHEN ps.ativo THEN 'plano ativo' ELSE 'plano inativo' END,
-      'CONFERIR'
+      'CORRIGIR'
     FROM plano_status ps
     WHERE ps.nome_sugere IS NOT NULL AND ps.nome_sugere IS DISTINCT FROM ps.freq
+
+    -- Plano cujo nome nao traz frequencia: a coluna nao tem como ser
+    -- confirmada pelo nome, e so o dono do negocio sabe o que foi vendido.
+    -- "Plano Mensal" e "Adulto - TRIMESTRAL" sao duracao, nao frequencia.
+    UNION ALL
+    SELECT 3, '3. NOME vs COLUNA', ps.nome,
+      'coluna diz ' || COALESCE(ps.freq::text, 'NULL') || ', nome nao diz nada',
+      'nome nao confirma nem contradiz - confira se e o que foi vendido',
+      'CONFERIR'
+    FROM plano_status ps
+    WHERE ps.nome_sugere IS NULL AND ps.estado = 'ok'
 
     -- 4. PLANOS INVALIDOS
     UNION ALL
