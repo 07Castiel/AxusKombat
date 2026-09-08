@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { translateError } from "./errors";
 
 /**
@@ -56,5 +56,59 @@ describe("translateError não regrediu nos outros códigos", () => {
     expect(translateError({ message: "Invalid login credentials" })).toBe(
       "E-mail ou senha incorretos.",
     );
+  });
+});
+
+/**
+ * A queda que originou estes testes: o projeto Supabase hibernou, o host saiu
+ * do DNS, e todo fetch do navegador — login inclusive — virou "Failed to
+ * fetch". A tela mandava o usuário verificar a própria internet, que estava
+ * perfeita. O texto apontava para o único lugar onde o problema não estava.
+ */
+describe("translateError em falha de rede", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const online = () => vi.stubGlobal("navigator", { onLine: true });
+  const offline = () => vi.stubGlobal("navigator", { onLine: false });
+
+  const SERVIDOR =
+    "Não conseguimos falar com o servidor. Tente de novo em alguns minutos; " +
+    "se continuar, o serviço pode estar fora do ar — avise o suporte.";
+  const SEM_INTERNET = "Você está sem internet. Verifique sua conexão e tente novamente.";
+
+  it("REGRESSÃO: com internet funcionando, não manda o usuário conferir a internet", () => {
+    online();
+    const msg = translateError({ message: "Failed to fetch" });
+    expect(msg).toBe(SERVIDOR);
+    expect(msg).not.toMatch(/sua internet/i);
+  });
+
+  it("sem rede no aparelho, aí sim aponta a internet do usuário", () => {
+    offline();
+    expect(translateError({ message: "Failed to fetch" })).toBe(SEM_INTERNET);
+  });
+
+  it("REGRESSÃO: o 'Load failed' do Safari deixa de vazar em inglês", () => {
+    online();
+    expect(translateError({ message: "Load failed" })).toBe(SERVIDOR);
+  });
+
+  it("entende também o texto do Firefox", () => {
+    online();
+    expect(
+      translateError({ message: "NetworkError when attempting to fetch resource." }),
+    ).toBe(SERVIDOR);
+  });
+
+  it("host fora do DNS — exatamente o caso da queda", () => {
+    online();
+    expect(translateError({ message: "net::ERR_NAME_NOT_RESOLVED" })).toBe(SERVIDOR);
+  });
+
+  it("no servidor (sem navigator) a culpa nunca é da internet do usuário", () => {
+    vi.stubGlobal("navigator", undefined);
+    expect(translateError({ message: "Failed to fetch" })).toBe(SERVIDOR);
   });
 });
