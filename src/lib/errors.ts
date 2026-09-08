@@ -46,6 +46,57 @@ const PG_CODE_MAP: Record<string, string> = {
 
 const FALLBACK = "Algo deu errado. Tente novamente em instantes.";
 
+/**
+ * Falha de rede: a requisição não chegou a ter resposta.
+ *
+ * Cada navegador escreve a sua. O Chrome diz "Failed to fetch", o Firefox
+ * "NetworkError when attempting to fetch resource", e o Safari — desktop e iOS
+ * — diz apenas "Load failed". Só as duas primeiras eram reconhecidas, então no
+ * Safari o usuário recebia o texto cru em inglês, sem tradução nenhuma.
+ */
+function ehFalhaDeRede(lower: string): boolean {
+  return (
+    lower.includes("failed to fetch") ||
+    lower.includes("networkerror") ||
+    lower.includes("load failed") ||
+    lower.includes("err_name_not_resolved") ||
+    lower.includes("err_internet_disconnected") ||
+    lower.includes("err_connection_refused")
+  );
+}
+
+/**
+ * `navigator.onLine === false` é confiável no negativo: o navegador só afirma
+ * isso quando não há interface de rede ativa. O `true` NÃO prova o contrário
+ * (portal cativo, link morto) — por isso a mensagem do outro lado não afirma
+ * que a internet do usuário está boa, apenas para de culpá-la.
+ *
+ * No servidor (SSR) `navigator` não existe: não há internet de usuário para
+ * culpar ali, então a falha é sempre do lado de cá.
+ */
+function navegadorOffline(): boolean {
+  return typeof navigator !== "undefined" && navigator.onLine === false;
+}
+
+const MSG_SEM_INTERNET =
+  "Você está sem internet. Verifique sua conexão e tente novamente.";
+
+/**
+ * Esta mensagem existe por causa de uma queda real.
+ *
+ * O banco (Supabase) hibernou, o host do projeto saiu do DNS e TODA chamada do
+ * navegador virou "Failed to fetch" — inclusive o login. A tela dizia "Sem
+ * conexão com o servidor. Verifique sua internet e tente novamente", e o dono
+ * da academia passou horas conferindo o próprio Wi-Fi, que estava perfeito.
+ *
+ * A mensagem estava mandando investigar o único lugar onde o problema não
+ * estava. O texto agora aponta para fora do usuário e nomeia a hipótese certa:
+ * o serviço pode estar fora do ar, e o suporte precisa saber disso.
+ */
+const MSG_SERVIDOR_INALCANCAVEL =
+  "Não conseguimos falar com o servidor. Tente de novo em alguns minutos; " +
+  "se continuar, o serviço pode estar fora do ar — avise o suporte.";
+
 export function translateError(err: AnyError, fallback = FALLBACK): string {
   if (!err) return fallback;
   const e = err as any;
@@ -68,8 +119,8 @@ export function translateError(err: AnyError, fallback = FALLBACK): string {
   }
 
   // Network / fetch
-  if (lower.includes("failed to fetch") || lower.includes("networkerror")) {
-    return "Sem conexão com o servidor. Verifique sua internet e tente novamente.";
+  if (ehFalhaDeRede(lower)) {
+    return navegadorOffline() ? MSG_SEM_INTERNET : MSG_SERVIDOR_INALCANCAVEL;
   }
   if (lower.includes("timeout")) return "A operação demorou muito. Tente novamente.";
 
