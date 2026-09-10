@@ -1242,6 +1242,21 @@ export type Database = {
         Returns: number
       }
       dashboard_resumo: { Args: never; Returns: Json }
+      diagnostico_frequencia_semanal: {
+        Args: never
+        Returns: {
+          detalhe: string
+          item: string
+          secao: string
+          situacao: string
+          valor: string
+        }[]
+      }
+      frequencia_aluno: {
+        Args: { p_aluno_id?: string; p_dias?: number }
+        Returns: Json
+      }
+      fuso_do_tenant: { Args: { p_tenant: string }; Returns: string }
       gerar_mensalidades_contrato: {
         Args: { p_contrato_id: string }
         Returns: number
@@ -1264,6 +1279,10 @@ export type Database = {
       processar_mensalidades_diario: { Args: never; Returns: Json }
       relatorio_periodo: {
         Args: { p_ate: string; p_de: string }
+        Returns: Json
+      }
+      risco_evasao: {
+        Args: { p_aluno_id?: string; p_dias?: number }
         Returns: Json
       }
       tenant_liberado: { Args: { _tenant_id: string }; Returns: boolean }
