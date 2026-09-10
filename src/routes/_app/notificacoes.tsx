@@ -468,6 +468,13 @@ function TabAutomacao({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
         timezone: form.timezone ?? "America/Sao_Paulo",
         pix_chave: form.pix_chave ?? null,
         assinatura: form.assinatura ?? null,
+        aquecimento_ativo: form.aquecimento_ativo !== false,
+        numero_ativo_desde: form.numero_ativo_desde
+          ? String(form.numero_ativo_desde).slice(0, 10) : null,
+        limite_diario: Number(form.limite_diario ?? 300) || 300,
+        intervalo_min_seg: Math.max(0, Number(form.intervalo_min_seg ?? 8) || 0),
+        intervalo_max_seg: Math.max(0, Number(form.intervalo_max_seg ?? 25) || 0),
+        variacao_texto: form.variacao_texto !== false,
       }});
       toast.success(`Configurações salvas. ${r.reagendadas ?? 0} mensalidade(s) reagendadas.`);
       qc.invalidateQueries({ queryKey: ["notification_settings"] });
