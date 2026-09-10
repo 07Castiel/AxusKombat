@@ -610,6 +610,7 @@ export type Database = {
       }
       notification_settings: {
         Row: {
+          aquecimento_ativo: boolean
           assinatura: string | null
           created_at: string
           dias_antes_lembrete: number[]
@@ -619,12 +620,18 @@ export type Database = {
           hora_inicio: string
           hora_preferencial: string
           id: string
+          intervalo_max_seg: number
+          intervalo_min_seg: number
+          limite_diario: number
+          numero_ativo_desde: string | null
           pix_chave: string | null
           tenant_id: string
           timezone: string
           updated_at: string
+          variacao_texto: boolean
         }
         Insert: {
+          aquecimento_ativo?: boolean
           assinatura?: string | null
           created_at?: string
           dias_antes_lembrete?: number[]
@@ -634,12 +641,18 @@ export type Database = {
           hora_inicio?: string
           hora_preferencial?: string
           id?: string
+          intervalo_max_seg?: number
+          intervalo_min_seg?: number
+          limite_diario?: number
+          numero_ativo_desde?: string | null
           pix_chave?: string | null
           tenant_id: string
           timezone?: string
           updated_at?: string
+          variacao_texto?: boolean
         }
         Update: {
+          aquecimento_ativo?: boolean
           assinatura?: string | null
           created_at?: string
           dias_antes_lembrete?: number[]
@@ -649,10 +662,15 @@ export type Database = {
           hora_inicio?: string
           hora_preferencial?: string
           id?: string
+          intervalo_max_seg?: number
+          intervalo_min_seg?: number
+          limite_diario?: number
+          numero_ativo_desde?: string | null
           pix_chave?: string | null
           tenant_id?: string
           timezone?: string
           updated_at?: string
+          variacao_texto?: boolean
         }
         Relationships: [
           {
