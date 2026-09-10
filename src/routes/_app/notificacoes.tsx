@@ -468,6 +468,13 @@ function TabAutomacao({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
         timezone: form.timezone ?? "America/Sao_Paulo",
         pix_chave: form.pix_chave ?? null,
         assinatura: form.assinatura ?? null,
+        aquecimento_ativo: form.aquecimento_ativo !== false,
+        numero_ativo_desde: form.numero_ativo_desde
+          ? String(form.numero_ativo_desde).slice(0, 10) : null,
+        limite_diario: Number(form.limite_diario ?? 300) || 300,
+        intervalo_min_seg: Math.max(0, Number(form.intervalo_min_seg ?? 8) || 0),
+        intervalo_max_seg: Math.max(0, Number(form.intervalo_max_seg ?? 25) || 0),
+        variacao_texto: form.variacao_texto !== false,
       }});
       toast.success(`Configurações salvas. ${r.reagendadas ?? 0} mensalidade(s) reagendadas.`);
       qc.invalidateQueries({ queryKey: ["notification_settings"] });
@@ -537,6 +544,70 @@ function TabAutomacao({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
             </Select>
           </div>
         </div>
+
+        <div className="border-t pt-4 space-y-4">
+          <div>
+            <h3 className="font-display uppercase tracking-wider text-metal-light">Proteção do número</h3>
+            <p className="text-xs text-muted-foreground">
+              Reduz o risco de bloqueio do WhatsApp evitando disparos em massa, rápidos e repetidos.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>Aquecimento gradual</Label>
+              <p className="text-xs text-muted-foreground">
+                Número novo começa com poucas mensagens por dia e aumenta aos poucos.
+              </p>
+            </div>
+            <Switch checked={form.aquecimento_ativo !== false}
+              onCheckedChange={(v) => setForm({ ...form, aquecimento_ativo: v })} />
+          </div>
+
+          <div>
+            <Label className="text-xs">Número em uso desde</Label>
+            <Input type="date" className="mt-1.5"
+              value={form.numero_ativo_desde ? String(form.numero_ativo_desde).slice(0, 10) : ""}
+              onChange={(e) => setForm({ ...form, numero_ativo_desde: e.target.value || null })} />
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Data em que este número passou a enviar mensagens. Em branco, o número é tratado como já maduro.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <Label className="text-xs">Máximo por dia</Label>
+              <Input type="number" min={1} max={2000} value={form.limite_diario ?? 300}
+                onChange={(e) => setForm({ ...form, limite_diario: Number(e.target.value) })} />
+            </div>
+            <div>
+              <Label className="text-xs">Intervalo mínimo (segundos)</Label>
+              <Input type="number" min={0} max={300} value={form.intervalo_min_seg ?? 8}
+                onChange={(e) => setForm({ ...form, intervalo_min_seg: Number(e.target.value) })} />
+            </div>
+            <div>
+              <Label className="text-xs">Intervalo máximo (segundos)</Label>
+              <Input type="number" min={0} max={300} value={form.intervalo_max_seg ?? 25}
+                onChange={(e) => setForm({ ...form, intervalo_max_seg: Number(e.target.value) })} />
+            </div>
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            O sistema espera um tempo aleatório entre esses dois valores a cada mensagem.
+          </p>
+
+          <div className="flex items-center justify-between border-t pt-4">
+            <div>
+              <Label>Variação de texto</Label>
+              <p className="text-xs text-muted-foreground">
+                Pequenas mudanças na saudação e no encerramento, para as mensagens não saírem idênticas.
+              </p>
+            </div>
+            <Switch checked={form.variacao_texto !== false}
+              onCheckedChange={(v) => setForm({ ...form, variacao_texto: v })} />
+          </div>
+        </div>
+
+
 
         <div className="border-t pt-4 space-y-3">
           <h3 className="font-display uppercase tracking-wider text-metal-light">Personalização</h3>

@@ -15,20 +15,21 @@ import {
 import { authorizeCronRequest } from "@/lib/cron-auth";
 import { comTabelasPendentes } from "@/integrations/supabase/tabelas-pendentes";
 import { TIPOS_SEM_TEMPLATE } from "@/lib/notification-queue";
+import { intervaloAleatorioMs, limiteDiarioEfetivo, variarTexto } from "@/lib/antiban";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * Teto por execução e intervalo entre envios.
+ * Teto por execução e orçamento de tempo.
  *
- * O worker roda a cada 15 minutos, então 120 mensagens por rodada dão ~480 por
- * hora — folga larga para uma academia. O limite antigo era 400 sem intervalo
- * nenhum: rajada que é exatamente o padrão que faz o WhatsApp bloquear o
- * número, e que também estourava o tempo da requisição no Worker.
+ * O intervalo entre mensagens agora é aleatório (ver @/lib/antiban) e pode
+ * chegar a dezenas de segundos, então o que limita a rodada na prática é o
+ * ORÇAMENTO DE TEMPO: quando ele estoura, o worker devolve o restante da fila
+ * e a próxima execução do cron (15 min depois) continua de onde parou.
  */
 const LOTE_AGENDADAS = Number(process.env.NOTIF_LOTE ?? 120);
 const LOTE_RETRIES = Number(process.env.NOTIF_LOTE_RETRY ?? 60);
-const INTERVALO_ENVIO_MS = Number(process.env.NOTIF_INTERVALO_MS ?? 250);
+const ORCAMENTO_MS = Number(process.env.NOTIF_ORCAMENTO_MS ?? 240_000);
 
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -55,6 +56,21 @@ function withinWindow(tz: string, start: string, end: string): boolean {
   const sMin = s.hh * 60 + s.mm;
   const eMin = e.hh * 60 + e.mm;
   return nowMin >= sMin && nowMin <= eMin;
+}
+
+/** Instante (ISO) da meia-noite de hoje no fuso da academia. */
+function inicioDoDiaIso(tz: string): string {
+  const agora = new Date();
+  let noFuso: Date;
+  try {
+    noFuso = new Date(agora.toLocaleString("en-US", { timeZone: tz }));
+  } catch {
+    noFuso = new Date(agora.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  }
+  const deslocamento = noFuso.getTime() - agora.getTime();
+  const meiaNoite = new Date(noFuso);
+  meiaNoite.setHours(0, 0, 0, 0);
+  return new Date(meiaNoite.getTime() - deslocamento).toISOString();
 }
 
 const SELECT_COLS = `
@@ -202,10 +218,23 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
         const summary = {
           scanned: notifs.length, sent: 0, failed: 0,
           retried: (retries ?? []).length, skipped_window: 0, skipped_config: 0,
+          skipped_limite: 0, skipped_tempo: 0,
         };
 
         const settingsCache = new Map<string, any>();
         const templatesCache = new Map<string, any[]>();
+        // Teto diário por academia (aquecimento incluso) e quanto já saiu hoje.
+        const cotaCache = new Map<string, { limite: number; usado: number }>();
+        const inicioRodada = Date.now();
+        let ultimoEnvioEm = 0;
+
+        /** Devolve a mensagem à fila sem marcá-la como falha. */
+        async function devolver(n: any) {
+          if (idsReivindicados) {
+            await dbNotif.from("notificacoes")
+              .update({ reivindicado_em: null }).eq("id", n.id);
+          }
+        }
 
         async function marcarFalha(n: any, mensagem: string | null, motivo: string, phone?: string | null) {
           const codigo = classifyErro(motivo);
@@ -225,6 +254,14 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
         }
 
         for (const n of notifs) {
+          // Orçamento de tempo: o intervalo entre envios é aleatório e longo de
+          // propósito, então a rodada para e devolve o resto da fila.
+          if (Date.now() - inicioRodada > ORCAMENTO_MS) {
+            await devolver(n);
+            summary.skipped_tempo++;
+            continue;
+          }
+
           // settings
           let s = settingsCache.get(n.tenant_id);
           if (!s) {
@@ -242,13 +279,30 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
           if (!withinWindow(s.timezone, s.hora_inicio, s.hora_fim)) {
             // Devolve a reivindicação: fora da janela a mensagem não é enviada
             // agora, e sem isto ela só voltaria à fila após a expiração.
-            if (idsReivindicados) {
-              await dbNotif.from("notificacoes")
-                .update({ reivindicado_em: null }).eq("id", n.id);
-            }
+            await devolver(n);
             summary.skipped_window++;
             continue;
           }
+
+          // teto diário + aquecimento gradual do número
+          let cota = cotaCache.get(n.tenant_id);
+          if (!cota) {
+            const { count } = await supabaseAdmin
+              .from("notificacoes")
+              .select("id", { count: "exact", head: true })
+              .eq("tenant_id", n.tenant_id)
+              .eq("status", "enviada")
+              .gte("enviada_em", inicioDoDiaIso(s.timezone));
+            cota = { limite: limiteDiarioEfetivo(s), usado: count ?? 0 };
+            cotaCache.set(n.tenant_id, cota);
+          }
+          if (cota.usado >= cota.limite) {
+            // Fica na fila para amanhã (ou para quando o aquecimento subir).
+            await devolver(n);
+            summary.skipped_limite++;
+            continue;
+          }
+
 
           // template
           let tpls = templatesCache.get(n.tenant_id);
@@ -300,7 +354,7 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
           const plano = mens?.contrato?.plano?.nome ?? "";
 
           // sempre renderiza com a versão ATUAL do modelo
-          const mensagem = avulso ? (n.mensagem ?? "") : renderTemplate(tpl!.mensagem, {
+          const base = avulso ? (n.mensagem ?? "") : renderTemplate(tpl!.mensagem, {
             nome, primeiro_nome: primeiroNome,
             academia: n.tenant?.nome ?? "",
             vencimento: venc, valor,
@@ -313,8 +367,11 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
             link_pagamento: "",
             assinatura: s.assinatura ?? "",
           });
+          // Variação leve e determinística: dezenas de mensagens idênticas em
+          // sequência é o que o WhatsApp lê como disparo em massa.
+          const mensagem = variarTexto(base, n.id, s.variacao_texto !== false);
 
-          if (avulso && !mensagem.trim()) {
+          if (avulso && !base.trim()) {
             await dbNotif.from("notificacoes").update({
               ...liberar,
               status: "cancelada",
@@ -332,8 +389,15 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
             continue;
           }
 
-          if (summary.sent > 0 && INTERVALO_ENVIO_MS > 0) await espera(INTERVALO_ENVIO_MS);
+          // Intervalo variável entre envios (nunca cadência robótica).
+          if (ultimoEnvioEm > 0) {
+            const espeMs = intervaloAleatorioMs(s);
+            const jaPassou = Date.now() - ultimoEnvioEm;
+            if (espeMs > jaPassou) await espera(espeMs - jaPassou);
+          }
+          ultimoEnvioEm = Date.now();
           const result = await sendWhatsappByTenant(n.tenant_id, phone, mensagem);
+          if (result.ok) cota.usado++;
           if (result.ok) {
             await dbNotif.from("notificacoes").update({
               ...liberar,
@@ -364,7 +428,8 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
               scanned: summary.scanned,
               sent: summary.sent,
               failed: summary.failed,
-              skipped: summary.skipped_window + summary.skipped_config,
+              skipped: summary.skipped_window + summary.skipped_config
+                + summary.skipped_limite + summary.skipped_tempo,
             }).eq("id", runId);
           if (eRun) {
             console.error(`[dispatch] rodada ${runId} não pôde ser fechada: ${eRun.message}`);

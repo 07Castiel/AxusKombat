@@ -36,7 +36,17 @@ export const saveNotificationSettings = createServerFn({ method: "POST" })
     timezone: z.string().min(3).max(64),
     pix_chave: z.string().max(200).nullable().optional(),
     assinatura: z.string().max(500).nullable().optional(),
-  }).parse(i))
+    // proteções antibanimento
+    aquecimento_ativo: z.boolean().optional(),
+    numero_ativo_desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+    limite_diario: z.number().int().min(1).max(2000).optional(),
+    intervalo_min_seg: z.number().int().min(0).max(300).optional(),
+    intervalo_max_seg: z.number().int().min(0).max(300).optional(),
+    variacao_texto: z.boolean().optional(),
+  }).refine(
+    (v) => (v.intervalo_max_seg ?? 0) >= (v.intervalo_min_seg ?? 0),
+    { message: "O intervalo máximo deve ser maior ou igual ao mínimo." },
+  ).parse(i))
   .handler(async ({ data, context }) => {
     const tenantId = await requireAdmin(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
