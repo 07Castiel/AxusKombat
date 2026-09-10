@@ -428,7 +428,8 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
               scanned: summary.scanned,
               sent: summary.sent,
               failed: summary.failed,
-              skipped: summary.skipped_window + summary.skipped_config,
+              skipped: summary.skipped_window + summary.skipped_config
+                + summary.skipped_limite + summary.skipped_tempo,
             }).eq("id", runId);
           if (eRun) {
             console.error(`[dispatch] rodada ${runId} não pôde ser fechada: ${eRun.message}`);
