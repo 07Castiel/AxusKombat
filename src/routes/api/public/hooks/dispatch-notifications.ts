@@ -15,20 +15,21 @@ import {
 import { authorizeCronRequest } from "@/lib/cron-auth";
 import { comTabelasPendentes } from "@/integrations/supabase/tabelas-pendentes";
 import { TIPOS_SEM_TEMPLATE } from "@/lib/notification-queue";
+import { intervaloAleatorioMs, limiteDiarioEfetivo, variarTexto } from "@/lib/antiban";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * Teto por execução e intervalo entre envios.
+ * Teto por execução e orçamento de tempo.
  *
- * O worker roda a cada 15 minutos, então 120 mensagens por rodada dão ~480 por
- * hora — folga larga para uma academia. O limite antigo era 400 sem intervalo
- * nenhum: rajada que é exatamente o padrão que faz o WhatsApp bloquear o
- * número, e que também estourava o tempo da requisição no Worker.
+ * O intervalo entre mensagens agora é aleatório (ver @/lib/antiban) e pode
+ * chegar a dezenas de segundos, então o que limita a rodada na prática é o
+ * ORÇAMENTO DE TEMPO: quando ele estoura, o worker devolve o restante da fila
+ * e a próxima execução do cron (15 min depois) continua de onde parou.
  */
 const LOTE_AGENDADAS = Number(process.env.NOTIF_LOTE ?? 120);
 const LOTE_RETRIES = Number(process.env.NOTIF_LOTE_RETRY ?? 60);
-const INTERVALO_ENVIO_MS = Number(process.env.NOTIF_INTERVALO_MS ?? 250);
+const ORCAMENTO_MS = Number(process.env.NOTIF_ORCAMENTO_MS ?? 240_000);
 
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -55,6 +56,21 @@ function withinWindow(tz: string, start: string, end: string): boolean {
   const sMin = s.hh * 60 + s.mm;
   const eMin = e.hh * 60 + e.mm;
   return nowMin >= sMin && nowMin <= eMin;
+}
+
+/** Instante (ISO) da meia-noite de hoje no fuso da academia. */
+function inicioDoDiaIso(tz: string): string {
+  const agora = new Date();
+  let noFuso: Date;
+  try {
+    noFuso = new Date(agora.toLocaleString("en-US", { timeZone: tz }));
+  } catch {
+    noFuso = new Date(agora.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  }
+  const deslocamento = noFuso.getTime() - agora.getTime();
+  const meiaNoite = new Date(noFuso);
+  meiaNoite.setHours(0, 0, 0, 0);
+  return new Date(meiaNoite.getTime() - deslocamento).toISOString();
 }
 
 const SELECT_COLS = `
