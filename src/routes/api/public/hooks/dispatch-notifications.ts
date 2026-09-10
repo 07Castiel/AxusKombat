@@ -218,10 +218,23 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
         const summary = {
           scanned: notifs.length, sent: 0, failed: 0,
           retried: (retries ?? []).length, skipped_window: 0, skipped_config: 0,
+          skipped_limite: 0, skipped_tempo: 0,
         };
 
         const settingsCache = new Map<string, any>();
         const templatesCache = new Map<string, any[]>();
+        // Teto diário por academia (aquecimento incluso) e quanto já saiu hoje.
+        const cotaCache = new Map<string, { limite: number; usado: number }>();
+        const inicioRodada = Date.now();
+        let ultimoEnvioEm = 0;
+
+        /** Devolve a mensagem à fila sem marcá-la como falha. */
+        async function devolver(n: any) {
+          if (idsReivindicados) {
+            await dbNotif.from("notificacoes")
+              .update({ reivindicado_em: null }).eq("id", n.id);
+          }
+        }
 
         async function marcarFalha(n: any, mensagem: string | null, motivo: string, phone?: string | null) {
           const codigo = classifyErro(motivo);
@@ -241,6 +254,14 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
         }
 
         for (const n of notifs) {
+          // Orçamento de tempo: o intervalo entre envios é aleatório e longo de
+          // propósito, então a rodada para e devolve o resto da fila.
+          if (Date.now() - inicioRodada > ORCAMENTO_MS) {
+            await devolver(n);
+            summary.skipped_tempo++;
+            continue;
+          }
+
           // settings
           let s = settingsCache.get(n.tenant_id);
           if (!s) {
@@ -258,13 +279,30 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
           if (!withinWindow(s.timezone, s.hora_inicio, s.hora_fim)) {
             // Devolve a reivindicação: fora da janela a mensagem não é enviada
             // agora, e sem isto ela só voltaria à fila após a expiração.
-            if (idsReivindicados) {
-              await dbNotif.from("notificacoes")
-                .update({ reivindicado_em: null }).eq("id", n.id);
-            }
+            await devolver(n);
             summary.skipped_window++;
             continue;
           }
+
+          // teto diário + aquecimento gradual do número
+          let cota = cotaCache.get(n.tenant_id);
+          if (!cota) {
+            const { count } = await supabaseAdmin
+              .from("notificacoes")
+              .select("id", { count: "exact", head: true })
+              .eq("tenant_id", n.tenant_id)
+              .eq("status", "enviada")
+              .gte("enviada_em", inicioDoDiaIso(s.timezone));
+            cota = { limite: limiteDiarioEfetivo(s), usado: count ?? 0 };
+            cotaCache.set(n.tenant_id, cota);
+          }
+          if (cota.usado >= cota.limite) {
+            // Fica na fila para amanhã (ou para quando o aquecimento subir).
+            await devolver(n);
+            summary.skipped_limite++;
+            continue;
+          }
+
 
           // template
           let tpls = templatesCache.get(n.tenant_id);
