@@ -354,7 +354,7 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
           const plano = mens?.contrato?.plano?.nome ?? "";
 
           // sempre renderiza com a versão ATUAL do modelo
-          const mensagem = avulso ? (n.mensagem ?? "") : renderTemplate(tpl!.mensagem, {
+          const base = avulso ? (n.mensagem ?? "") : renderTemplate(tpl!.mensagem, {
             nome, primeiro_nome: primeiroNome,
             academia: n.tenant?.nome ?? "",
             vencimento: venc, valor,
@@ -367,8 +367,11 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
             link_pagamento: "",
             assinatura: s.assinatura ?? "",
           });
+          // Variação leve e determinística: dezenas de mensagens idênticas em
+          // sequência é o que o WhatsApp lê como disparo em massa.
+          const mensagem = variarTexto(base, n.id, s.variacao_texto !== false);
 
-          if (avulso && !mensagem.trim()) {
+          if (avulso && !base.trim()) {
             await dbNotif.from("notificacoes").update({
               ...liberar,
               status: "cancelada",
@@ -386,8 +389,15 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
             continue;
           }
 
-          if (summary.sent > 0 && INTERVALO_ENVIO_MS > 0) await espera(INTERVALO_ENVIO_MS);
+          // Intervalo variável entre envios (nunca cadência robótica).
+          if (ultimoEnvioEm > 0) {
+            const espeMs = intervaloAleatorioMs(s);
+            const jaPassou = Date.now() - ultimoEnvioEm;
+            if (espeMs > jaPassou) await espera(espeMs - jaPassou);
+          }
+          ultimoEnvioEm = Date.now();
           const result = await sendWhatsappByTenant(n.tenant_id, phone, mensagem);
+          if (result.ok) cota.usado++;
           if (result.ok) {
             await dbNotif.from("notificacoes").update({
               ...liberar,
