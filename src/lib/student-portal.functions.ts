@@ -143,7 +143,7 @@ export const getStudentPortalData = createServerFn({ method: "GET" }).handler(as
   }
   const [{ data: mensalidades }, { data: horarios }, { data: graduacoes }] = await Promise.all([
     supabaseAdmin.from("mensalidades").select("id, competencia, data_vencimento, valor, valor_final, status, data_pagamento").eq("aluno_id", session.alunoId).order("data_vencimento", { ascending: false }).limit(12),
-    supabaseAdmin.from("horarios").select("id, dia, hora, hora_fim, professor, modalidades(nome)").eq("tenant_id", session.tenantId).eq("ativo", true).eq("categoria", session.categoria),
+    supabaseAdmin.from("horarios").select("id, dia, hora, hora_fim, professor, modalidades(nome)").eq("tenant_id", session.tenantId).eq("ativo", true).eq("categoria", session.categoria as "adulto" | "kids"),
     supabaseAdmin.from("historico_graduacoes").select("data, observacoes, graduacoes!historico_graduacoes_graduacao_nova_id_fkey(nome)").eq("aluno_id", session.alunoId).order("data", { ascending: false }),
   ]);
   return {

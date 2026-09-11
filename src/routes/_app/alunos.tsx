@@ -17,13 +17,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Search, Pencil, RotateCcw, Trash2, User, Heart, ClipboardList, Ban, Pause, Play, Link as LinkIcon, Copy, Archive } from "lucide-react";
+import { Plus, Search, Pencil, RotateCcw, Trash2, User, Heart, ClipboardList, Ban, Pause, Play, KeyRound, Copy, Archive, LockKeyhole, UnlockKeyhole } from "lucide-react";
 import { toast } from "sonner";
 import { translateError, firstZodMessage } from "@/lib/errors";
 import { alunoSchema } from "@/lib/validators";
 import { fmtDate, fmtMoney, toISODate } from "@/lib/utils";
 import { upsertContratoAtivo, cancelarContrato, pausarContrato } from "@/lib/contratos.functions";
-import { gerarPortalToken } from "@/lib/tenant.functions";
+import { issueStudentPortalAccess, listStudentPortalAccess, setStudentPortalActive } from "@/lib/student-portal.functions";
 
 export const Route = createFileRoute("/_app/alunos")({
   component: AlunosPage,
@@ -61,7 +61,8 @@ function AlunosPage() {
   const upsertContratoFn = useServerFn(upsertContratoAtivo);
   const cancelarContratoFn = useServerFn(cancelarContrato);
   const pausarContratoFn = useServerFn(pausarContrato);
-  const gerarTokenFn = useServerFn(gerarPortalToken);
+  const issuePortalAccessFn = useServerFn(issueStudentPortalAccess);
+  const setPortalActiveFn = useServerFn(setStudentPortalActive);
 
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -71,6 +72,8 @@ function AlunosPage() {
   const [archiving, setArchiving] = useState<{ id: string; nome: string } | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [portalCredentials, setPortalCredentials] = useState<{ nome: string; matricula: string; senhaProvisoria: string } | null>(null);
+  const [portalBusyId, setPortalBusyId] = useState<string | null>(null);
 
   const { data: alunos = [] } = useQuery({
     queryKey: ["alunos", profile?.tenant_id],
@@ -94,6 +97,18 @@ function AlunosPage() {
       return data ?? [];
     },
   });
+
+  const { data: portalAccess = [] } = useQuery({
+    queryKey: ["student-portal-access", profile?.tenant_id],
+    enabled: !!profile?.tenant_id,
+    queryFn: () => listStudentPortalAccess(),
+  });
+
+  const portalByAluno = useMemo(() => {
+    const map = new Map<string, (typeof portalAccess)[number]>();
+    for (const access of portalAccess) map.set(access.aluno_id, access);
+    return map;
+  }, [portalAccess]);
 
   const contratoByAluno = useMemo(() => {
     const map = new Map<string, any>();
@@ -251,18 +266,30 @@ function AlunosPage() {
     } catch (err: any) { toast.error(translateError(err)); }
   };
 
-  const copyPortalLink = async (alunoId: string, existingToken: string | null) => {
+  const issuePortalAccess = async (alunoId: string) => {
+    setPortalBusyId(alunoId);
     try {
-      let token = existingToken;
-      if (!token) {
-        const r: any = await gerarTokenFn({ data: { aluno_id: alunoId } });
-        token = r.token;
-        qc.invalidateQueries({ queryKey: ["alunos"] });
-      }
-      const url = `${window.location.origin}/portal/${token}`;
-      await navigator.clipboard.writeText(url);
-      toast.success("Link do portal copiado");
+      const credentials = await issuePortalAccessFn({ data: { alunoId } });
+      setPortalCredentials(credentials);
+      await qc.invalidateQueries({ queryKey: ["student-portal-access"] });
     } catch (err: any) { toast.error(translateError(err)); }
+    finally { setPortalBusyId(null); }
+  };
+
+  const togglePortalAccess = async (alunoId: string, ativo: boolean) => {
+    setPortalBusyId(alunoId);
+    try {
+      await setPortalActiveFn({ data: { alunoId, ativo } });
+      toast.success(ativo ? "Acesso ao portal liberado" : "Acesso ao portal bloqueado");
+      await qc.invalidateQueries({ queryKey: ["student-portal-access"] });
+    } catch (err: any) { toast.error(translateError(err)); }
+    finally { setPortalBusyId(null); }
+  };
+
+  const copyCredentials = async () => {
+    if (!portalCredentials) return;
+    await navigator.clipboard.writeText(`Portal: ${window.location.origin}/portal\nMatrícula: ${portalCredentials.matricula}\nSenha provisória: ${portalCredentials.senhaProvisoria}`);
+    toast.success("Credenciais copiadas");
   };
 
   const filtered = alunos.filter((a: any) => {
@@ -417,6 +444,23 @@ function AlunosPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={!!portalCredentials} onOpenChange={(value) => !value && setPortalCredentials(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Acesso ao Portal do Aluno</DialogTitle>
+            <DialogDescription>Entregue estes dados diretamente a {portalCredentials?.nome}. A senha provisória não será exibida novamente.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
+            <div><p className="text-xs uppercase tracking-widest text-muted-foreground">Matrícula</p><p className="font-mono text-lg font-bold">{portalCredentials?.matricula}</p></div>
+            <div><p className="text-xs uppercase tracking-widest text-muted-foreground">Senha provisória</p><p className="font-mono text-lg font-bold">{portalCredentials?.senhaProvisoria}</p></div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setPortalCredentials(null)}>Fechar</Button>
+            <Button onClick={copyCredentials}><Copy className="mr-2 h-4 w-4" />Copiar dados</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Card className="p-4 gradient-card border-border mb-4">
         <div className="flex flex-col md:flex-row gap-3 md:items-center">
           <div className="relative flex-1">
@@ -449,6 +493,7 @@ function AlunosPage() {
             {filtered.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Nenhum aluno encontrado</TableCell></TableRow>}
             {filtered.map((a: any) => {
               const c = contratoByAluno.get(a.id);
+              const portal = portalByAluno.get(a.id);
               return (
                 <TableRow key={a.id}>
                   <TableCell className="font-medium">
@@ -474,7 +519,12 @@ function AlunosPage() {
                   <TableCell className="text-sm text-muted-foreground">{fmtDate(a.data_entrada)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex gap-1 justify-end">
-                      <Button size="icon" variant="ghost" onClick={()=>copyPortalLink(a.id, a.portal_token)} title="Copiar link do portal" aria-label="Copiar link do portal do aluno"><LinkIcon className="h-4 w-4"/></Button>
+                       <Button size="icon" variant="ghost" disabled={portalBusyId === a.id || somenteLeitura.ativo} onClick={() => issuePortalAccess(a.id)} title={portal ? "Redefinir senha do portal" : "Ativar Portal do Aluno"} aria-label={portal ? "Redefinir senha do portal" : "Ativar Portal do Aluno"}><KeyRound className="h-4 w-4"/></Button>
+                       {portal && (
+                         <Button size="icon" variant="ghost" disabled={portalBusyId === a.id || somenteLeitura.ativo} onClick={() => togglePortalAccess(a.id, !portal.ativo)} title={portal.ativo ? "Bloquear acesso ao portal" : "Liberar acesso ao portal"} aria-label={portal.ativo ? "Bloquear acesso ao portal" : "Liberar acesso ao portal"}>
+                           {portal.ativo ? <LockKeyhole className="h-4 w-4" /> : <UnlockKeyhole className="h-4 w-4 text-success" />}
+                         </Button>
+                       )}
                       {c && (
                         <Button size="icon" variant="ghost" onClick={()=>togglePause(c.id, c.status === "ativo")} title={c.status === "ativo" ? "Pausar contrato" : "Reativar contrato"} aria-label="Pausar ou retomar contrato">
                           {c.status === "ativo" ? <Pause className="h-4 w-4"/> : <Play className="h-4 w-4 text-success"/>}
