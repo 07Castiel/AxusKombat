@@ -107,7 +107,7 @@ export const studentPortalLogin = createServerFn({ method: "POST" })
     }
     const { data: credential } = await supabaseAdmin
       .from("aluno_credenciais")
-      .select("id, senha_hash, ativo, bloqueado_ate")
+      .select("id, senha_hash, ativo, bloqueado_ate, tentativas_falhas")
       .eq("matricula", enrollment)
       .maybeSingle();
     const locked = credential?.bloqueado_ate && new Date(credential.bloqueado_ate).getTime() > Date.now();
@@ -120,7 +120,7 @@ export const studentPortalLogin = createServerFn({ method: "POST" })
     });
     if (!credential || !ok) {
       if (credential && !locked) {
-        const failures = (credential as { tentativas_falhas?: number }).tentativas_falhas ?? (enrollmentFailures ?? 0) + 1;
+        const failures = credential.tentativas_falhas + 1;
         await supabaseAdmin.from("aluno_credenciais").update({
           tentativas_falhas: failures,
           bloqueado_ate: failures >= 5 ? new Date(Date.now() + 15 * 60_000).toISOString() : null,
