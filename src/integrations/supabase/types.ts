@@ -74,6 +74,30 @@ export type Database = {
           },
         ]
       }
+      aluno_login_tentativas: {
+        Row: {
+          created_at: string
+          id: string
+          ip_hash: string
+          matricula_hash: string
+          sucesso: boolean
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          ip_hash: string
+          matricula_hash: string
+          sucesso?: boolean
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          ip_hash?: string
+          matricula_hash?: string
+          sucesso?: boolean
+        }
+        Relationships: []
+      }
       aluno_sessoes: {
         Row: {
           created_at: string
