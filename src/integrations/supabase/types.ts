@@ -14,6 +14,128 @@ export type Database = {
   }
   public: {
     Tables: {
+      aluno_credenciais: {
+        Row: {
+          aluno_id: string
+          ativo: boolean
+          bloqueado_ate: string | null
+          created_at: string
+          id: string
+          matricula: string
+          senha_alterada_em: string | null
+          senha_hash: string
+          tenant_id: string
+          tentativas_falhas: number
+          troca_senha_obrigatoria: boolean
+          updated_at: string
+        }
+        Insert: {
+          aluno_id: string
+          ativo?: boolean
+          bloqueado_ate?: string | null
+          created_at?: string
+          id?: string
+          matricula: string
+          senha_alterada_em?: string | null
+          senha_hash: string
+          tenant_id: string
+          tentativas_falhas?: number
+          troca_senha_obrigatoria?: boolean
+          updated_at?: string
+        }
+        Update: {
+          aluno_id?: string
+          ativo?: boolean
+          bloqueado_ate?: string | null
+          created_at?: string
+          id?: string
+          matricula?: string
+          senha_alterada_em?: string | null
+          senha_hash?: string
+          tenant_id?: string
+          tentativas_falhas?: number
+          troca_senha_obrigatoria?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "aluno_credenciais_aluno_id_fkey"
+            columns: ["aluno_id"]
+            isOneToOne: true
+            referencedRelation: "alunos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "aluno_credenciais_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      aluno_login_tentativas: {
+        Row: {
+          created_at: string
+          id: string
+          ip_hash: string
+          matricula_hash: string
+          sucesso: boolean
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          ip_hash: string
+          matricula_hash: string
+          sucesso?: boolean
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          ip_hash?: string
+          matricula_hash?: string
+          sucesso?: boolean
+        }
+        Relationships: []
+      }
+      aluno_sessoes: {
+        Row: {
+          created_at: string
+          credencial_id: string
+          expires_at: string
+          id: string
+          last_seen_at: string
+          revoked_at: string | null
+          token_hash: string
+        }
+        Insert: {
+          created_at?: string
+          credencial_id: string
+          expires_at: string
+          id?: string
+          last_seen_at?: string
+          revoked_at?: string | null
+          token_hash: string
+        }
+        Update: {
+          created_at?: string
+          credencial_id?: string
+          expires_at?: string
+          id?: string
+          last_seen_at?: string
+          revoked_at?: string | null
+          token_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "aluno_sessoes_credencial_id_fkey"
+            columns: ["credencial_id"]
+            isOneToOne: false
+            referencedRelation: "aluno_credenciais"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       alunos: {
         Row: {
           altura: number | null
