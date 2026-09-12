@@ -35,9 +35,12 @@ export const issueStudentPortalAccess = createServerFn({ method: "POST" })
 
     const { data: existing } = await supabaseAdmin
       .from("aluno_credenciais")
-      .select("id, matricula")
+      .select("id, matricula, ativo")
       .eq("aluno_id", aluno.id)
       .maybeSingle();
+    if (existing?.matricula) {
+      return { nome: aluno.nome_completo, matricula: existing.matricula };
+    }
     let enrollment = existing?.matricula ?? "";
     if (!enrollment) {
       for (let attempt = 0; attempt < 5; attempt += 1) {
