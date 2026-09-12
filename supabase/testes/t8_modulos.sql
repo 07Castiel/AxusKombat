@@ -62,8 +62,6 @@ SELECT t_ok('8.2 dashboard_resumo continua respondendo (nao foi tocado)',
   dashboard_resumo() IS NOT NULL, 'alunos_ativos='||(dashboard_resumo()->'alunos'->>'ativos'));
 SELECT t_ok('8.2 relatorio_periodo continua respondendo',
   relatorio_periodo((now()-interval '30 days')::date, now()::date) IS NOT NULL);
-SELECT t_ok('8.2 portal_aluno_dados nao foi afetado (nao le presencas)',
-  portal_aluno_dados('token-inexistente') IS NULL);
 RESET ROLE;
 
 \echo '-- 8.3 escrita de presenca (togglePresenca) nao regrediu com os 2 indices novos'

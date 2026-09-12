@@ -3,61 +3,10 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 const COOKIE_NAME = "axus_student_session";
 const SESSION_DAYS = 7;
-const PBKDF2_ITERATIONS = 210_000;
 const encoder = new TextEncoder();
 
 function bytesToBase64(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString("base64url");
-}
-
-function base64ToBytes(value: string): Uint8Array {
-  return new Uint8Array(Buffer.from(value, "base64url"));
-}
-
-function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  const buffer = new ArrayBuffer(bytes.byteLength);
-  new Uint8Array(buffer).set(bytes);
-  return buffer;
-}
-
-async function derivePassword(password: string, salt: Uint8Array, iterations: number) {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(password),
-    "PBKDF2",
-    false,
-    ["deriveBits"],
-  );
-  const bits = await crypto.subtle.deriveBits(
-    { name: "PBKDF2", hash: "SHA-256", salt: toArrayBuffer(salt), iterations },
-    key,
-    256,
-  );
-  return new Uint8Array(bits);
-}
-
-export async function hashPassword(password: string): Promise<string> {
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const hash = await derivePassword(password, salt, PBKDF2_ITERATIONS);
-  return `pbkdf2$${PBKDF2_ITERATIONS}$${bytesToBase64(salt)}$${bytesToBase64(hash)}`;
-}
-
-export async function verifyPassword(password: string, stored: string): Promise<boolean> {
-  const [scheme, iterationsRaw, saltRaw, expectedRaw] = stored.split("$");
-  const iterations = Number(iterationsRaw);
-  if (scheme !== "pbkdf2" || !Number.isSafeInteger(iterations) || !saltRaw || !expectedRaw) {
-    return false;
-  }
-  try {
-    const actual = await derivePassword(password, base64ToBytes(saltRaw), iterations);
-    const expected = base64ToBytes(expectedRaw);
-    if (actual.length !== expected.length) return false;
-    let difference = 0;
-    for (let i = 0; i < actual.length; i += 1) difference |= actual[i] ^ expected[i];
-    return difference === 0;
-  } catch {
-    return false;
-  }
 }
 
 async function sha256(value: string): Promise<string> {
@@ -73,12 +22,6 @@ export function generateEnrollment(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   const bytes = crypto.getRandomValues(new Uint8Array(8));
   return `AXK-${Array.from(bytes, (byte) => chars[byte % chars.length]).join("")}`;
-}
-
-export function generateTemporaryPassword(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
-  const bytes = crypto.getRandomValues(new Uint8Array(10));
-  return Array.from(bytes, (byte) => chars[byte % chars.length]).join("");
 }
 
 export function requestIp(): string {
@@ -119,7 +62,6 @@ export type StudentSession = {
   credentialId: string;
   alunoId: string;
   tenantId: string;
-  mustChangePassword: boolean;
   nome: string;
   academia: string;
   categoria: string;
@@ -140,7 +82,7 @@ export async function getStudentSession(): Promise<StudentSession | null> {
   }
   const { data: credential } = await supabaseAdmin
     .from("aluno_credenciais")
-    .select("id, aluno_id, tenant_id, ativo, troca_senha_obrigatoria")
+    .select("id, aluno_id, tenant_id, ativo")
     .eq("id", session.credencial_id)
     .maybeSingle();
   if (!credential?.ativo) {
@@ -161,7 +103,6 @@ export async function getStudentSession(): Promise<StudentSession | null> {
     credentialId: credential.id,
     alunoId: credential.aluno_id,
     tenantId: credential.tenant_id,
-    mustChangePassword: credential.troca_senha_obrigatoria,
     nome: aluno.nome_completo,
     academia: tenant.nome,
     categoria: aluno.categoria,

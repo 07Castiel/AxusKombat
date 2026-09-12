@@ -17,13 +17,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Search, Pencil, RotateCcw, Trash2, User, Heart, ClipboardList, Ban, Pause, Play, KeyRound, Copy, Archive, LockKeyhole, UnlockKeyhole } from "lucide-react";
+import { Plus, Search, Pencil, RotateCcw, Trash2, User, Heart, ClipboardList, Ban, Pause, Play, KeyRound, Copy, Archive, LockKeyhole, UnlockKeyhole, Download } from "lucide-react";
 import { toast } from "sonner";
 import { translateError, firstZodMessage } from "@/lib/errors";
 import { alunoSchema } from "@/lib/validators";
 import { fmtDate, fmtMoney, toISODate } from "@/lib/utils";
 import { upsertContratoAtivo, cancelarContrato, pausarContrato } from "@/lib/contratos.functions";
-import { issueStudentPortalAccess, listStudentPortalAccess, setStudentPortalActive } from "@/lib/student-portal.functions";
+import { issueAllStudentPortalAccess, issueStudentPortalAccess, listStudentPortalAccess, setStudentPortalActive } from "@/lib/student-portal.functions";
 
 export const Route = createFileRoute("/_app/alunos")({
   component: AlunosPage,
@@ -31,6 +31,10 @@ export const Route = createFileRoute("/_app/alunos")({
     meta: [
       { title: "Alunos | Axus Kombat" },
       { name: "description", content: "Cadastro e gestão de alunos da academia." },
+      { property: "og:title", content: "Alunos | Axus Kombat" },
+      { property: "og:description", content: "Cadastro e gestão de alunos da academia." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
@@ -62,6 +66,7 @@ function AlunosPage() {
   const cancelarContratoFn = useServerFn(cancelarContrato);
   const pausarContratoFn = useServerFn(pausarContrato);
   const issuePortalAccessFn = useServerFn(issueStudentPortalAccess);
+  const issueAllPortalAccessFn = useServerFn(issueAllStudentPortalAccess);
   const setPortalActiveFn = useServerFn(setStudentPortalActive);
 
   const [open, setOpen] = useState(false);
@@ -72,8 +77,9 @@ function AlunosPage() {
   const [archiving, setArchiving] = useState<{ id: string; nome: string } | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [portalCredentials, setPortalCredentials] = useState<{ nome: string; matricula: string; senhaProvisoria: string } | null>(null);
+  const [portalCredentials, setPortalCredentials] = useState<{ nome: string; matricula: string } | null>(null);
   const [portalBusyId, setPortalBusyId] = useState<string | null>(null);
+  const [portalBulkBusy, setPortalBulkBusy] = useState(false);
 
   const { data: alunos = [] } = useQuery({
     queryKey: ["alunos", profile?.tenant_id],
@@ -288,14 +294,39 @@ function AlunosPage() {
 
   const copyCredentials = async () => {
     if (!portalCredentials) return;
-    await navigator.clipboard.writeText(`Portal: ${window.location.origin}/portal\nMatrícula: ${portalCredentials.matricula}\nSenha provisória: ${portalCredentials.senhaProvisoria}`);
-    toast.success("Credenciais copiadas");
+    await navigator.clipboard.writeText(`Portal: ${window.location.origin}/portal\nMatrícula: ${portalCredentials.matricula}`);
+    toast.success("Dados de acesso copiados");
+  };
+
+  const exportPortalAccess = async () => {
+    setPortalBulkBusy(true);
+    try {
+      const result = await issueAllPortalAccessFn();
+      const XLSX = await import("xlsx");
+      const rows = result.rows.map((row) => ({
+        "Nome do aluno": row.nome,
+        "Matrícula": row.matricula,
+        "Status do aluno": row.status,
+        "Acesso": row.acesso,
+        "Portal": `${window.location.origin}/portal`,
+      }));
+      const sheet = XLSX.utils.json_to_sheet(rows);
+      sheet["!autofilter"] = { ref: `A1:E${Math.max(rows.length + 1, 1)}` };
+      sheet["!cols"] = [{ wch: 34 }, { wch: 16 }, { wch: 18 }, { wch: 14 }, { wch: 42 }];
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, sheet, "Matrículas");
+      XLSX.writeFile(workbook, `matriculas-alunos-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      await qc.invalidateQueries({ queryKey: ["student-portal-access"] });
+      toast.success(result.created ? `${result.created} matrículas criadas e planilha baixada` : "Planilha de matrículas baixada");
+    } catch (err: any) { toast.error(translateError(err)); }
+    finally { setPortalBulkBusy(false); }
   };
 
   const filtered = alunos.filter((a: any) => {
     if (a.status === "arquivado" && !(isAdmin && showArchived)) return false;
     const q = search.toLowerCase();
-    return a.nome_completo.toLowerCase().includes(q) || (a.email ?? "").toLowerCase().includes(q);
+    const matricula = portalByAluno.get(a.id)?.matricula ?? "";
+    return a.nome_completo.toLowerCase().includes(q) || (a.email ?? "").toLowerCase().includes(q) || matricula.toLowerCase().includes(q);
   });
 
   return (
@@ -304,9 +335,14 @@ function AlunosPage() {
         title="Alunos"
         description={`${alunos.length} alunos cadastrados`}
         actions={
-          <Button className="gradient-primary text-primary-foreground" onClick={startCreate} disabled={somenteLeitura.ativo} title={somenteLeitura.motivo || undefined}>
-            <Plus className="h-4 w-4 mr-2"/>Novo aluno
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={exportPortalAccess} disabled={portalBulkBusy || somenteLeitura.ativo} title="Gerar matrículas pendentes e baixar planilha">
+              <Download className="mr-2 h-4 w-4"/>{portalBulkBusy ? "Preparando..." : "Matrículas"}
+            </Button>
+            <Button className="gradient-primary text-primary-foreground" onClick={startCreate} disabled={somenteLeitura.ativo} title={somenteLeitura.motivo || undefined}>
+              <Plus className="h-4 w-4 mr-2"/>Novo aluno
+            </Button>
+          </div>
         }
       />
 
@@ -448,11 +484,10 @@ function AlunosPage() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Acesso ao Portal do Aluno</DialogTitle>
-            <DialogDescription>Entregue estes dados diretamente a {portalCredentials?.nome}. A senha provisória não será exibida novamente.</DialogDescription>
+            <DialogDescription>Entregue esta matrícula diretamente a {portalCredentials?.nome}.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
             <div><p className="text-xs uppercase tracking-widest text-muted-foreground">Matrícula</p><p className="font-mono text-lg font-bold">{portalCredentials?.matricula}</p></div>
-            <div><p className="text-xs uppercase tracking-widest text-muted-foreground">Senha provisória</p><p className="font-mono text-lg font-bold">{portalCredentials?.senhaProvisoria}</p></div>
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setPortalCredentials(null)}>Fechar</Button>
@@ -465,7 +500,7 @@ function AlunosPage() {
         <div className="flex flex-col md:flex-row gap-3 md:items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
-            <Input placeholder="Buscar por nome ou e-mail..." aria-label="Buscar alunos" value={search} onChange={(e)=>setSearch(e.target.value)} className="pl-9"/>
+            <Input placeholder="Buscar por nome, e-mail ou matrícula..." aria-label="Buscar alunos" value={search} onChange={(e)=>setSearch(e.target.value)} className="pl-9"/>
           </div>
           {isAdmin && (
             <label className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground cursor-pointer">
@@ -485,12 +520,13 @@ function AlunosPage() {
               <TableHead>Dia venc.</TableHead>
               <TableHead>Categoria</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Acesso por matrícula</TableHead>
               <TableHead>Entrada</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Nenhum aluno encontrado</TableCell></TableRow>}
+            {filtered.length === 0 && <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhum aluno encontrado</TableCell></TableRow>}
             {filtered.map((a: any) => {
               const c = contratoByAluno.get(a.id);
               const portal = portalByAluno.get(a.id);
@@ -516,10 +552,13 @@ function AlunosPage() {
                   <TableCell className="text-sm">{c ? `Dia ${c.dia_vencimento}` : "—"}</TableCell>
                   <TableCell><StatusBadge status={a.categoria}/></TableCell>
                   <TableCell><StatusBadge status={a.status}/></TableCell>
+                  <TableCell>
+                    {portal ? <div><p className="font-mono text-xs font-semibold">{portal.matricula}</p><p className={`text-[10px] uppercase tracking-widest ${portal.ativo ? "text-success" : "text-destructive"}`}>{portal.ativo ? "Ativo" : "Bloqueado"}</p></div> : <span className="text-xs text-muted-foreground">Não gerado</span>}
+                  </TableCell>
                   <TableCell className="text-sm text-muted-foreground">{fmtDate(a.data_entrada)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex gap-1 justify-end">
-                       <Button size="icon" variant="ghost" disabled={portalBusyId === a.id || somenteLeitura.ativo} onClick={() => issuePortalAccess(a.id)} title={portal ? "Redefinir senha do portal" : "Ativar Portal do Aluno"} aria-label={portal ? "Redefinir senha do portal" : "Ativar Portal do Aluno"}><KeyRound className="h-4 w-4"/></Button>
+                       <Button size="icon" variant="ghost" disabled={portalBusyId === a.id || somenteLeitura.ativo} onClick={() => issuePortalAccess(a.id)} title={portal ? "Ver matrícula do portal" : "Gerar matrícula do portal"} aria-label={portal ? "Ver matrícula do portal" : "Gerar matrícula do portal"}><KeyRound className="h-4 w-4"/></Button>
                        {portal && (
                          <Button size="icon" variant="ghost" disabled={portalBusyId === a.id || somenteLeitura.ativo} onClick={() => togglePortalAccess(a.id, !portal.ativo)} title={portal.ativo ? "Bloquear acesso ao portal" : "Liberar acesso ao portal"} aria-label={portal.ativo ? "Bloquear acesso ao portal" : "Liberar acesso ao portal"}>
                            {portal.ativo ? <LockKeyhole className="h-4 w-4" /> : <UnlockKeyhole className="h-4 w-4 text-success" />}

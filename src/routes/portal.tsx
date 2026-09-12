@@ -2,16 +2,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
-import { Award, CalendarDays, CreditCard, Loader2, LogIn, LogOut, ShieldCheck, Swords } from "lucide-react";
+import { Award, CalendarDays, CreditCard, Loader2, LogIn, LogOut, Swords } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PasswordInput } from "@/components/PasswordInput";
 import { fmtDate, fmtMoney } from "@/lib/utils";
 import {
-  changeStudentTemporaryPassword,
   getStudentPortalData,
   studentPortalLogin,
   studentPortalLogout,
@@ -62,11 +60,7 @@ function StudentPortalPage() {
   const queryClient = useQueryClient();
   const login = useServerFn(studentPortalLogin);
   const logout = useServerFn(studentPortalLogout);
-  const changePassword = useServerFn(changeStudentTemporaryPassword);
   const [matricula, setMatricula] = useState("");
-  const [senha, setSenha] = useState("");
-  const [novaSenha, setNovaSenha] = useState("");
-  const [confirmacao, setConfirmacao] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const { data, isLoading } = useQuery({
     queryKey: ["student-portal"],
@@ -80,24 +74,10 @@ function StudentPortalPage() {
     event.preventDefault();
     setSubmitting(true);
     try {
-      await login({ data: { matricula, senha } });
-      setSenha("");
+      await login({ data: { matricula } });
       await refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível entrar.");
-    } finally { setSubmitting(false); }
-  };
-
-  const onChangePassword = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (novaSenha !== confirmacao) { toast.error("As senhas não coincidem."); return; }
-    setSubmitting(true);
-    try {
-      await changePassword({ data: { novaSenha } });
-      toast.success("Senha definida com sucesso.");
-      await refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível salvar a senha.");
     } finally { setSubmitting(false); }
   };
 
@@ -116,33 +96,13 @@ function StudentPortalPage() {
             <div className="mb-6 text-center">
               <LogIn className="mx-auto h-8 w-8 text-primary" />
               <h1 className="mt-3 font-display text-2xl uppercase tracking-widest">Entrar no portal</h1>
-              <p className="mt-2 text-sm text-muted-foreground">Use a matrícula e a senha fornecidas pela sua academia.</p>
+               <p className="mt-2 text-sm text-muted-foreground">Use o número de matrícula fornecido pela sua academia.</p>
             </div>
             <form className="space-y-4" onSubmit={onLogin}>
               <div className="space-y-1.5"><Label htmlFor="matricula">Matrícula</Label><Input id="matricula" autoComplete="username" required value={matricula} onChange={(e) => setMatricula(e.target.value.toUpperCase())} placeholder="AXK-XXXXXXXX" /></div>
-              <div className="space-y-1.5"><Label htmlFor="senha">Senha</Label><PasswordInput id="senha" autoComplete="current-password" required value={senha} onChange={(e) => setSenha(e.target.value)} /></div>
               <Button className="w-full" type="submit" disabled={submitting}>{submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Entrar"}</Button>
             </form>
-            <p className="mt-5 text-center text-xs text-muted-foreground">Esqueceu a senha? Solicite uma nova diretamente à academia.</p>
-          </Card>
-        </main>
-      </PortalShell>
-    );
-  }
-
-  if (data.mustChangePassword) {
-    return (
-      <PortalShell>
-        <main className="mx-auto grid min-h-[70vh] max-w-md place-items-center px-4 py-10">
-          <Card className="w-full border-border p-6 sm:p-8">
-            <ShieldCheck className="h-8 w-8 text-primary" />
-            <h1 className="mt-3 font-display text-xl uppercase tracking-widest">Crie sua senha</h1>
-            <p className="mt-2 text-sm text-muted-foreground">Olá, {data.aluno.nome_completo}. Substitua a senha provisória antes de continuar.</p>
-            <form className="mt-6 space-y-4" onSubmit={onChangePassword}>
-              <div className="space-y-1.5"><Label htmlFor="nova-senha">Nova senha</Label><PasswordInput id="nova-senha" minLength={8} required autoComplete="new-password" value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} /></div>
-              <div className="space-y-1.5"><Label htmlFor="confirmar-senha">Confirmar nova senha</Label><PasswordInput id="confirmar-senha" minLength={8} required autoComplete="new-password" value={confirmacao} onChange={(e) => setConfirmacao(e.target.value)} /></div>
-              <Button className="w-full" type="submit" disabled={submitting}>{submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar e continuar"}</Button>
-            </form>
+             <p className="mt-5 text-center text-xs text-muted-foreground">Não sabe sua matrícula? Solicite o número diretamente à academia.</p>
           </Card>
         </main>
       </PortalShell>

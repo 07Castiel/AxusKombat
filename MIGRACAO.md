@@ -157,8 +157,8 @@ Cron da Vercel usa GET; se mantiver os handlers em POST, use `pg_cron` +
   e atualize o signing secret.
 - **Evolution API**: as instâncias de WhatsApp precisam ser reconectadas
   (novo QR Code) se você trocar de servidor Evolution.
-- **Portal do aluno**: os links usam `alunos.portal_token`; como os tokens vêm
-  no dump, os links continuam válidos — só muda o domínio.
+- **Portal do aluno**: o acesso é feito em `/portal` usando somente a matrícula.
+  Confirme que as tabelas `aluno_credenciais` e `aluno_sessoes` foram migradas.
 
 ## 11. Checklist final
 
