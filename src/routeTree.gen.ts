@@ -17,7 +17,6 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AdminMasterIndexRouteImport } from './routes/admin-master.index'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
-import { Route as PortalTokenRouteImport } from './routes/portal.$token'
 import { Route as AdminMasterDashboardRouteImport } from './routes/admin-master.dashboard'
 import { Route as AdminMasterAcessosRouteImport } from './routes/admin-master.acessos'
 import { Route as AppRelatoriosRouteImport } from './routes/_app/relatorios'
@@ -78,11 +77,6 @@ const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppRoute,
-} as any)
-const PortalTokenRoute = PortalTokenRouteImport.update({
-  id: '/$token',
-  path: '/$token',
-  getParentRoute: () => PortalRoute,
 } as any)
 const AdminMasterDashboardRoute = AdminMasterDashboardRouteImport.update({
   id: '/admin-master/dashboard',
@@ -195,7 +189,7 @@ const ApiPublicHooksDispatchNotificationsRoute =
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
-  '/portal': typeof PortalRouteWithChildren
+  '/portal': typeof PortalRoute
   '/precos': typeof PrecosRoute
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -214,7 +208,6 @@ export interface FileRoutesByFullPath {
   '/relatorios': typeof AppRelatoriosRoute
   '/admin-master/acessos': typeof AdminMasterAcessosRoute
   '/admin-master/dashboard': typeof AdminMasterDashboardRoute
-  '/portal/$token': typeof PortalTokenRoute
   '/admin-master/': typeof AdminMasterIndexRoute
   '/aluno/$id': typeof AppAlunoIdRoute
   '/admin-master/tenant/$id': typeof AdminMasterTenantIdRoute
@@ -225,7 +218,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
-  '/portal': typeof PortalRouteWithChildren
+  '/portal': typeof PortalRoute
   '/precos': typeof PrecosRoute
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -244,7 +237,6 @@ export interface FileRoutesByTo {
   '/relatorios': typeof AppRelatoriosRoute
   '/admin-master/acessos': typeof AdminMasterAcessosRoute
   '/admin-master/dashboard': typeof AdminMasterDashboardRoute
-  '/portal/$token': typeof PortalTokenRoute
   '/': typeof AppIndexRoute
   '/admin-master': typeof AdminMasterIndexRoute
   '/aluno/$id': typeof AppAlunoIdRoute
@@ -258,7 +250,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
-  '/portal': typeof PortalRouteWithChildren
+  '/portal': typeof PortalRoute
   '/precos': typeof PrecosRoute
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -277,7 +269,6 @@ export interface FileRoutesById {
   '/_app/relatorios': typeof AppRelatoriosRoute
   '/admin-master/acessos': typeof AdminMasterAcessosRoute
   '/admin-master/dashboard': typeof AdminMasterDashboardRoute
-  '/portal/$token': typeof PortalTokenRoute
   '/_app/': typeof AppIndexRoute
   '/admin-master/': typeof AdminMasterIndexRoute
   '/_app/aluno/$id': typeof AppAlunoIdRoute
@@ -311,7 +302,6 @@ export interface FileRouteTypes {
     | '/relatorios'
     | '/admin-master/acessos'
     | '/admin-master/dashboard'
-    | '/portal/$token'
     | '/admin-master/'
     | '/aluno/$id'
     | '/admin-master/tenant/$id'
@@ -341,7 +331,6 @@ export interface FileRouteTypes {
     | '/relatorios'
     | '/admin-master/acessos'
     | '/admin-master/dashboard'
-    | '/portal/$token'
     | '/'
     | '/admin-master'
     | '/aluno/$id'
@@ -373,7 +362,6 @@ export interface FileRouteTypes {
     | '/_app/relatorios'
     | '/admin-master/acessos'
     | '/admin-master/dashboard'
-    | '/portal/$token'
     | '/_app/'
     | '/admin-master/'
     | '/_app/aluno/$id'
@@ -387,7 +375,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
-  PortalRoute: typeof PortalRouteWithChildren
+  PortalRoute: typeof PortalRoute
   PrecosRoute: typeof PrecosRoute
   SignupRoute: typeof SignupRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
@@ -458,13 +446,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
-    }
-    '/portal/$token': {
-      id: '/portal/$token'
-      path: '/$token'
-      fullPath: '/portal/$token'
-      preLoaderRoute: typeof PortalTokenRouteImport
-      parentRoute: typeof PortalRoute
     }
     '/admin-master/dashboard': {
       id: '/admin-master/dashboard'
@@ -654,21 +635,10 @@ const AppRouteChildren: AppRouteChildren = {
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
-interface PortalRouteChildren {
-  PortalTokenRoute: typeof PortalTokenRoute
-}
-
-const PortalRouteChildren: PortalRouteChildren = {
-  PortalTokenRoute: PortalTokenRoute,
-}
-
-const PortalRouteWithChildren =
-  PortalRoute._addFileChildren(PortalRouteChildren)
-
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
-  PortalRoute: PortalRouteWithChildren,
+  PortalRoute: PortalRoute,
   PrecosRoute: PrecosRoute,
   SignupRoute: SignupRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
