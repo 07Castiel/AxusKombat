@@ -14,16 +14,6 @@ async function sha256(value: string): Promise<string> {
   return bytesToBase64(new Uint8Array(digest));
 }
 
-export function normalizeEnrollment(value: string): string {
-  return value.trim().toUpperCase().replace(/[^A-Z0-9-]/g, "");
-}
-
-export function generateEnrollment(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  const bytes = crypto.getRandomValues(new Uint8Array(8));
-  return `AXK-${Array.from(bytes, (byte) => chars[byte % chars.length]).join("")}`;
-}
-
 export function requestIp(): string {
   const headers = getRequest().headers;
   return (

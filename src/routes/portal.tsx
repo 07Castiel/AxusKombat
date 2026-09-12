@@ -3,12 +3,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { Award, CalendarDays, CreditCard, Loader2, LogIn, LogOut, Swords } from "lucide-react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { fmtDate, fmtMoney } from "@/lib/utils";
+import { MATRICULA_MIN } from "@/lib/student-portal.matricula";
 import {
   getStudentPortalData,
   studentPortalLogin,
@@ -62,6 +62,7 @@ function StudentPortalPage() {
   const logout = useServerFn(studentPortalLogout);
   const [matricula, setMatricula] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
   const { data, isLoading } = useQuery({
     queryKey: ["student-portal"],
     queryFn: () => getStudentPortalData(),
@@ -72,12 +73,19 @@ function StudentPortalPage() {
 
   const onLogin = async (event: React.FormEvent) => {
     event.preventDefault();
+    // Barra o texto curto aqui: o schema do servidor devolveria erro de
+    // validacao cru, que nao diz nada a quem esta digitando no celular.
+    if (matricula.trim().length < MATRICULA_MIN) {
+      setErro("Digite a matrícula completa, no formato AXK-XXXXXXXX.");
+      return;
+    }
+    setErro(null);
     setSubmitting(true);
     try {
       await login({ data: { matricula } });
       await refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível entrar.");
+      setErro(error instanceof Error ? error.message : "Não foi possível entrar. Tente novamente.");
     } finally { setSubmitting(false); }
   };
 
@@ -96,13 +104,37 @@ function StudentPortalPage() {
             <div className="mb-6 text-center">
               <LogIn className="mx-auto h-8 w-8 text-primary" />
               <h1 className="mt-3 font-display text-2xl uppercase tracking-widest">Entrar no portal</h1>
-               <p className="mt-2 text-sm text-muted-foreground">Use o número de matrícula fornecido pela sua academia.</p>
+              <p className="mt-2 text-sm text-muted-foreground">Use o número de matrícula fornecido pela sua academia.</p>
             </div>
-            <form className="space-y-4" onSubmit={onLogin}>
-              <div className="space-y-1.5"><Label htmlFor="matricula">Matrícula</Label><Input id="matricula" autoComplete="username" required value={matricula} onChange={(e) => setMatricula(e.target.value.toUpperCase())} placeholder="AXK-XXXXXXXX" /></div>
-              <Button className="w-full" type="submit" disabled={submitting}>{submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Entrar"}</Button>
+            <form className="space-y-4" onSubmit={onLogin} noValidate>
+              <div className="space-y-1.5">
+                <Label htmlFor="matricula">Matrícula</Label>
+                <Input
+                  id="matricula"
+                  autoComplete="username"
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  inputMode="text"
+                  aria-invalid={!!erro}
+                  aria-describedby={erro ? "matricula-erro" : undefined}
+                  value={matricula}
+                  onChange={(e) => { setMatricula(e.target.value.toUpperCase()); if (erro) setErro(null); }}
+                  placeholder="AXK-XXXXXXXX"
+                  className="font-mono tracking-widest"
+                />
+                {erro && (
+                  <p id="matricula-erro" role="alert" className="text-sm text-destructive">{erro}</p>
+                )}
+              </div>
+              <Button className="w-full" type="submit" disabled={submitting || !matricula.trim()}>
+                {submitting ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Entrando...</>
+                ) : (
+                  "Entrar"
+                )}
+              </Button>
             </form>
-             <p className="mt-5 text-center text-xs text-muted-foreground">Não sabe sua matrícula? Solicite o número diretamente à academia.</p>
+            <p className="mt-5 text-center text-xs text-muted-foreground">Não sabe sua matrícula? Solicite o número diretamente à academia.</p>
           </Card>
         </main>
       </PortalShell>
@@ -118,8 +150,8 @@ function StudentPortalPage() {
     <PortalShell>
       <main className="mx-auto max-w-4xl space-y-6 p-4 md:p-8">
         <div className="flex items-start justify-between gap-4">
-          <div><p className="text-xs uppercase tracking-widest text-metal">{data.aluno.academia}</p><h1 className="font-display text-2xl uppercase tracking-wider">{data.aluno.nome_completo}</h1><p className="text-xs text-muted-foreground">Categoria: {data.aluno.categoria}</p></div>
-          <Button variant="outline" size="sm" onClick={onLogout}><LogOut className="mr-2 h-4 w-4" />Sair</Button>
+          <div><p className="text-xs uppercase tracking-widest text-metal">{data.aluno.academia}</p><h1 className="font-display text-2xl uppercase tracking-wider break-words">{data.aluno.nome_completo}</h1><p className="text-xs text-muted-foreground">Categoria: {data.aluno.categoria}</p></div>
+          <Button variant="outline" size="sm" className="shrink-0" onClick={onLogout}><LogOut className="mr-2 h-4 w-4" />Sair</Button>
         </div>
 
         <section><h2 className="mb-3 flex items-center gap-2 font-display text-sm uppercase tracking-widest text-metal-light"><CreditCard className="h-4 w-4 text-primary" />Mensalidades{pendingTotal > 0 && <span className="ml-auto font-bold text-destructive">{fmtMoney(pendingTotal)} em aberto</span>}</h2><div className="grid gap-2">{monthly.length === 0 && <Card className="p-4 text-sm text-muted-foreground">Nenhuma mensalidade registrada.</Card>}{monthly.map((item) => <Card key={item.id} className="flex items-center justify-between p-3"><div><p className="text-sm font-medium">{item.competencia}</p><p className="text-xs text-muted-foreground">Vence em {fmtDate(item.data_vencimento)}</p></div><div className="text-right"><p className="font-bold">{fmtMoney(Number(item.valor_final ?? item.valor))}</p><p className={`text-[10px] uppercase tracking-widest ${STATUS_COLOR[item.status] ?? ""}`}>{item.status}</p></div></Card>)}</div></section>
