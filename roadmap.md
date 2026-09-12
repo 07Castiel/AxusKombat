@@ -5,4 +5,6 @@
 - [x] Adicionar geração em massa e exportação XLSX na lista de alunos
 - [x] Exibir matrícula e estado de acesso na lista
 - [x] Remover fluxo público por token e referências antigas
-- [ ] Validar login, isolamento, planilha, desktop e celular
+- [x] Aplicar a migration 0002: `portal_token` e `portal_aluno_dados` fora do banco
+- [x] Conferir no banco: 60 matrículas, todas distintas, nenhuma cruzando academia
+- [ ] Validar na tela: entrar, sair, bloquear acesso, planilha baixada e celular
