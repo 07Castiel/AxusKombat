@@ -2,6 +2,14 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireActiveSubscription } from "@/lib/subscription";
 import { requirePermissao } from "@/lib/tenant-guard";
+import {
+  ESTADO_ACESSO_LABEL,
+  MATRICULA_MAX,
+  MATRICULA_MIN,
+  estadoAcesso,
+  generateEnrollment,
+  normalizeEnrollment,
+} from "@/lib/student-portal.matricula";
 
 const genericLoginError = "Matrícula inválida ou acesso indisponível. Verifique o número e tente novamente.";
 
@@ -24,7 +32,6 @@ export const issueStudentPortalAccess = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const tenantId = await requirePermissao(context as never, "alunos", "editar");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { generateEnrollment } = await import("@/lib/student-portal.server");
     const { data: aluno } = await supabaseAdmin
       .from("alunos")
       .select("id, nome_completo")
@@ -38,27 +45,25 @@ export const issueStudentPortalAccess = createServerFn({ method: "POST" })
       .select("id, matricula, ativo")
       .eq("aluno_id", aluno.id)
       .maybeSingle();
+    // Reexecutar a acao nao troca a matricula de quem ja tem: o numero
+    // impresso na planilha continua valendo.
     if (existing?.matricula) {
       return { nome: aluno.nome_completo, matricula: existing.matricula };
     }
-    let enrollment = existing?.matricula ?? "";
-    if (!enrollment) {
-      for (let attempt = 0; attempt < 5; attempt += 1) {
-        const candidate = generateEnrollment();
-        const { count } = await supabaseAdmin
-          .from("aluno_credenciais")
-          .select("id", { count: "exact", head: true })
-          .eq("matricula", candidate);
-        if (!count) { enrollment = candidate; break; }
-      }
+    let enrollment = "";
+    for (let attempt = 0; attempt < 5 && !enrollment; attempt += 1) {
+      const candidate = generateEnrollment();
+      const { count } = await supabaseAdmin
+        .from("aluno_credenciais")
+        .select("id", { count: "exact", head: true })
+        .eq("matricula", candidate);
+      if (!count) enrollment = candidate;
     }
     if (!enrollment) throw new Error("Não foi possível gerar uma matrícula única.");
     const { data: credential, error } = await supabaseAdmin.from("aluno_credenciais").upsert({
       aluno_id: aluno.id,
       tenant_id: tenantId,
       matricula: enrollment,
-      senha_hash: "disabled",
-      troca_senha_obrigatoria: false,
       ativo: true,
       tentativas_falhas: 0,
       bloqueado_ate: null,
@@ -72,7 +77,6 @@ export const issueAllStudentPortalAccess = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     const tenantId = await requirePermissao(context as never, "alunos", "editar");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { generateEnrollment } = await import("@/lib/student-portal.server");
     const [{ data: alunos, error: alunosError }, { data: existing, error: existingError }] = await Promise.all([
       supabaseAdmin.from("alunos").select("id, nome_completo, status").eq("tenant_id", tenantId).order("nome_completo"),
       supabaseAdmin.from("aluno_credenciais").select("aluno_id, matricula, ativo").eq("tenant_id", tenantId),
@@ -80,7 +84,7 @@ export const issueAllStudentPortalAccess = createServerFn({ method: "POST" })
     if (alunosError || existingError) throw new Error(alunosError?.message ?? existingError?.message);
     const byAluno = new Map((existing ?? []).map((item) => [item.aluno_id, item]));
     const used = new Set((existing ?? []).map((item) => item.matricula));
-    const inserts: Array<{ aluno_id: string; tenant_id: string; matricula: string; senha_hash: string; troca_senha_obrigatoria: boolean; ativo: boolean }> = [];
+    const inserts: Array<{ aluno_id: string; tenant_id: string; matricula: string; ativo: boolean }> = [];
     for (const aluno of alunos ?? []) {
       if (byAluno.has(aluno.id)) continue;
       let matricula = "";
@@ -93,7 +97,7 @@ export const issueAllStudentPortalAccess = createServerFn({ method: "POST" })
       }
       if (!matricula) throw new Error("Não foi possível gerar todas as matrículas.");
       used.add(matricula);
-      inserts.push({ aluno_id: aluno.id, tenant_id: tenantId, matricula, senha_hash: "disabled", troca_senha_obrigatoria: false, ativo: true });
+      inserts.push({ aluno_id: aluno.id, tenant_id: tenantId, matricula, ativo: true });
     }
     if (inserts.length) {
       const { error } = await supabaseAdmin.from("aluno_credenciais").insert(inserts);
@@ -111,7 +115,7 @@ export const issueAllStudentPortalAccess = createServerFn({ method: "POST" })
         nome: aluno.nome_completo,
         status: aluno.status,
         matricula: accessByAluno.get(aluno.id)?.matricula ?? "",
-        acesso: accessByAluno.get(aluno.id)?.ativo ? "Ativo" : "Bloqueado",
+        acesso: ESTADO_ACESSO_LABEL[estadoAcesso(accessByAluno.get(aluno.id), aluno.status)],
       })),
     };
   });
@@ -138,11 +142,13 @@ export const setStudentPortalActive = createServerFn({ method: "POST" })
   });
 
 export const studentPortalLogin = createServerFn({ method: "POST" })
-  .inputValidator((input) => z.object({ matricula: z.string().min(4).max(40) }).parse(input))
+  .inputValidator((input) =>
+    z.object({ matricula: z.string().min(MATRICULA_MIN).max(MATRICULA_MAX) }).parse(input),
+  )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const portal = await import("@/lib/student-portal.server");
-    const enrollment = portal.normalizeEnrollment(data.matricula);
+    const enrollment = normalizeEnrollment(data.matricula);
     const ipHash = await portal.identifierHash(portal.requestIp());
     const enrollmentHash = await portal.identifierHash(enrollment);
     const since = new Date(Date.now() - 15 * 60_000).toISOString();
@@ -155,11 +161,20 @@ export const studentPortalLogin = createServerFn({ method: "POST" })
     }
     const { data: credential } = await supabaseAdmin
       .from("aluno_credenciais")
-      .select("id, ativo, bloqueado_ate")
+      .select("id, ativo, bloqueado_ate, aluno_id, tenant_id")
       .eq("matricula", enrollment)
       .maybeSingle();
+    // getStudentSession() so devolve dados de aluno ativo em academia ativa.
+    // Sem conferir isso aqui, o login "daria certo" e a tela voltaria sozinha
+    // para o formulario, sem dizer nada a quem digitou.
+    const [{ data: aluno }, { data: tenant }] = credential
+      ? await Promise.all([
+          supabaseAdmin.from("alunos").select("status").eq("id", credential.aluno_id).maybeSingle(),
+          supabaseAdmin.from("tenants").select("ativo").eq("id", credential.tenant_id).maybeSingle(),
+        ])
+      : [{ data: null }, { data: null }];
     const locked = credential?.bloqueado_ate && new Date(credential.bloqueado_ate).getTime() > Date.now();
-    const ok = Boolean(credential?.ativo && !locked);
+    const ok = Boolean(credential?.ativo && !locked && aluno?.status === "ativo" && tenant?.ativo);
     await supabaseAdmin.from("aluno_login_tentativas").insert({
       ip_hash: ipHash,
       matricula_hash: enrollmentHash,

@@ -15,6 +15,13 @@
       "when": 1789154875841,
       "tag": "0001_student_portal_login_attempts",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789218959523,
+      "tag": "0002_remove_legacy_portal_token",
+      "breakpoints": true
     }
   ]
 }

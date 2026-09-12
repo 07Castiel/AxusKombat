@@ -24,6 +24,7 @@ import { alunoSchema } from "@/lib/validators";
 import { fmtDate, fmtMoney, toISODate } from "@/lib/utils";
 import { upsertContratoAtivo, cancelarContrato, pausarContrato } from "@/lib/contratos.functions";
 import { issueAllStudentPortalAccess, issueStudentPortalAccess, listStudentPortalAccess, setStudentPortalActive } from "@/lib/student-portal.functions";
+import { ESTADO_ACESSO_LABEL, estadoAcesso } from "@/lib/student-portal.matricula";
 
 export const Route = createFileRoute("/_app/alunos")({
   component: AlunosPage,
@@ -57,6 +58,25 @@ const EMPTY = {
   status_contrato: "ativo" as "ativo" | "pausado" | "cancelado",
 };
 type FormState = typeof EMPTY;
+
+const AVISO_CONFIDENCIAL =
+  "CONFIDENCIAL — a matrícula é a única credencial de acesso ao Portal do Aluno. " +
+  "Entregue o número individualmente a cada aluno e não publique esta relação.";
+/** O cabecalho fica na linha 3 da planilha: aviso na 1, linha em branco na 2. */
+const LINHA_CABECALHO = 3;
+
+const ACESSO_COR: Record<string, string> = {
+  ativo: "text-success",
+  bloqueado: "text-destructive",
+  indisponivel: "text-warning",
+  nao_gerado: "text-muted-foreground",
+};
+const ACESSO_AJUDA: Record<string, string> = {
+  ativo: "O aluno entra em /portal com esta matrícula.",
+  bloqueado: "Acesso bloqueado pela academia. As sessões abertas foram encerradas.",
+  indisponivel: "A matrícula existe, mas o portal só abre para aluno ativo.",
+  nao_gerado: "Este aluno ainda não tem matrícula.",
+};
 
 function AlunosPage() {
   const { profile, isAdmin } = useAuth();
@@ -303,16 +323,17 @@ function AlunosPage() {
     try {
       const result = await issueAllPortalAccessFn();
       const XLSX = await import("xlsx");
-      const rows = result.rows.map((row) => ({
-        "Nome do aluno": row.nome,
-        "Matrícula": row.matricula,
-        "Status do aluno": row.status,
-        "Acesso": row.acesso,
-        "Portal": `${window.location.origin}/portal`,
-      }));
-      const sheet = XLSX.utils.json_to_sheet(rows);
-      sheet["!autofilter"] = { ref: `A1:E${Math.max(rows.length + 1, 1)}` };
+      const portalUrl = `${window.location.origin}/portal`;
+      // Linha 1 carrega o aviso, linha 3 e o cabecalho: a matricula e a unica
+      // credencial do aluno, entao quem imprimir a planilha ve isso antes dos nomes.
+      const cabecalho = ["Nome do aluno", "Matrícula", "Status do aluno", "Acesso", "Portal"];
+      const corpo = result.rows.map((row) => [row.nome, row.matricula, row.status, row.acesso, portalUrl]);
+      const sheet = XLSX.utils.aoa_to_sheet([[AVISO_CONFIDENCIAL], [], cabecalho, ...corpo]);
+      const ultimaLinha = LINHA_CABECALHO + corpo.length;
+      sheet["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: cabecalho.length - 1 } }];
+      sheet["!autofilter"] = { ref: `A${LINHA_CABECALHO}:E${Math.max(ultimaLinha, LINHA_CABECALHO)}` };
       sheet["!cols"] = [{ wch: 34 }, { wch: 16 }, { wch: 18 }, { wch: 14 }, { wch: 42 }];
+      sheet["!rows"] = [{ hpt: 28 }];
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, sheet, "Matrículas");
       XLSX.writeFile(workbook, `matriculas-alunos-${new Date().toISOString().slice(0, 10)}.xlsx`);
@@ -530,6 +551,7 @@ function AlunosPage() {
             {filtered.map((a: any) => {
               const c = contratoByAluno.get(a.id);
               const portal = portalByAluno.get(a.id);
+              const acesso = estadoAcesso(portal, a.status);
               return (
                 <TableRow key={a.id}>
                   <TableCell className="font-medium">
@@ -553,7 +575,14 @@ function AlunosPage() {
                   <TableCell><StatusBadge status={a.categoria}/></TableCell>
                   <TableCell><StatusBadge status={a.status}/></TableCell>
                   <TableCell>
-                    {portal ? <div><p className="font-mono text-xs font-semibold">{portal.matricula}</p><p className={`text-[10px] uppercase tracking-widest ${portal.ativo ? "text-success" : "text-destructive"}`}>{portal.ativo ? "Ativo" : "Bloqueado"}</p></div> : <span className="text-xs text-muted-foreground">Não gerado</span>}
+                    {portal ? (
+                      <div title={ACESSO_AJUDA[acesso]}>
+                        <p className="font-mono text-xs font-semibold">{portal.matricula}</p>
+                        <p className={`text-[10px] uppercase tracking-widest ${ACESSO_COR[acesso]}`}>{ESTADO_ACESSO_LABEL[acesso]}</p>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground" title={ACESSO_AJUDA.nao_gerado}>Não gerado</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">{fmtDate(a.data_entrada)}</TableCell>
                   <TableCell className="text-right">

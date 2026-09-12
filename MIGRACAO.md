@@ -33,7 +33,7 @@ Isso aplica, na ordem: tipos enum, tabelas (`tenants`, `profiles`, `user_roles`,
 `notification_templates`, `whatsapp_config`, `whatsapp_connections`,
 `visitor_logs`, `system_logs`), todos os GRANTs, políticas de RLS e as funções
 (`has_role`, `is_admin`, `can_access_categoria`, `gerar_mensalidades_contrato`,
-`agendar_notificacoes_mensalidade`, `portal_aluno_dados`, etc.).
+`agendar_notificacoes_mensalidade`, etc.).
 
 Confirme depois com `supabase db diff` — deve vir vazio.
 
@@ -158,7 +158,9 @@ Cron da Vercel usa GET; se mantiver os handlers em POST, use `pg_cron` +
 - **Evolution API**: as instâncias de WhatsApp precisam ser reconectadas
   (novo QR Code) se você trocar de servidor Evolution.
 - **Portal do aluno**: o acesso é feito em `/portal` usando somente a matrícula.
-  Confirme que as tabelas `aluno_credenciais` e `aluno_sessoes` foram migradas.
+  Confirme que as tabelas `aluno_credenciais`, `aluno_sessoes` e
+  `aluno_login_tentativas` foram migradas. Elas nascem em `drizzle/migrations/`,
+  não em `supabase/migrations/` — aplique as duas pastas.
 
 ## 11. Checklist final
 

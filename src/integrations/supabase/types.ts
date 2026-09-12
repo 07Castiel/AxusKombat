@@ -22,11 +22,8 @@ export type Database = {
           created_at: string
           id: string
           matricula: string
-          senha_alterada_em: string | null
-          senha_hash: string
           tenant_id: string
           tentativas_falhas: number
-          troca_senha_obrigatoria: boolean
           updated_at: string
         }
         Insert: {
@@ -36,11 +33,8 @@ export type Database = {
           created_at?: string
           id?: string
           matricula: string
-          senha_alterada_em?: string | null
-          senha_hash: string
           tenant_id: string
           tentativas_falhas?: number
-          troca_senha_obrigatoria?: boolean
           updated_at?: string
         }
         Update: {
@@ -50,11 +44,8 @@ export type Database = {
           created_at?: string
           id?: string
           matricula?: string
-          senha_alterada_em?: string | null
-          senha_hash?: string
           tenant_id?: string
           tentativas_falhas?: number
-          troca_senha_obrigatoria?: boolean
           updated_at?: string
         }
         Relationships: [
@@ -154,7 +145,6 @@ export type Database = {
           observacoes: string | null
           observacoes_medicas: string | null
           peso: number | null
-          portal_token: string | null
           responsavel_cpf: string | null
           responsavel_nome: string | null
           responsavel_telefone: string | null
@@ -180,7 +170,6 @@ export type Database = {
           observacoes?: string | null
           observacoes_medicas?: string | null
           peso?: number | null
-          portal_token?: string | null
           responsavel_cpf?: string | null
           responsavel_nome?: string | null
           responsavel_telefone?: string | null
@@ -206,7 +195,6 @@ export type Database = {
           observacoes?: string | null
           observacoes_medicas?: string | null
           peso?: number | null
-          portal_token?: string | null
           responsavel_cpf?: string | null
           responsavel_nome?: string | null
           responsavel_telefone?: string | null
@@ -1415,7 +1403,6 @@ export type Database = {
       is_professor_kids: { Args: never; Returns: boolean }
       is_recepcao: { Args: never; Returns: boolean }
       master_excluir_tenant: { Args: { p_tenant_id: string }; Returns: Json }
-      portal_aluno_dados: { Args: { p_token: string }; Returns: Json }
       processar_mensalidades_diario: { Args: never; Returns: Json }
       relatorio_periodo: {
         Args: { p_ate: string; p_de: string }
