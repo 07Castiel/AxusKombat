@@ -17,13 +17,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Search, Pencil, RotateCcw, Trash2, User, Heart, ClipboardList, Ban, Pause, Play, KeyRound, Copy, Archive, LockKeyhole, UnlockKeyhole, Download } from "lucide-react";
+import { Plus, Search, Pencil, RotateCcw, Trash2, User, Heart, ClipboardList, Ban, Pause, Play, KeyRound, Copy, Archive, LockKeyhole, UnlockKeyhole, Download, Send } from "lucide-react";
 import { toast } from "sonner";
 import { translateError, firstZodMessage } from "@/lib/errors";
 import { alunoSchema } from "@/lib/validators";
 import { fmtDate, fmtMoney, toISODate } from "@/lib/utils";
 import { upsertContratoAtivo, cancelarContrato, pausarContrato } from "@/lib/contratos.functions";
-import { issueAllStudentPortalAccess, issueStudentPortalAccess, listStudentPortalAccess, setStudentPortalActive } from "@/lib/student-portal.functions";
+import { enviarAcessoPortal, issueAllStudentPortalAccess, issueStudentPortalAccess, listStudentPortalAccess, setStudentPortalActive } from "@/lib/student-portal.functions";
 import { ESTADO_ACESSO_LABEL, estadoAcesso } from "@/lib/student-portal.matricula";
 
 export const Route = createFileRoute("/_app/alunos")({
@@ -60,8 +60,8 @@ const EMPTY = {
 type FormState = typeof EMPTY;
 
 const AVISO_CONFIDENCIAL =
-  "CONFIDENCIAL — a matrícula é a única credencial de acesso ao Portal do Aluno. " +
-  "Entregue o número individualmente a cada aluno e não publique esta relação.";
+  "CONFIDENCIAL — o aluno entra no portal com a matrícula abaixo e a própria data de nascimento. " +
+  "Entregue o número individualmente e não publique esta relação.";
 /** O cabecalho fica na linha 3 da planilha: aviso na 1, linha em branco na 2. */
 const LINHA_CABECALHO = 3;
 
@@ -69,12 +69,14 @@ const ACESSO_COR: Record<string, string> = {
   ativo: "text-success",
   bloqueado: "text-destructive",
   indisponivel: "text-warning",
+  sem_nascimento: "text-warning",
   nao_gerado: "text-muted-foreground",
 };
 const ACESSO_AJUDA: Record<string, string> = {
-  ativo: "O aluno entra em /portal com esta matrícula.",
+  ativo: "O aluno entra no portal com esta matrícula e a data de nascimento dele.",
   bloqueado: "Acesso bloqueado pela academia. As sessões abertas foram encerradas.",
   indisponivel: "A matrícula existe, mas o portal só abre para aluno ativo.",
+  sem_nascimento: "Falta a data de nascimento no cadastro. Sem ela o aluno não consegue entrar.",
   nao_gerado: "Este aluno ainda não tem matrícula.",
 };
 
@@ -88,6 +90,7 @@ function AlunosPage() {
   const issuePortalAccessFn = useServerFn(issueStudentPortalAccess);
   const issueAllPortalAccessFn = useServerFn(issueAllStudentPortalAccess);
   const setPortalActiveFn = useServerFn(setStudentPortalActive);
+  const enviarAcessoPortalFn = useServerFn(enviarAcessoPortal);
 
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -100,6 +103,7 @@ function AlunosPage() {
   const [portalCredentials, setPortalCredentials] = useState<{ nome: string; matricula: string } | null>(null);
   const [portalBusyId, setPortalBusyId] = useState<string | null>(null);
   const [portalBulkBusy, setPortalBulkBusy] = useState(false);
+  const [envioBusy, setEnvioBusy] = useState(false);
 
   const { data: alunos = [] } = useQuery({
     queryKey: ["alunos", profile?.tenant_id],
@@ -314,7 +318,9 @@ function AlunosPage() {
 
   const copyCredentials = async () => {
     if (!portalCredentials) return;
-    await navigator.clipboard.writeText(`Portal: ${window.location.origin}/portal\nMatrícula: ${portalCredentials.matricula}`);
+    await navigator.clipboard.writeText(
+      `Portal: ${window.location.origin}/portal\nMatrícula: ${portalCredentials.matricula}\nPara entrar, informe a matrícula e a sua data de nascimento.`,
+    );
     toast.success("Dados de acesso copiados");
   };
 
@@ -343,6 +349,30 @@ function AlunosPage() {
     finally { setPortalBulkBusy(false); }
   };
 
+  const enviarAcessos = async () => {
+    setEnvioBusy(true);
+    try {
+      const r = await enviarAcessoPortalFn({ data: { reenviar: false } });
+      const pendencias = [
+        r.sem_telefone && `${r.sem_telefone} sem telefone`,
+        r.sem_nascimento && `${r.sem_nascimento} sem data de nascimento`,
+        r.sem_matricula && `${r.sem_matricula} sem matrícula`,
+        r.bloqueados && `${r.bloqueados} bloqueados`,
+        r.inativos && `${r.inativos} inativos`,
+        r.ja_enviados && `${r.ja_enviados} já receberam`,
+      ].filter(Boolean).join(", ");
+      if (r.enfileirados === 0) {
+        toast.info(pendencias ? `Nenhum recado novo na fila. ${pendencias}.` : "Todos os alunos já receberam o acesso.");
+      } else {
+        toast.success(
+          `${r.enfileirados} recados na fila. O envio é espaçado ao longo dos próximos dias.` +
+          (pendencias ? ` Fora da fila: ${pendencias}.` : ""),
+        );
+      }
+    } catch (err: any) { toast.error(translateError(err)); }
+    finally { setEnvioBusy(false); }
+  };
+
   const filtered = alunos.filter((a: any) => {
     if (a.status === "arquivado" && !(isAdmin && showArchived)) return false;
     const q = search.toLowerCase();
@@ -360,6 +390,11 @@ function AlunosPage() {
             <Button variant="outline" onClick={exportPortalAccess} disabled={portalBulkBusy || somenteLeitura.ativo} title="Gerar matrículas pendentes e baixar planilha">
               <Download className="mr-2 h-4 w-4"/>{portalBulkBusy ? "Preparando..." : "Matrículas"}
             </Button>
+            {isAdmin && (
+              <Button variant="outline" onClick={enviarAcessos} disabled={envioBusy || somenteLeitura.ativo} title="Enfileirar o recado com a matrícula por WhatsApp, com o espaçamento antibanimento">
+                <Send className="mr-2 h-4 w-4"/>{envioBusy ? "Enfileirando..." : "Enviar acesso"}
+              </Button>
+            )}
             <Button className="gradient-primary text-primary-foreground" onClick={startCreate} disabled={somenteLeitura.ativo} title={somenteLeitura.motivo || undefined}>
               <Plus className="h-4 w-4 mr-2"/>Novo aluno
             </Button>
@@ -505,7 +540,7 @@ function AlunosPage() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Acesso ao Portal do Aluno</DialogTitle>
-            <DialogDescription>Entregue esta matrícula diretamente a {portalCredentials?.nome}.</DialogDescription>
+            <DialogDescription>Entregue esta matrícula diretamente a {portalCredentials?.nome}. Para entrar, ele informa a matrícula e a própria data de nascimento.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
             <div><p className="text-xs uppercase tracking-widest text-muted-foreground">Matrícula</p><p className="font-mono text-lg font-bold">{portalCredentials?.matricula}</p></div>
@@ -551,7 +586,7 @@ function AlunosPage() {
             {filtered.map((a: any) => {
               const c = contratoByAluno.get(a.id);
               const portal = portalByAluno.get(a.id);
-              const acesso = estadoAcesso(portal, a.status);
+              const acesso = estadoAcesso(portal, a);
               return (
                 <TableRow key={a.id}>
                   <TableCell className="font-medium">

@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { fmtDate, fmtMoney } from "@/lib/utils";
-import { MATRICULA_MIN } from "@/lib/student-portal.matricula";
+import { MATRICULA_DIGITOS, normalizeBirthDate } from "@/lib/student-portal.matricula";
 import {
   getStudentPortalData,
   studentPortalLogin,
@@ -61,6 +61,7 @@ function StudentPortalPage() {
   const login = useServerFn(studentPortalLogin);
   const logout = useServerFn(studentPortalLogout);
   const [matricula, setMatricula] = useState("");
+  const [nascimento, setNascimento] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const { data, isLoading } = useQuery({
@@ -73,16 +74,21 @@ function StudentPortalPage() {
 
   const onLogin = async (event: React.FormEvent) => {
     event.preventDefault();
-    // Barra o texto curto aqui: o schema do servidor devolveria erro de
-    // validacao cru, que nao diz nada a quem esta digitando no celular.
-    if (matricula.trim().length < MATRICULA_MIN) {
-      setErro("Digite a matrícula completa, no formato AXK-XXXXXXXX.");
+    // Barra o preenchimento incompleto aqui: o servidor devolveria a mesma
+    // mensagem generica de credencial errada, que manda o aluno conferir um
+    // numero que ele nem terminou de digitar.
+    if (matricula.replace(/\D/g, "").length !== MATRICULA_DIGITOS) {
+      setErro(`A matrícula tem ${MATRICULA_DIGITOS} dígitos. Confira o número que a academia enviou.`);
+      return;
+    }
+    if (!normalizeBirthDate(nascimento)) {
+      setErro("Informe sua data de nascimento.");
       return;
     }
     setErro(null);
     setSubmitting(true);
     try {
-      await login({ data: { matricula } });
+      await login({ data: { matricula, nascimento } });
       await refresh();
     } catch (error) {
       setErro(error instanceof Error ? error.message : "Não foi possível entrar. Tente novamente.");
@@ -104,7 +110,7 @@ function StudentPortalPage() {
             <div className="mb-6 text-center">
               <LogIn className="mx-auto h-8 w-8 text-primary" />
               <h1 className="mt-3 font-display text-2xl uppercase tracking-widest">Entrar no portal</h1>
-              <p className="mt-2 text-sm text-muted-foreground">Use o número de matrícula fornecido pela sua academia.</p>
+              <p className="mt-2 text-sm text-muted-foreground">Informe a matrícula que a academia enviou e sua data de nascimento.</p>
             </div>
             <form className="space-y-4" onSubmit={onLogin} noValidate>
               <div className="space-y-1.5">
@@ -112,21 +118,45 @@ function StudentPortalPage() {
                 <Input
                   id="matricula"
                   autoComplete="username"
-                  autoCapitalize="characters"
                   spellCheck={false}
-                  inputMode="text"
+                  // Teclado numerico no celular: a matricula so tem digitos.
+                  inputMode="numeric"
+                  maxLength={MATRICULA_DIGITOS}
                   aria-invalid={!!erro}
-                  aria-describedby={erro ? "matricula-erro" : undefined}
+                  aria-describedby={erro ? "login-erro" : undefined}
                   value={matricula}
-                  onChange={(e) => { setMatricula(e.target.value.toUpperCase()); if (erro) setErro(null); }}
-                  placeholder="AXK-XXXXXXXX"
-                  className="font-mono tracking-widest"
+                  onChange={(e) => {
+                    setMatricula(e.target.value.replace(/\D/g, "").slice(0, MATRICULA_DIGITOS));
+                    if (erro) setErro(null);
+                  }}
+                  placeholder={"0".repeat(MATRICULA_DIGITOS)}
+                  className="font-mono text-lg tracking-[0.4em]"
                 />
-                {erro && (
-                  <p id="matricula-erro" role="alert" className="text-sm text-destructive">{erro}</p>
-                )}
               </div>
-              <Button className="w-full" type="submit" disabled={submitting || !matricula.trim()}>
+              <div className="space-y-1.5">
+                <Label htmlFor="nascimento">Data de nascimento</Label>
+                <Input
+                  id="nascimento"
+                  type="date"
+                  autoComplete="bday"
+                  max={new Date().toISOString().slice(0, 10)}
+                  aria-invalid={!!erro}
+                  aria-describedby={erro ? "login-erro" : undefined}
+                  value={nascimento}
+                  onChange={(e) => {
+                    setNascimento(e.target.value);
+                    if (erro) setErro(null);
+                  }}
+                />
+              </div>
+              {erro && (
+                <p id="login-erro" role="alert" className="text-sm text-destructive">{erro}</p>
+              )}
+              <Button
+                className="w-full"
+                type="submit"
+                disabled={submitting || !matricula.trim() || !nascimento}
+              >
                 {submitting ? (
                   <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Entrando...</>
                 ) : (
