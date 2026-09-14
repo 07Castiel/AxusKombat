@@ -9,6 +9,7 @@ export type ErroCodigo =
   | "telefone_invalido"
   | "sem_modelo"
   | "servico_indisponivel"
+  | "configuracao_invalida"
   | "desconhecido";
 
 export const MAX_TENTATIVAS = 5;
@@ -23,6 +24,7 @@ export const BACKOFF_MINUTOS = [5, 30, 120, 360, 1440];
  */
 const NAO_RETENTAVEIS: ErroCodigo[] = [
   "sem_telefone", "telefone_invalido", "sem_modelo", "whatsapp_desconectado",
+  "configuracao_invalida",
 ];
 
 export function isRetentavel(codigo: string | null | undefined): boolean {
@@ -54,6 +56,25 @@ const SINAIS_INDISPONIVEL = [
   "inacessível", "inacessivel",
 ];
 
+/**
+ * Credencial recusada ou ausente. Retentar não muda nada: a Evolution vai
+ * recusar as cinco tentativas igual, e cinco POSTs recusados por minuto é
+ * justamente o tráfego que não se quer gerar. Precisa de correção humana.
+ */
+const STATUS_CONFIGURACAO = new Set([401, 403, 407]);
+
+const SINAIS_CONFIGURACAO = [
+  "não configurado", "nao configurado",
+  "unauthorized", "forbidden", "apikey", "api key",
+];
+
+function pareceConfiguracao(m: string): boolean {
+  for (const t of m.match(/\b\d{3}\b/g) ?? []) {
+    if (STATUS_CONFIGURACAO.has(Number(t))) return true;
+  }
+  return SINAIS_CONFIGURACAO.some((s) => m.includes(s));
+}
+
 function pareceIndisponivel(m: string): boolean {
   // \b\d{3}\b isola o status: casa "HTTP 530" e "504 gateway", mas não o
   // "1016" do corpo de erro do Cloudflare nem outros números de 4+ dígitos.
@@ -72,6 +93,7 @@ export function classifyErro(mensagem: string | null | undefined): ErroCodigo {
   if (m.includes("modelo")) return "sem_modelo";
   if (m.includes("desconectado") || m.includes("não conectado") || m.includes("nao conectado"))
     return "whatsapp_desconectado";
+  if (pareceConfiguracao(m)) return "configuracao_invalida";
   if (pareceIndisponivel(m)) return "servico_indisponivel";
   return "desconhecido";
 }
@@ -82,6 +104,7 @@ export const ERRO_LABEL: Record<ErroCodigo, string> = {
   telefone_invalido: "Número de telefone inválido",
   sem_modelo: "Modelo de mensagem não configurado",
   servico_indisponivel: "Serviço de envio indisponível",
+  configuracao_invalida: "Acesso ao serviço de WhatsApp recusado",
   desconhecido: "Falha no envio",
 };
 
@@ -91,6 +114,8 @@ export const ERRO_ACAO: Record<ErroCodigo, string> = {
   telefone_invalido: "Corrija o telefone do aluno e reenvie manualmente.",
   sem_modelo: "Crie o modelo correspondente na aba Modelos.",
   servico_indisponivel: "Nova tentativa automática em instantes.",
+  configuracao_invalida:
+    "A chave de acesso ao serviço foi recusada. Nenhuma mensagem sai até o suporte corrigir — fale com o suporte.",
   desconhecido: "Verifique o histórico para detalhes.",
 };
 

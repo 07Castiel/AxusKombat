@@ -68,7 +68,29 @@ describe("classifyErro", () => {
     // "1016" tem 4 digitos: nao pode casar com a lista de status. Se casasse,
     // qualquer numero grande no corpo do erro viraria "servico_indisponivel".
     expect(classifyErro("resposta estranha: 1016")).toBe("desconhecido");
-    expect(classifyErro("Evolution HTTP 401: Unauthorized")).toBe("desconhecido");
+  });
+
+  it("separa credencial recusada de servidor fora do ar", () => {
+    // Sao os dois "a Evolution nao aceitou", mas o desfecho e oposto: um espera
+    // o servidor voltar, o outro espera alguem arrumar a chave.
+    for (const m of [
+      "Evolution HTTP 401: Unauthorized",
+      "Evolution HTTP 403: Forbidden",
+      "Evolution HTTP 401: {\"message\":\"Invalid apikey\"}",
+    ]) {
+      expect(classifyErro(m), m).toBe("configuracao_invalida");
+    }
+  });
+
+  it("trata env var ausente como configuração, não como rede", () => {
+    // baseUrl()/apiKey() lançam quando a env var falta e a exceção chega aqui
+    // embrulhada. Sem a ordem certa em classifyErro, o "inacessível" do
+    // embrulho ganharia e isto viraria "servico_indisponivel" — retentado 5x
+    // para um servidor que está no ar e nunca vai aceitar.
+    expect(classifyErro("EVOLUTION_API_KEY não configurado no servidor"))
+      .toBe("configuracao_invalida");
+    expect(classifyErro("Evolution inacessível: EVOLUTION_API_URL não configurado no servidor"))
+      .toBe("configuracao_invalida");
   });
 
   it("cai em desconhecido para vazio, nulo e mensagem que não casa", () => {
@@ -90,6 +112,12 @@ describe("isRetentavel", () => {
     for (const c of ["sem_telefone", "telefone_invalido", "sem_modelo"]) {
       expect(isRetentavel(c), c).toBe(false);
     }
+  });
+
+  it("não retenta credencial recusada", () => {
+    // A Evolution vai recusar as cinco tentativas igual. O unico efeito de
+    // insistir e cinco POSTs recusados por minuto contra o mesmo servidor.
+    expect(isRetentavel("configuracao_invalida")).toBe(false);
   });
 
   it("não retenta desconexão do WhatsApp — o reenvio é decisão do usuário", () => {
@@ -142,6 +170,7 @@ describe("mensagens para o usuário", () => {
       "sem_modelo",
       "whatsapp_desconectado",
       "servico_indisponivel",
+      "configuracao_invalida",
       "desconhecido",
       "codigo-que-nao-existe",
       null,
@@ -154,6 +183,9 @@ describe("mensagens para o usuário", () => {
   it("a ação diz o que fazer, não só o que aconteceu", () => {
     expect(erroAcao("sem_telefone")).toMatch(/cadastre/i);
     expect(erroAcao("whatsapp_desconectado")).toMatch(/reconecte/i);
+    // O admin da academia nao tem como trocar a chave da API: a acao precisa
+    // aponta-lo para quem tem.
+    expect(erroAcao("configuracao_invalida")).toMatch(/suporte/i);
   });
 });
 

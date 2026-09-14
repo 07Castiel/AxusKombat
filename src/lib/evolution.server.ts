@@ -151,6 +151,9 @@ function descreverFalhaDeRede(e: unknown): string {
     return `Evolution sem resposta: tempo esgotado após ${TIMEOUT_MS / 1000}s`;
   }
   const detalhe = err?.message || String(e);
+  // baseUrl()/apiKey() lançam quando a env var falta, e isso não é rede: dizer
+  // "inacessível" mandaria o admin procurar um servidor fora do ar que está no ar.
+  if (detalhe.includes("não configurado")) return detalhe.slice(0, 200);
   return `Evolution inacessível: ${detalhe}`.slice(0, 200);
 }
 
