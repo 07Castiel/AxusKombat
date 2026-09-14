@@ -139,14 +139,56 @@ function normalizePhone(raw: string): string | null {
   return digits;
 }
 
+/**
+ * Traduz uma exceção de rede em texto que `classifyErro` reconhece.
+ *
+ * `fetch` só devolve Response quando a resposta chega. DNS que não resolve,
+ * conexão recusada e o AbortController de TIMEOUT_MS chegam aqui como exceção.
+ */
+function descreverFalhaDeRede(e: unknown): string {
+  const err = e as { name?: string; message?: string } | null;
+  if (err?.name === "AbortError" || err?.name === "TimeoutError") {
+    return `Evolution sem resposta: tempo esgotado após ${TIMEOUT_MS / 1000}s`;
+  }
+  const detalhe = err?.message || String(e);
+  // baseUrl()/apiKey() lançam quando a env var falta, e isso não é rede: dizer
+  // "inacessível" mandaria o admin procurar um servidor fora do ar que está no ar.
+  if (detalhe.includes("não configurado")) return detalhe.slice(0, 200);
+  return `Evolution inacessível: ${detalhe}`.slice(0, 200);
+}
+
+/**
+ * Envia uma mensagem de texto. NUNCA lança.
+ *
+ * O worker chama isto dentro de um laço de até 180 mensagens. Uma exceção aqui
+ * abortava a rodada inteira: as mensagens seguintes da fila não eram nem
+ * tentadas, a linha em notification_worker_runs ficava sem finished_at e as
+ * notificações reivindicadas só voltavam à fila quando a reivindicação expirava.
+ * Toda falha vira `{ ok: false, error }` para que o worker registre e siga.
+ */
 export async function sendText(instanceName: string, phone: string, message: string): Promise<{ ok: boolean; error?: string; id?: string }> {
   const to = normalizePhone(phone);
   if (!to) return { ok: false, error: "Número de telefone inválido" };
-  const res = await timedFetch(`${baseUrl()}/message/sendText/${encodeURIComponent(instanceName)}`, {
-    method: "POST",
-    body: JSON.stringify({ number: to, text: message }),
-  });
-  const text = await res.text();
+
+  let res: Response;
+  try {
+    res = await timedFetch(`${baseUrl()}/message/sendText/${encodeURIComponent(instanceName)}`, {
+      method: "POST",
+      body: JSON.stringify({ number: to, text: message }),
+    });
+  } catch (e) {
+    return { ok: false, error: descreverFalhaDeRede(e) };
+  }
+
+  // Ler o corpo também pode falhar: a conexão cai depois dos headers.
+  let text: string;
+  try {
+    text = await res.text();
+  } catch (e) {
+    if (!res.ok) return { ok: false, error: `Evolution HTTP ${res.status}` };
+    return { ok: false, error: descreverFalhaDeRede(e) };
+  }
+
   if (!res.ok) return { ok: false, error: `Evolution HTTP ${res.status}: ${text.slice(0, 200)}` };
   let parsed: any = null;
   try { parsed = JSON.parse(text); } catch { /* ignore */ }

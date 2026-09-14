@@ -24,7 +24,7 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { translateError } from "@/lib/errors";
-import { erroLabel, erroAcao } from "@/lib/notification-errors";
+import { erroLabel, erroAcao, erroAcaoComTentativas } from "@/lib/notification-errors";
 import {
   getNotificationSettings, saveNotificationSettings,
   listTemplates, upsertTemplate, deleteTemplate,
@@ -958,7 +958,9 @@ function TabHistorico({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
                   {n.status === "falhou" ? (
                     <div className="space-y-0.5">
                       <span className="text-destructive block truncate">{erroLabel(n.erro_codigo)}</span>
-                      <span className="block truncate">{erroAcao(n.erro_codigo)}</span>
+                      <span className="block truncate">
+                        {erroAcaoComTentativas(n.erro_codigo, n.tentativas, n.proxima_tentativa)}
+                      </span>
                       {n.proxima_tentativa && (
                         <span className="block">
                           Próxima tentativa: {new Date(n.proxima_tentativa).toLocaleString("pt-BR")}

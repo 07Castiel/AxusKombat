@@ -4,6 +4,7 @@ import {
   MAX_TENTATIVAS,
   classifyErro,
   erroAcao,
+  erroAcaoComTentativas,
   erroLabel,
   isRetentavel,
   proximaTentativaISO,
@@ -43,6 +44,55 @@ describe("classifyErro", () => {
     }
   });
 
+  it("reconhece a queda da Evolution atrás do Cloudflare", () => {
+    // Caso real do painel: o 530 (error code 1016) e o Cloudflare dizendo que
+    // nao resolveu o DNS da origem — a mensagem nem chegou ao servidor. Ficava
+    // como "desconhecido" e o admin lia "verifique o historico" para uma queda
+    // que se resolve sozinha.
+    expect(classifyErro("Evolution HTTP 530: error code: 1016")).toBe("servico_indisponivel");
+    for (const m of [
+      "Evolution HTTP 500: Internal Server Error",
+      "Evolution HTTP 521: web server is down",
+      "Evolution HTTP 522: connection timed out",
+      "Evolution HTTP 524",
+      "Evolution HTTP 429: Too Many Requests",
+      "Evolution sem resposta: tempo esgotado após 20s",
+      "Evolution inacessível: getaddrinfo ENOTFOUND api.exemplo.com",
+      "The operation was aborted",
+    ]) {
+      expect(classifyErro(m), m).toBe("servico_indisponivel");
+    }
+  });
+
+  it("não confunde o código do corpo do Cloudflare com um status HTTP", () => {
+    // "1016" tem 4 digitos: nao pode casar com a lista de status. Se casasse,
+    // qualquer numero grande no corpo do erro viraria "servico_indisponivel".
+    expect(classifyErro("resposta estranha: 1016")).toBe("desconhecido");
+  });
+
+  it("separa credencial recusada de servidor fora do ar", () => {
+    // Sao os dois "a Evolution nao aceitou", mas o desfecho e oposto: um espera
+    // o servidor voltar, o outro espera alguem arrumar a chave.
+    for (const m of [
+      "Evolution HTTP 401: Unauthorized",
+      "Evolution HTTP 403: Forbidden",
+      "Evolution HTTP 401: {\"message\":\"Invalid apikey\"}",
+    ]) {
+      expect(classifyErro(m), m).toBe("configuracao_invalida");
+    }
+  });
+
+  it("trata env var ausente como configuração, não como rede", () => {
+    // baseUrl()/apiKey() lançam quando a env var falta e a exceção chega aqui
+    // embrulhada. Sem a ordem certa em classifyErro, o "inacessível" do
+    // embrulho ganharia e isto viraria "servico_indisponivel" — retentado 5x
+    // para um servidor que está no ar e nunca vai aceitar.
+    expect(classifyErro("EVOLUTION_API_KEY não configurado no servidor"))
+      .toBe("configuracao_invalida");
+    expect(classifyErro("Evolution inacessível: EVOLUTION_API_URL não configurado no servidor"))
+      .toBe("configuracao_invalida");
+  });
+
   it("cai em desconhecido para vazio, nulo e mensagem que não casa", () => {
     expect(classifyErro(null)).toBe("desconhecido");
     expect(classifyErro(undefined)).toBe("desconhecido");
@@ -62,6 +112,12 @@ describe("isRetentavel", () => {
     for (const c of ["sem_telefone", "telefone_invalido", "sem_modelo"]) {
       expect(isRetentavel(c), c).toBe(false);
     }
+  });
+
+  it("não retenta credencial recusada", () => {
+    // A Evolution vai recusar as cinco tentativas igual. O unico efeito de
+    // insistir e cinco POSTs recusados por minuto contra o mesmo servidor.
+    expect(isRetentavel("configuracao_invalida")).toBe(false);
   });
 
   it("não retenta desconexão do WhatsApp — o reenvio é decisão do usuário", () => {
@@ -114,6 +170,7 @@ describe("mensagens para o usuário", () => {
       "sem_modelo",
       "whatsapp_desconectado",
       "servico_indisponivel",
+      "configuracao_invalida",
       "desconhecido",
       "codigo-que-nao-existe",
       null,
@@ -126,5 +183,37 @@ describe("mensagens para o usuário", () => {
   it("a ação diz o que fazer, não só o que aconteceu", () => {
     expect(erroAcao("sem_telefone")).toMatch(/cadastre/i);
     expect(erroAcao("whatsapp_desconectado")).toMatch(/reconecte/i);
+    // O admin da academia nao tem como trocar a chave da API: a acao precisa
+    // aponta-lo para quem tem.
+    expect(erroAcao("configuracao_invalida")).toMatch(/suporte/i);
+  });
+});
+
+describe("erroAcaoComTentativas", () => {
+  it("promete nova tentativa enquanto ela existe", () => {
+    expect(erroAcaoComTentativas("servico_indisponivel", 2, "2026-09-14T12:00:00Z"))
+      .toBe(erroAcao("servico_indisponivel"));
+  });
+
+  it("para de prometer quando o teto de tentativas foi atingido", () => {
+    // Sem isto o painel dizia "nova tentativa automatica em instantes" para
+    // sempre, numa mensagem que so sai se alguem clicar em Reenviar.
+    const texto = erroAcaoComTentativas("servico_indisponivel", MAX_TENTATIVAS, null);
+    expect(texto).not.toBe(erroAcao("servico_indisponivel"));
+    expect(texto).toMatch(/reenviar/i);
+    expect(texto).toContain(String(MAX_TENTATIVAS));
+  });
+
+  it("não muda a ação de erro que nunca foi retentável", () => {
+    // "Cadastre o telefone" continua sendo a instrucao certa, e o teto de
+    // tentativas nao tem nada a ver com ela.
+    expect(erroAcaoComTentativas("sem_telefone", MAX_TENTATIVAS, null)).toBe(erroAcao("sem_telefone"));
+    expect(erroAcaoComTentativas("whatsapp_desconectado", MAX_TENTATIVAS, null))
+      .toBe(erroAcao("whatsapp_desconectado"));
+  });
+
+  it("trata tentativas nula como zero", () => {
+    expect(erroAcaoComTentativas("servico_indisponivel", null, null))
+      .toBe(erroAcao("servico_indisponivel"));
   });
 });
