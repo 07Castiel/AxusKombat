@@ -7,4 +7,7 @@
 - [x] Remover fluxo público por token e referências antigas
 - [x] Aplicar a migration 0002: `portal_token` e `portal_aluno_dados` fora do banco
 - [x] Conferir no banco: 60 matrículas, todas distintas, nenhuma cruzando academia
+- [x] Encurtar a matrícula para 6 dígitos, com data de nascimento como 2º fator
+- [x] Enfileirar o recado com a matrícula por WhatsApp, pelo worker antibanimento
+- [ ] Aplicar a migration 0003 e preencher a data de nascimento de quem falta
 - [ ] Validar na tela: entrar, sair, bloquear acesso, planilha baixada e celular

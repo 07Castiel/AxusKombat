@@ -80,14 +80,25 @@ export async function getStudentSession(): Promise<StudentSession | null> {
     return null;
   }
   const [{ data: aluno }, { data: tenant }] = await Promise.all([
-    supabaseAdmin.from("alunos").select("nome_completo, categoria, status").eq("id", credential.aluno_id).maybeSingle(),
-    supabaseAdmin.from("tenants").select("nome, ativo").eq("id", credential.tenant_id).maybeSingle(),
+    supabaseAdmin
+      .from("alunos")
+      .select("nome_completo, categoria, status")
+      .eq("id", credential.aluno_id)
+      .maybeSingle(),
+    supabaseAdmin
+      .from("tenants")
+      .select("nome, ativo")
+      .eq("id", credential.tenant_id)
+      .maybeSingle(),
   ]);
   if (!aluno || aluno.status !== "ativo" || !tenant?.ativo) {
     deleteCookie(COOKIE_NAME, { path: "/" });
     return null;
   }
-  void supabaseAdmin.from("aluno_sessoes").update({ last_seen_at: new Date().toISOString() }).eq("id", session.id);
+  void supabaseAdmin
+    .from("aluno_sessoes")
+    .update({ last_seen_at: new Date().toISOString() })
+    .eq("id", session.id);
   return {
     sessionId: session.id,
     credentialId: credential.id,
@@ -109,4 +120,20 @@ export async function revokeCurrentStudentSession(): Promise<void> {
       .eq("token_hash", tokenHash);
   }
   deleteCookie(COOKIE_NAME, { path: "/" });
+}
+/**
+ * Origem publica do app, para montar o link do portal que vai no recado.
+ *
+ * APP_URL quando configurada; senao a origem da propria requisicao. Mesma
+ * decisao que o checkout ja toma em billing.functions.ts, e pelo mesmo motivo:
+ * o endereco nao pode vir do cliente.
+ */
+export function origemPublica(): string {
+  const configurada = process.env.APP_URL;
+  if (configurada) return configurada.replace(/\/$/, "");
+  const req = getRequest();
+  const origem = req?.headers.get("origin");
+  if (origem) return origem.replace(/\/$/, "");
+  if (req?.url) return new URL(req.url).origin;
+  throw new Error("Não foi possível determinar o endereço do portal.");
 }

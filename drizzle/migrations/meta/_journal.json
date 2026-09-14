@@ -22,6 +22,13 @@
       "when": 1789218959523,
       "tag": "0002_remove_legacy_portal_token",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789223400000,
+      "tag": "0003_matricula_numerica",
+      "breakpoints": true
     }
   ]
 }
