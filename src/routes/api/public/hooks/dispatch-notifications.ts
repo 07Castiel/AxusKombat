@@ -114,331 +114,375 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
           .select("id").single();
         const runId = (runRow as any)?.id as string | undefined;
 
-        const nowIso = new Date().toISOString();
+        /**
+         * Fecha a rodada em notification_worker_runs.
+         *
+         * Sem isto, uma exceção deixava a linha sem finished_at para sempre: o
+         * histórico de execuções não mostrava que a rodada morreu, nem por quê.
+         */
+        async function fecharRodada(campos: Record<string, unknown>) {
+          if (!runId) return;
+          // Não lança: o trabalho já foi feito e as mensagens já saíram.
+          // Derrubar aqui só faria o cron tentar tudo de novo.
+          const { error: eRun } = await supabaseAdmin
+            .from("notification_worker_runs")
+            .update({ finished_at: new Date().toISOString(), ...campos })
+            .eq("id", runId);
+          if (eRun) console.error(`[dispatch] rodada ${runId} não pôde ser fechada: ${eRun.message}`);
+        }
 
-        // ---- Reivindicação do lote (A3) --------------------------------
-        // Antes o worker selecionava status='agendada' e só gravava o status
-        // novo DEPOIS do envio. Duas execuções sobrepostas — o cron dispara a
-        // cada 15 min e uma rodada faz até 180 chamadas HTTP de 20 s — liam as
-        // mesmas linhas e o aluno recebia a cobrança duas vezes.
-        //
-        // reivindicar_notificacoes marca o lote com FOR UPDATE SKIP LOCKED, o
-        // que faz a segunda execução pular o que a primeira travou.
-        //
-        // Se a função ainda não existe (código publicado antes da ETAPA 4), cai
-        // no caminho antigo em vez de parar de enviar. A janela de duplicidade
-        // volta a existir nesse intervalo, e o aviso no log é proposital.
-        let idsReivindicados: string[] | null = null;
-        const { data: reivindicados, error: erroReivindicar } = await dbNotif.rpc(
-          "reivindicar_notificacoes",
-          {
-            p_tenant: tenantFiltro,
-            p_limite_agendadas: LOTE_AGENDADAS,
-            p_limite_retry: LOTE_RETRIES,
-            p_max_tentativas: MAX_TENTATIVAS,
-          },
-        );
-        if (erroReivindicar) {
-          console.warn(
-            "[dispatch] reivindicar_notificacoes indisponível — rodando sem proteção " +
-              "contra execuções sobrepostas. Aplique a ETAPA 4:",
-            erroReivindicar.message,
+        try {
+          const nowIso = new Date().toISOString();
+
+          // ---- Reivindicação do lote (A3) --------------------------------
+          // Antes o worker selecionava status='agendada' e só gravava o status
+          // novo DEPOIS do envio. Duas execuções sobrepostas — o cron dispara a
+          // cada 15 min e uma rodada faz até 180 chamadas HTTP de 20 s — liam as
+          // mesmas linhas e o aluno recebia a cobrança duas vezes.
+          //
+          // reivindicar_notificacoes marca o lote com FOR UPDATE SKIP LOCKED, o
+          // que faz a segunda execução pular o que a primeira travou.
+          //
+          // Se a função ainda não existe (código publicado antes da ETAPA 4), cai
+          // no caminho antigo em vez de parar de enviar. A janela de duplicidade
+          // volta a existir nesse intervalo, e o aviso no log é proposital.
+          let idsReivindicados: string[] | null = null;
+          const { data: reivindicados, error: erroReivindicar } = await dbNotif.rpc(
+            "reivindicar_notificacoes",
+            {
+              p_tenant: tenantFiltro,
+              p_limite_agendadas: LOTE_AGENDADAS,
+              p_limite_retry: LOTE_RETRIES,
+              p_max_tentativas: MAX_TENTATIVAS,
+            },
           );
-        } else {
-          idsReivindicados = ((reivindicados ?? []) as unknown[])
-            .map((r) => (typeof r === "string" ? r : (r as { id?: string })?.id))
-            .filter((v): v is string => typeof v === "string");
-        }
-
-        let agendadas: unknown[] | null = null;
-        let retries: unknown[] | null = null;
-        let error: { message: string } | null = null;
-
-        if (idsReivindicados) {
-          if (idsReivindicados.length === 0) {
-            agendadas = [];
+          if (erroReivindicar) {
+            console.warn(
+              "[dispatch] reivindicar_notificacoes indisponível — rodando sem proteção " +
+                "contra execuções sobrepostas. Aplique a ETAPA 4:",
+              erroReivindicar.message,
+            );
           } else {
-            const r = await supabaseAdmin
-              .from("notificacoes")
-              .select(SELECT_COLS)
-              .in("id", idsReivindicados);
-            agendadas = r.data as unknown[] | null;
-            error = r.error;
+            idsReivindicados = ((reivindicados ?? []) as unknown[])
+              .map((r) => (typeof r === "string" ? r : (r as { id?: string })?.id))
+              .filter((v): v is string => typeof v === "string");
           }
-          retries = [];
-        } else {
-          const r1 = await comEscopo(
-            supabaseAdmin
-              .from("notificacoes")
-              .select(SELECT_COLS)
-              .eq("status", "agendada")
-              .lte("agendada_para", nowIso) as any,
-          ).limit(LOTE_AGENDADAS);
-          agendadas = r1.data as unknown[] | null;
-          error = r1.error;
 
-          const r2 = await comEscopo(
-            supabaseAdmin
-              .from("notificacoes")
-              .select(SELECT_COLS)
-              .eq("status", "falhou")
-              .lt("tentativas", MAX_TENTATIVAS)
-              .not("proxima_tentativa", "is", null)
-              .lte("proxima_tentativa", nowIso) as any,
-          ).limit(LOTE_RETRIES);
-          retries = r2.data as unknown[] | null;
-        }
+          let agendadas: unknown[] | null = null;
+          let retries: unknown[] | null = null;
+          let error: { message: string } | null = null;
 
-        // Só devolve a marca quando ela existe: a coluna reivindicado_em pode
-        // ainda não ter sido criada.
-        const liberar = idsReivindicados ? { reivindicado_em: null } : {};
+          if (idsReivindicados) {
+            if (idsReivindicados.length === 0) {
+              agendadas = [];
+            } else {
+              const r = await supabaseAdmin
+                .from("notificacoes")
+                .select(SELECT_COLS)
+                .in("id", idsReivindicados);
+              agendadas = r.data as unknown[] | null;
+              error = r.error;
+            }
+            retries = [];
+          } else {
+            const r1 = await comEscopo(
+              supabaseAdmin
+                .from("notificacoes")
+                .select(SELECT_COLS)
+                .eq("status", "agendada")
+                .lte("agendada_para", nowIso) as any,
+            ).limit(LOTE_AGENDADAS);
+            agendadas = r1.data as unknown[] | null;
+            error = r1.error;
 
-        if (error) {
-          if (runId) {
-            await supabaseAdmin.from("notification_worker_runs").update({
-              finished_at: new Date().toISOString(), erro: error.message,
-            }).eq("id", runId);
+            const r2 = await comEscopo(
+              supabaseAdmin
+                .from("notificacoes")
+                .select(SELECT_COLS)
+                .eq("status", "falhou")
+                .lt("tentativas", MAX_TENTATIVAS)
+                .not("proxima_tentativa", "is", null)
+                .lte("proxima_tentativa", nowIso) as any,
+            ).limit(LOTE_RETRIES);
+            retries = r2.data as unknown[] | null;
           }
-          return new Response(JSON.stringify({ error: error.message }), {
+
+          // Só devolve a marca quando ela existe: a coluna reivindicado_em pode
+          // ainda não ter sido criada.
+          const liberar = idsReivindicados ? { reivindicado_em: null } : {};
+
+          if (error) {
+            await fecharRodada({ erro: error.message });
+            return new Response(JSON.stringify({ error: error.message }), {
+              status: 500, headers: { "Content-Type": "application/json" },
+            });
+          }
+
+          const { filtrarFila } = await import("@/lib/notification-queue");
+          const brutas = [...((agendadas ?? []) as any[]), ...((retries ?? []) as any[])];
+          // Descarta versões antigas duplicadas e ordena da mais antiga para a mais
+          // nova. A janela de 1 mês não se aplica (o worker envia o que já venceu) e
+          // o filtro de modelo também não: os modelos são carregados por tenant
+          // dentro do laço abaixo, que cancela a mensagem quando o modelo não existe.
+          const notifs = filtrarFila(brutas, [], {
+            aplicarJanela: false,
+            aplicarTemplates: false,
+            ordem: "asc",
+          });
+          const summary = {
+            scanned: notifs.length, sent: 0, failed: 0,
+            retried: (retries ?? []).length, skipped_window: 0, skipped_config: 0,
+            skipped_limite: 0, skipped_tempo: 0,
+          };
+
+          const settingsCache = new Map<string, any>();
+          const templatesCache = new Map<string, any[]>();
+          // Teto diário por academia (aquecimento incluso) e quanto já saiu hoje.
+          const cotaCache = new Map<string, { limite: number; usado: number }>();
+          const inicioRodada = Date.now();
+          let ultimoEnvioEm = 0;
+
+          /** Devolve a mensagem à fila sem marcá-la como falha. */
+          async function devolver(n: any) {
+            if (idsReivindicados) {
+              await dbNotif.from("notificacoes")
+                .update({ reivindicado_em: null }).eq("id", n.id);
+            }
+          }
+
+          async function marcarFalha(n: any, mensagem: string | null, motivo: string, phone?: string | null) {
+            const codigo = classifyErro(motivo);
+            const tentativas = (n.tentativas ?? 0) + 1;
+            const retentavel = isRetentavel(codigo);
+            const { error: eFalha } = await dbNotif.from("notificacoes").update({
+              ...liberar,
+              status: "falhou",
+              erro: motivo,
+              erro_codigo: codigo,
+              tentativas,
+              proxima_tentativa: retentavel ? proximaTentativaISO(tentativas) : null,
+              ...(mensagem ? { mensagem } : {}),
+              ...(phone ? { destinatario: phone } : {}),
+              updated_at: new Date().toISOString(),
+            }).eq("id", n.id);
+            if (eFalha) {
+              console.error(`[dispatch] ${n.id}: falha não registrada (${eFalha.message}). Motivo: ${motivo}`);
+            }
+          }
+
+          /**
+           * Processa UMA notificação. Separado do laço para que a barreira de
+           * exceção abaixo tenha algo bem definido para envolver.
+           */
+          async function processar(n: any) {
+            // Orçamento de tempo: o intervalo entre envios é aleatório e longo de
+            // propósito, então a rodada para e devolve o resto da fila.
+            if (Date.now() - inicioRodada > ORCAMENTO_MS) {
+              await devolver(n);
+              summary.skipped_tempo++;
+              return;
+            }
+
+            // settings
+            let s = settingsCache.get(n.tenant_id);
+            if (!s) {
+              const { data } = await supabaseAdmin
+                .from("notification_settings").select("*")
+                .eq("tenant_id", n.tenant_id).maybeSingle();
+              s = data ?? {
+                hora_inicio: "08:00", hora_fim: "20:00",
+                timezone: "America/Sao_Paulo", pix_chave: null, assinatura: null,
+              };
+              settingsCache.set(n.tenant_id, s);
+            }
+
+            // janela horária — nunca envia fora dela
+            if (!withinWindow(s.timezone, s.hora_inicio, s.hora_fim)) {
+              // Devolve a reivindicação: fora da janela a mensagem não é enviada
+              // agora, e sem isto ela só voltaria à fila após a expiração.
+              await devolver(n);
+              summary.skipped_window++;
+              return;
+            }
+
+            // teto diário + aquecimento gradual do número
+            let cota = cotaCache.get(n.tenant_id);
+            if (!cota) {
+              const { count } = await supabaseAdmin
+                .from("notificacoes")
+                .select("id", { count: "exact", head: true })
+                .eq("tenant_id", n.tenant_id)
+                .eq("status", "enviada")
+                .gte("enviada_em", inicioDoDiaIso(s.timezone));
+              cota = { limite: limiteDiarioEfetivo(s), usado: count ?? 0 };
+              cotaCache.set(n.tenant_id, cota);
+            }
+            if (cota.usado >= cota.limite) {
+              // Fica na fila para amanhã (ou para quando o aquecimento subir).
+              await devolver(n);
+              summary.skipped_limite++;
+              return;
+            }
+
+
+            // template
+            let tpls = templatesCache.get(n.tenant_id);
+            if (!tpls) {
+              const { data } = await supabaseAdmin
+                .from("notification_templates").select("*")
+                .eq("tenant_id", n.tenant_id).eq("ativo", true);
+              tpls = ((data ?? []) as any[]).sort((a, b) =>
+                String(b.updated_at ?? b.created_at ?? "").localeCompare(String(a.updated_at ?? a.created_at ?? "")));
+              templatesCache.set(n.tenant_id, tpls);
+            }
+            // Envio avulso (comunicado, teste, manual) já chega com o texto
+            // pronto e não depende de modelo — sem isto o worker cancelaria toda
+            // mensagem desse tipo como "modelo não configurado".
+            const avulso = TIPOS_SEM_TEMPLATE.has(n.tipo);
+
+            // sempre a versão ativa mais recente do modelo
+            const tpl = avulso
+              ? null
+              : (tpls.find((t) => t.tipo === n.tipo && t.dias_offset === n.dias_offset)
+                 ?? tpls.find((t) => t.tipo === n.tipo));
+            if (!avulso && !tpl) {
+              // modelo inativo/removido: a mensagem não deve ser enviada
+              await dbNotif.from("notificacoes").update({
+                ...liberar,
+                status: "cancelada",
+                motivo_cancelamento: "Modelo de mensagem inativo ou não configurado",
+                proxima_tentativa: null,
+                updated_at: new Date().toISOString(),
+              }).eq("id", n.id);
+              summary.skipped_config++;
+              return;
+            }
+
+
+            const aluno = n.aluno ?? {};
+            const mens = n.mensalidade ?? {};
+            const phone = aluno.telefone || aluno.responsavel_telefone;
+            const nome = aluno.nome_completo ?? "";
+            const primeiroNome = nome.split(" ")[0] ?? nome;
+            const venc = mens.data_vencimento
+              ? new Date(mens.data_vencimento + "T12:00:00").toLocaleDateString("pt-BR", { timeZone: s.timezone })
+              : "";
+            const valor = Number(mens.valor_final ?? mens.valor ?? 0).toLocaleString("pt-BR",
+              { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const diasRestantes = mens.data_vencimento
+              ? String(Math.round((new Date(mens.data_vencimento + "T12:00:00").getTime() - Date.now()) / 86400000))
+              : "";
+            const plano = mens?.contrato?.plano?.nome ?? "";
+
+            // sempre renderiza com a versão ATUAL do modelo
+            const base = avulso ? (n.mensagem ?? "") : renderTemplate(tpl!.mensagem, {
+              nome, primeiro_nome: primeiroNome,
+              academia: n.tenant?.nome ?? "",
+              vencimento: venc, valor,
+              telefone: phone ?? "",
+              modalidade: aluno.categoria ?? "",
+              plano,
+              pix: s.pix_chave ?? "",
+              dias_restantes: diasRestantes,
+              professor: "",
+              link_pagamento: "",
+              assinatura: s.assinatura ?? "",
+            });
+            // Variação leve e determinística: dezenas de mensagens idênticas em
+            // sequência é o que o WhatsApp lê como disparo em massa.
+            const mensagem = variarTexto(base, n.id, s.variacao_texto !== false);
+
+            if (avulso && !base.trim()) {
+              await dbNotif.from("notificacoes").update({
+                ...liberar,
+                status: "cancelada",
+                motivo_cancelamento: "Mensagem vazia",
+                proxima_tentativa: null,
+                updated_at: new Date().toISOString(),
+              }).eq("id", n.id);
+              summary.skipped_config++;
+              return;
+            }
+
+            if (!phone) {
+              await marcarFalha(n, mensagem, "Aluno sem telefone cadastrado");
+              summary.failed++;
+              return;
+            }
+
+            // Intervalo variável entre envios (nunca cadência robótica).
+            if (ultimoEnvioEm > 0) {
+              const espeMs = intervaloAleatorioMs(s);
+              const jaPassou = Date.now() - ultimoEnvioEm;
+              if (espeMs > jaPassou) await espera(espeMs - jaPassou);
+            }
+            ultimoEnvioEm = Date.now();
+            const result = await sendWhatsappByTenant(n.tenant_id, phone, mensagem);
+            if (result.ok) cota.usado++;
+            if (result.ok) {
+              await dbNotif.from("notificacoes").update({
+                ...liberar,
+                status: "enviada",
+                enviada_em: new Date().toISOString(),
+                destinatario: phone,
+                mensagem,
+                erro: null,
+                erro_codigo: null,
+                proxima_tentativa: null,
+                tentativas: (n.tentativas ?? 0) + 1,
+                updated_at: new Date().toISOString(),
+              }).eq("id", n.id);
+              summary.sent++;
+            } else {
+              await marcarFalha(n, mensagem, result.error ?? "Erro desconhecido", phone);
+              summary.failed++;
+            }
+          }
+
+          for (const n of notifs) {
+            // Barreira: antes, qualquer exceção (rede, Supabase, um campo nulo
+            // inesperado) abortava o handler inteiro. As mensagens seguintes da
+            // fila não eram nem tentadas, a rodada ficava sem finished_at e as
+            // linhas reivindicadas só voltavam à fila ao expirar. Uma linha ruim
+            // agora custa uma linha, não a rodada.
+            try {
+              await processar(n);
+            } catch (e) {
+              const detalhe = (e as { message?: string })?.message || String(e);
+              console.error(`[dispatch] ${n?.id}: erro inesperado — ${detalhe}`);
+              summary.failed++;
+              try {
+                await marcarFalha(n, null, `Falha inesperada no envio: ${detalhe}`.slice(0, 200));
+              } catch (e2) {
+                // Nem marcar deu certo (Supabase fora). Segue para a próxima: a
+                // reivindicação expira e a linha volta à fila sozinha.
+                console.error(`[dispatch] ${n?.id}: também não deu para marcar a falha —`,
+                  (e2 as { message?: string })?.message ?? e2);
+              }
+            }
+          }
+
+          await fecharRodada({
+            scanned: summary.scanned,
+            sent: summary.sent,
+            failed: summary.failed,
+            skipped: summary.skipped_window + summary.skipped_config
+              + summary.skipped_limite + summary.skipped_tempo,
+          });
+
+          return new Response(JSON.stringify({ ok: true, summary, ranAt: new Date().toISOString() }), {
+            status: 200, headers: { "Content-Type": "application/json" },
+          });
+        } catch (e) {
+          // Rede de segurança da rodada inteira. O laço já tem barreira por
+          // notificação; isto cobre o que acontece fora dele (Supabase, RPC).
+          const detalhe = (e as { message?: string })?.message || String(e);
+          console.error(`[dispatch] rodada ${runId ?? "?"} abortada: ${detalhe}`);
+          await fecharRodada({ erro: detalhe.slice(0, 500) });
+          return new Response(JSON.stringify({ error: detalhe }), {
             status: 500, headers: { "Content-Type": "application/json" },
           });
         }
-
-        const { filtrarFila } = await import("@/lib/notification-queue");
-        const brutas = [...((agendadas ?? []) as any[]), ...((retries ?? []) as any[])];
-        // Descarta versões antigas duplicadas e ordena da mais antiga para a mais
-        // nova. A janela de 1 mês não se aplica (o worker envia o que já venceu) e
-        // o filtro de modelo também não: os modelos são carregados por tenant
-        // dentro do laço abaixo, que cancela a mensagem quando o modelo não existe.
-        const notifs = filtrarFila(brutas, [], {
-          aplicarJanela: false,
-          aplicarTemplates: false,
-          ordem: "asc",
-        });
-        const summary = {
-          scanned: notifs.length, sent: 0, failed: 0,
-          retried: (retries ?? []).length, skipped_window: 0, skipped_config: 0,
-          skipped_limite: 0, skipped_tempo: 0,
-        };
-
-        const settingsCache = new Map<string, any>();
-        const templatesCache = new Map<string, any[]>();
-        // Teto diário por academia (aquecimento incluso) e quanto já saiu hoje.
-        const cotaCache = new Map<string, { limite: number; usado: number }>();
-        const inicioRodada = Date.now();
-        let ultimoEnvioEm = 0;
-
-        /** Devolve a mensagem à fila sem marcá-la como falha. */
-        async function devolver(n: any) {
-          if (idsReivindicados) {
-            await dbNotif.from("notificacoes")
-              .update({ reivindicado_em: null }).eq("id", n.id);
-          }
-        }
-
-        async function marcarFalha(n: any, mensagem: string | null, motivo: string, phone?: string | null) {
-          const codigo = classifyErro(motivo);
-          const tentativas = (n.tentativas ?? 0) + 1;
-          const retentavel = isRetentavel(codigo);
-          await dbNotif.from("notificacoes").update({
-            ...liberar,
-            status: "falhou",
-            erro: motivo,
-            erro_codigo: codigo,
-            tentativas,
-            proxima_tentativa: retentavel ? proximaTentativaISO(tentativas) : null,
-            ...(mensagem ? { mensagem } : {}),
-            ...(phone ? { destinatario: phone } : {}),
-            updated_at: new Date().toISOString(),
-          }).eq("id", n.id);
-        }
-
-        for (const n of notifs) {
-          // Orçamento de tempo: o intervalo entre envios é aleatório e longo de
-          // propósito, então a rodada para e devolve o resto da fila.
-          if (Date.now() - inicioRodada > ORCAMENTO_MS) {
-            await devolver(n);
-            summary.skipped_tempo++;
-            continue;
-          }
-
-          // settings
-          let s = settingsCache.get(n.tenant_id);
-          if (!s) {
-            const { data } = await supabaseAdmin
-              .from("notification_settings").select("*")
-              .eq("tenant_id", n.tenant_id).maybeSingle();
-            s = data ?? {
-              hora_inicio: "08:00", hora_fim: "20:00",
-              timezone: "America/Sao_Paulo", pix_chave: null, assinatura: null,
-            };
-            settingsCache.set(n.tenant_id, s);
-          }
-
-          // janela horária — nunca envia fora dela
-          if (!withinWindow(s.timezone, s.hora_inicio, s.hora_fim)) {
-            // Devolve a reivindicação: fora da janela a mensagem não é enviada
-            // agora, e sem isto ela só voltaria à fila após a expiração.
-            await devolver(n);
-            summary.skipped_window++;
-            continue;
-          }
-
-          // teto diário + aquecimento gradual do número
-          let cota = cotaCache.get(n.tenant_id);
-          if (!cota) {
-            const { count } = await supabaseAdmin
-              .from("notificacoes")
-              .select("id", { count: "exact", head: true })
-              .eq("tenant_id", n.tenant_id)
-              .eq("status", "enviada")
-              .gte("enviada_em", inicioDoDiaIso(s.timezone));
-            cota = { limite: limiteDiarioEfetivo(s), usado: count ?? 0 };
-            cotaCache.set(n.tenant_id, cota);
-          }
-          if (cota.usado >= cota.limite) {
-            // Fica na fila para amanhã (ou para quando o aquecimento subir).
-            await devolver(n);
-            summary.skipped_limite++;
-            continue;
-          }
-
-
-          // template
-          let tpls = templatesCache.get(n.tenant_id);
-          if (!tpls) {
-            const { data } = await supabaseAdmin
-              .from("notification_templates").select("*")
-              .eq("tenant_id", n.tenant_id).eq("ativo", true);
-            tpls = ((data ?? []) as any[]).sort((a, b) =>
-              String(b.updated_at ?? b.created_at ?? "").localeCompare(String(a.updated_at ?? a.created_at ?? "")));
-            templatesCache.set(n.tenant_id, tpls);
-          }
-          // Envio avulso (comunicado, teste, manual) já chega com o texto
-          // pronto e não depende de modelo — sem isto o worker cancelaria toda
-          // mensagem desse tipo como "modelo não configurado".
-          const avulso = TIPOS_SEM_TEMPLATE.has(n.tipo);
-
-          // sempre a versão ativa mais recente do modelo
-          const tpl = avulso
-            ? null
-            : (tpls.find((t) => t.tipo === n.tipo && t.dias_offset === n.dias_offset)
-               ?? tpls.find((t) => t.tipo === n.tipo));
-          if (!avulso && !tpl) {
-            // modelo inativo/removido: a mensagem não deve ser enviada
-            await dbNotif.from("notificacoes").update({
-              ...liberar,
-              status: "cancelada",
-              motivo_cancelamento: "Modelo de mensagem inativo ou não configurado",
-              proxima_tentativa: null,
-              updated_at: new Date().toISOString(),
-            }).eq("id", n.id);
-            summary.skipped_config++;
-            continue;
-          }
-
-
-          const aluno = n.aluno ?? {};
-          const mens = n.mensalidade ?? {};
-          const phone = aluno.telefone || aluno.responsavel_telefone;
-          const nome = aluno.nome_completo ?? "";
-          const primeiroNome = nome.split(" ")[0] ?? nome;
-          const venc = mens.data_vencimento
-            ? new Date(mens.data_vencimento + "T12:00:00").toLocaleDateString("pt-BR", { timeZone: s.timezone })
-            : "";
-          const valor = Number(mens.valor_final ?? mens.valor ?? 0).toLocaleString("pt-BR",
-            { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-          const diasRestantes = mens.data_vencimento
-            ? String(Math.round((new Date(mens.data_vencimento + "T12:00:00").getTime() - Date.now()) / 86400000))
-            : "";
-          const plano = mens?.contrato?.plano?.nome ?? "";
-
-          // sempre renderiza com a versão ATUAL do modelo
-          const base = avulso ? (n.mensagem ?? "") : renderTemplate(tpl!.mensagem, {
-            nome, primeiro_nome: primeiroNome,
-            academia: n.tenant?.nome ?? "",
-            vencimento: venc, valor,
-            telefone: phone ?? "",
-            modalidade: aluno.categoria ?? "",
-            plano,
-            pix: s.pix_chave ?? "",
-            dias_restantes: diasRestantes,
-            professor: "",
-            link_pagamento: "",
-            assinatura: s.assinatura ?? "",
-          });
-          // Variação leve e determinística: dezenas de mensagens idênticas em
-          // sequência é o que o WhatsApp lê como disparo em massa.
-          const mensagem = variarTexto(base, n.id, s.variacao_texto !== false);
-
-          if (avulso && !base.trim()) {
-            await dbNotif.from("notificacoes").update({
-              ...liberar,
-              status: "cancelada",
-              motivo_cancelamento: "Mensagem vazia",
-              proxima_tentativa: null,
-              updated_at: new Date().toISOString(),
-            }).eq("id", n.id);
-            summary.skipped_config++;
-            continue;
-          }
-
-          if (!phone) {
-            await marcarFalha(n, mensagem, "Aluno sem telefone cadastrado");
-            summary.failed++;
-            continue;
-          }
-
-          // Intervalo variável entre envios (nunca cadência robótica).
-          if (ultimoEnvioEm > 0) {
-            const espeMs = intervaloAleatorioMs(s);
-            const jaPassou = Date.now() - ultimoEnvioEm;
-            if (espeMs > jaPassou) await espera(espeMs - jaPassou);
-          }
-          ultimoEnvioEm = Date.now();
-          const result = await sendWhatsappByTenant(n.tenant_id, phone, mensagem);
-          if (result.ok) cota.usado++;
-          if (result.ok) {
-            await dbNotif.from("notificacoes").update({
-              ...liberar,
-              status: "enviada",
-              enviada_em: new Date().toISOString(),
-              destinatario: phone,
-              mensagem,
-              erro: null,
-              erro_codigo: null,
-              proxima_tentativa: null,
-              tentativas: (n.tentativas ?? 0) + 1,
-              updated_at: new Date().toISOString(),
-            }).eq("id", n.id);
-            summary.sent++;
-          } else {
-            await marcarFalha(n, mensagem, result.error ?? "Erro desconhecido", phone);
-            summary.failed++;
-          }
-        }
-
-        if (runId) {
-          // Registro de execução: se não gravar, a rodada fica eternamente
-          // "em andamento" no painel. Não lança — o trabalho já foi feito e as
-          // mensagens já saíram; derrubar aqui só faria o cron tentar de novo.
-          const { error: eRun } = await supabaseAdmin
-            .from("notification_worker_runs").update({
-              finished_at: new Date().toISOString(),
-              scanned: summary.scanned,
-              sent: summary.sent,
-              failed: summary.failed,
-              skipped: summary.skipped_window + summary.skipped_config
-                + summary.skipped_limite + summary.skipped_tempo,
-            }).eq("id", runId);
-          if (eRun) {
-            console.error(`[dispatch] rodada ${runId} não pôde ser fechada: ${eRun.message}`);
-          }
-        }
-
-        return new Response(JSON.stringify({ ok: true, summary, ranAt: new Date().toISOString() }), {
-          status: 200, headers: { "Content-Type": "application/json" },
-        });
       },
     },
   },
