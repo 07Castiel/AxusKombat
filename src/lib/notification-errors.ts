@@ -68,6 +68,26 @@ const SINAIS_CONFIGURACAO = [
   "unauthorized", "forbidden", "apikey", "api key",
 ];
 
+/**
+ * A Evolution respondeu, mas o socket do Baileys com o WhatsApp está fechado.
+ *
+ * Vem como HTTP 500 com `{"message":"Connection Closed"}` no corpo, então sem
+ * isto caía em "servico_indisponivel" e era retentado 5x — e as cinco falham
+ * igual, porque o que falta é alguém ler o QR Code de novo. Como
+ * `whatsapp_desconectado`, para de retentar e entra no diálogo de reconexão,
+ * que pergunta ao admin se as pendentes devem sair.
+ *
+ * Só os motivos que exigem reconexão. `restart required` e `timed out` são
+ * transitórios e continuam retentáveis de propósito.
+ */
+const SINAIS_SESSAO_MORTA = [
+  "connection closed", "connection lost", "connection replaced", "logged out",
+];
+
+function pareceSessaoMorta(m: string): boolean {
+  return SINAIS_SESSAO_MORTA.some((s) => m.includes(s));
+}
+
 function pareceConfiguracao(m: string): boolean {
   for (const t of m.match(/\b\d{3}\b/g) ?? []) {
     if (STATUS_CONFIGURACAO.has(Number(t))) return true;
@@ -91,8 +111,10 @@ export function classifyErro(mensagem: string | null | undefined): ErroCodigo {
   if (m.includes("telefone inválido") || m.includes("numero inválido") || m.includes("número inválido"))
     return "telefone_invalido";
   if (m.includes("modelo")) return "sem_modelo";
-  if (m.includes("desconectado") || m.includes("não conectado") || m.includes("nao conectado"))
-    return "whatsapp_desconectado";
+  if (
+    m.includes("desconectado") || m.includes("não conectado") || m.includes("nao conectado")
+    || pareceSessaoMorta(m)
+  ) return "whatsapp_desconectado";
   if (pareceConfiguracao(m)) return "configuracao_invalida";
   if (pareceIndisponivel(m)) return "servico_indisponivel";
   return "desconhecido";

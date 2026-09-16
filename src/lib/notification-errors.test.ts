@@ -70,6 +70,30 @@ describe("classifyErro", () => {
     expect(classifyErro("resposta estranha: 1016")).toBe("desconhecido");
   });
 
+  it("reconhece a sessão do WhatsApp morta, apesar do HTTP 500", () => {
+    // Caso real: a Evolution responde 500 com o motivo do Baileys no corpo. O
+    // 500 sozinho diria "servico_indisponivel" (retentavel), mas as cinco
+    // tentativas falham igual — o que falta e ler o QR Code de novo.
+    expect(
+      classifyErro('Evolution HTTP 500: {"status":500,"error":"Internal Server Error",'
+        + '"response":{"message":"Connection Closed"}}'),
+    ).toBe("whatsapp_desconectado");
+    for (const m of [
+      "Connection Lost",
+      "Connection Replaced",
+      "Evolution HTTP 500: logged out",
+    ]) {
+      expect(classifyErro(m), m).toBe("whatsapp_desconectado");
+    }
+  });
+
+  it("mantém retentável o que a sessão resolve sozinha", () => {
+    // "restart required" e "timed out" voltam sem ninguem fazer nada: marca-los
+    // como desconectado pararia de retentar e ainda pediria um QR Code a toa.
+    expect(classifyErro("Evolution HTTP 500: restart required")).toBe("servico_indisponivel");
+    expect(classifyErro("Evolution HTTP 500: timed out")).toBe("servico_indisponivel");
+  });
+
   it("separa credencial recusada de servidor fora do ar", () => {
     // Sao os dois "a Evolution nao aceitou", mas o desfecho e oposto: um espera
     // o servidor voltar, o outro espera alguem arrumar a chave.

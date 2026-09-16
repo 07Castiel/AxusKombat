@@ -193,9 +193,37 @@ export const sendWhatsappTest = createServerFn({ method: "POST" })
 
     const { data: row } = await supabaseAdmin
       .from("whatsapp_connections").select("*").eq("tenant_id", tenantId).maybeSingle();
-    if (!row || !(row as any).connected) {
-      return { ok: false, error: "WhatsApp não está conectado." };
+    if (!row) return { ok: false, error: "WhatsApp não está conectado." };
+
+    // Confirma o estado com a Evolution antes de tentar.
+    //
+    // A coluna `connected` é um retrato do último refresh e envelhece: a sessão
+    // do Baileys pode ter caído semanas atrás e a linha continuar dizendo
+    // "conectado". O teste então prometia enviar e voltava com um HTTP 500
+    // "Connection Closed" — que não diz ao admin o que fazer. Perguntar custa
+    // uma requisição e é o ponto do botão: verificar se está funcionando.
+    const { state, ownerJid } = await evo.connectionState((row as any).instance_name);
+    const mapped = evo.mapState(state);
+    if (mapped !== "conectado") {
+      // O banco estava desatualizado: corrige, senão o painel segue mostrando
+      // "Conectado" e o próximo teste cai no mesmo lugar.
+      const { error: eSync } = await supabaseAdmin.from("whatsapp_connections")
+        .update({ status: mapped, connected: false }).eq("tenant_id", tenantId);
+      if (eSync) console.error(`[whatsapp] status não sincronizado: ${eSync.message}`);
+      return {
+        ok: false,
+        error: "WhatsApp desconectado — use \"Reconectar WhatsApp\" e leia o QR Code.",
+      };
     }
+    if (!(row as any).connected) {
+      // Caso inverso: estava conectado de verdade e o banco não sabia.
+      await supabaseAdmin.from("whatsapp_connections").update({
+        status: "conectado", connected: true,
+        phone_number: evo.jidToPhone(ownerJid) ?? (row as any).phone_number,
+        last_connection: new Date().toISOString(),
+      }).eq("tenant_id", tenantId);
+    }
+
     const message =
       "Olá!\n\nEsta é uma mensagem de teste enviada pelo sistema.\nA integração com o WhatsApp está funcionando corretamente.";
     const r = await evo.sendText((row as any).instance_name, data.to, message);

@@ -250,6 +250,34 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
             }
           }
 
+          /**
+           * Academias cuja conexão já foi marcada como caída nesta rodada.
+           *
+           * Sem isto, um lote de 180 mensagens numa academia desconectada faria
+           * 180 UPDATEs idênticos na mesma linha.
+           */
+          const conexaoJaMarcada = new Set<string>();
+
+          /**
+           * Registra no banco que o WhatsApp da academia caiu.
+           *
+           * A coluna `connected` só era corrigida quando alguém abria o painel e
+           * clicava em atualizar. Até lá a tela dizia "Conectado" enquanto todas
+           * as mensagens falhavam — foi exatamente assim que uma sessão morta
+           * passou três semanas despercebida. Quem descobre primeiro é o worker;
+           * então é ele quem grava.
+           */
+          async function marcarConexaoCaida(tenantId: string) {
+            if (conexaoJaMarcada.has(tenantId)) return;
+            conexaoJaMarcada.add(tenantId);
+            const { error } = await supabaseAdmin.from("whatsapp_connections")
+              .update({ status: "desconectado", connected: false })
+              .eq("tenant_id", tenantId);
+            if (error) {
+              console.error(`[dispatch] ${tenantId}: conexão não marcada como caída (${error.message})`);
+            }
+          }
+
           async function marcarFalha(n: any, mensagem: string | null, motivo: string, phone?: string | null) {
             const codigo = classifyErro(motivo);
             const tentativas = (n.tentativas ?? 0) + 1;
@@ -267,6 +295,9 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-notifications")
             }).eq("id", n.id);
             if (eFalha) {
               console.error(`[dispatch] ${n.id}: falha não registrada (${eFalha.message}). Motivo: ${motivo}`);
+            }
+            if (codigo === "whatsapp_desconectado" && n.tenant_id) {
+              await marcarConexaoCaida(n.tenant_id);
             }
           }
 
