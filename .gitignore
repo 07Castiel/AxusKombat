@@ -16,6 +16,11 @@ dist-ssr
 .nitro
 *.local
 
+# Env — segredos e config local. As VITE_* vêm dos secrets da plataforma no
+# build; use .env.example (versionado) como modelo. Nunca versionar o .env (#24).
+.env
+!.env.example
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
