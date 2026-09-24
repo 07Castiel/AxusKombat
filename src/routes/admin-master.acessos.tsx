@@ -12,6 +12,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { translateError } from "@/lib/errors";
+// A exportação neutraliza injeção de fórmula: os campos vêm de visitor_logs, que
+// carrega referrer/user_agent/página controlados por visitante anônimo (#23).
+import { tabelaCsv } from "@/lib/csv-safe";
 import { listVisitorLogs, visitorStats, exportVisitorLogs, deleteVisitorLog } from "@/lib/acessos.functions";
 
 export const Route = createFileRoute("/admin-master/acessos")({
@@ -42,17 +45,6 @@ type Row = {
 
 function fmtDate(iso: string) {
   try { return new Date(iso).toLocaleString("pt-BR"); } catch { return iso; }
-}
-
-function toCsv(rows: Record<string, unknown>[]): string {
-  if (!rows.length) return "";
-  const cols = Object.keys(rows[0]);
-  const escape = (v: unknown) => {
-    if (v == null) return "";
-    const s = String(v).replace(/"/g, '""');
-    return /[",\n;]/.test(s) ? `"${s}"` : s;
-  };
-  return [cols.join(","), ...rows.map((r) => cols.map((c) => escape(r[c])).join(","))].join("\n");
 }
 
 function Bar({ data }: { data: { label: string; value: number }[] }) {
@@ -120,7 +112,7 @@ function AcessosPage() {
   const handleExport = async () => {
     try {
       const res = await exportFn({ data: { token: token!, ...filters } });
-      const csv = toCsv(res.rows as Record<string, unknown>[]);
+      const csv = tabelaCsv(res.rows as Record<string, unknown>[]);
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");

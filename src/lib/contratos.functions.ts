@@ -27,6 +27,13 @@ export const upsertContratoAtivo = createServerFn({ method: "POST" })
     const ctx = context as any;
     const tenantId = await requirePermissao(ctx, "pagamentos");
 
+    // O aluno tem de ser desta academia (#22). Sem isto, o contrato nascia no
+    // tenant de quem chama apontando para um aluno de outra academia — o gatilho
+    // do banco também recusa, mas aqui a mensagem é clara e falha antes.
+    const { data: alunoDoTenant } = await ctx.supabase
+      .from("alunos").select("id").eq("id", data.aluno_id).eq("tenant_id", tenantId).maybeSingle();
+    if (!alunoDoTenant) throw new Error("Aluno não encontrado nesta academia.");
+
     const { data: existing } = await ctx.supabase
       .from("contratos").select("id, dia_vencimento, valor_mensalidade")
       .eq("aluno_id", data.aluno_id).eq("status", "ativo").maybeSingle();

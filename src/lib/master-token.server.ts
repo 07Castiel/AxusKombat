@@ -23,23 +23,25 @@ export const MAX_TENTATIVAS_LOGIN = 5;
 export const JANELA_LOGIN_MIN = 15;
 
 /**
- * Chave de assinatura do token de sessão mestre (A6).
+ * Chave de assinatura do token de sessão mestre (A6 / #24).
  *
- * Antes o HMAC era assinado com a própria MASTER_ADMIN_PASSWORD: a senha virava
- * chave criptográfica, então quem conseguisse um token podia atacá-lo offline
- * para recuperá-la. Agora existe uma chave separada; enquanto ela não for
- * configurada, mantém o comportamento antigo e avisa no log.
+ * MASTER_TOKEN_SECRET é OBRIGATÓRIA e distinta da senha. Antes, quando ela não
+ * estava configurada, o HMAC caía na própria MASTER_ADMIN_PASSWORD: a senha
+ * virava chave criptográfica, então quem conseguisse um token podia atacá-lo
+ * offline para recuperá-la. Sem esse fallback, o login mestre é recusado (a
+ * assinatura/verificação lança) até a chave dedicada existir — em vez de rodar
+ * com a rede de segurança removida.
  */
 function getSecret(): string {
   const dedicada = process.env.MASTER_TOKEN_SECRET;
-  if (dedicada) return dedicada;
-  const s = process.env.MASTER_ADMIN_PASSWORD;
-  if (!s) throw new Error("MASTER_ADMIN_PASSWORD não configurado");
-  console.warn(
-    "[admin-master] MASTER_TOKEN_SECRET não configurada: o token está sendo " +
-      "assinado com a própria senha. Configure uma chave dedicada.",
-  );
-  return s;
+  if (!dedicada) {
+    throw new Error(
+      "MASTER_TOKEN_SECRET não configurada. Configure uma chave dedicada " +
+        "(distinta de MASTER_ADMIN_PASSWORD) nos secrets do projeto para " +
+        "habilitar o painel de admin mestre.",
+    );
+  }
+  return dedicada;
 }
 
 /**

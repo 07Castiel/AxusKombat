@@ -8,6 +8,7 @@ import {
   type RelatorioPeriodo,
 } from "@/integrations/supabase/tabelas-pendentes";
 import { useAuth } from "@/hooks/use-auth";
+import { linhaCsv } from "@/lib/csv-safe";
 import { PageHeader } from "@/components/PageHeader";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -102,21 +103,23 @@ function RelatoriosPage() {
   const alunosKids = comp.kids;
 
   const exportCSV = () => {
+    // linhaCsv neutraliza injeção de fórmula: o nome do aluno (ranking) é
+    // controlado pelo usuário e vai para uma planilha aberta no Excel (#23).
     const lines = [
-      ["Relatório Axus Kombat", `${from} a ${to}`].join(","),
+      linhaCsv(["Relatório Axus Kombat", `${from} a ${to}`]),
       "",
-      ["Indicador", "Valor"].join(","),
-      ["Total recebido", totalRecebido].join(","),
-      ["Total vencido", totalVencido].join(","),
-      ["Total pendente", totalPendente].join(","),
-      ["Total despesas", totalDespesas].join(","),
-      ["Lucro líquido", lucro].join(","),
+      linhaCsv(["Indicador", "Valor"]),
+      linhaCsv(["Total recebido", totalRecebido]),
+      linhaCsv(["Total vencido", totalVencido]),
+      linhaCsv(["Total pendente", totalPendente]),
+      linhaCsv(["Total despesas", totalDespesas]),
+      linhaCsv(["Lucro líquido", lucro]),
       "",
-      ["Mês", "Receita", "Despesa"].join(","),
-      ...monthly.map((m) => [m.mes, m.receita, m.despesa].join(",")),
+      linhaCsv(["Mês", "Receita", "Despesa"]),
+      ...monthly.map((m) => linhaCsv([m.mes, m.receita, m.despesa])),
       "",
-      ["Top inadimplentes (aluno, mensalidades atrasadas, total devido)"].join(","),
-      ...ranking.map((r) => [r.nome, r.atrasadas, r.total].join(",")),
+      linhaCsv(["Top inadimplentes (aluno, mensalidades atrasadas, total devido)"]),
+      ...ranking.map((r) => linhaCsv([r.nome, r.atrasadas, r.total])),
     ];
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
