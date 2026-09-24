@@ -7,6 +7,9 @@ CREATE SCHEMA IF NOT EXISTS auth;
 CREATE TABLE IF NOT EXISTS auth.users (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   email text, raw_user_meta_data jsonb DEFAULT '{}'::jsonb,
+  -- app_metadata só a service_role escreve no Supabase real; o trigger de
+  -- cadastro lê skip_tenant daqui (issue #18), não de raw_user_meta_data.
+  raw_app_meta_data jsonb DEFAULT '{}'::jsonb,
   created_at timestamptz DEFAULT now());
 -- auth.uid() do Supabase lê o JWT; aqui lê um GUC que o teste seta.
 CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS

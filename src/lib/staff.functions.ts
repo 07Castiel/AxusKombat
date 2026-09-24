@@ -81,9 +81,14 @@ export const createStaff = createServerFn({ method: "POST" })
       user_metadata: {
         nome_completo: data.nome_completo,
         telefone: data.telefone ?? null,
-        // Marca de convite: o trigger handle_new_user, depois da ETAPA 3, honra
-        // isto e não cria academia nenhuma. Enquanto essa migration não rodar,
-        // ele ainda cria um tenant temporário e o bloco de limpeza remove.
+      },
+      // Marca de convite em app_metadata, NÃO em user_metadata: o trigger
+      // handle_new_user honra skip_tenant apenas daqui, e app_metadata só a
+      // service_role escreve. Assim um signUp público não pode forjar a flag
+      // para pular a criação da própria academia e se enfiar em outra
+      // (issue #18). Enquanto a migration nova não rodar, o trigger ainda cria
+      // um tenant temporário e o bloco de limpeza abaixo o remove.
+      app_metadata: {
         skip_tenant: true,
       },
     });
