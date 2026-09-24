@@ -1,21 +1,19 @@
 /**
  * Autenticação dos endpoints chamados por pg_cron (server-only).
  *
- * Antes, os hooks comparavam o header `apikey` com SUPABASE_PUBLISHABLE_KEY —
- * que é exatamente o mesmo JWT `role: anon` que o Vite injeta no bundle e que
- * qualquer visitante lê no DevTools. Na prática os endpoints eram públicos:
- * dava para disparar o worker de WhatsApp em laço para todas as academias.
+ * CRON_SECRET é OBRIGATÓRIA (issue #21). Antes, quando ela não estava
+ * configurada, os hooks caíam num modo legado que aceitava
+ * SUPABASE_PUBLISHABLE_KEY — o mesmo JWT `role: anon` que o Vite injeta no
+ * bundle e que qualquer visitante lê no DevTools. Na prática os endpoints
+ * ficavam públicos: dava para disparar o worker de WhatsApp em laço para todas
+ * as academias. Não havia validação de startup que recusasse subir assim.
  *
- * Agora existe um segredo dedicado. A transição é sem janela de quebra:
+ * Agora não há mais fallback: sem CRON_SECRET, os hooks respondem 503 e não
+ * executam nada. Só o segredo dedicado é aceito, em `x-cron-secret` ou, por
+ * compatibilidade com os jobs já cadastrados, em `apikey`.
  *
- *   - CRON_SECRET definida  -> é o ÚNICO segredo aceito (a chave anon não passa)
- *   - CRON_SECRET ausente   -> mantém o comportamento antigo e registra aviso
- *
- * Ordem de virada, sem perder execução:
- *   1. subir este código (CRON_SECRET ainda ausente, cron segue funcionando)
- *   2. definir CRON_SECRET nos secrets do projeto
- *   3. atualizar os jobs do pg_cron para mandar o header novo
- *   4. conferir em notification_worker_runs que voltou a executar
+ * Configuração: defina CRON_SECRET nos secrets do projeto (um valor longo e
+ * aleatório) e faça os jobs do pg_cron mandarem o header `x-cron-secret`.
  */
 import { timingSafeEqual } from "crypto";
 
@@ -40,33 +38,43 @@ const unauthorized = (): Response =>
     headers: { "Content-Type": "application/json" },
   });
 
+const serviceUnavailable = (): Response =>
+  new Response(JSON.stringify({ error: "cron_secret_nao_configurado" }), {
+    status: 503,
+    headers: { "Content-Type": "application/json" },
+  });
+
 /**
  * Valida a chamada de um hook de cron. Aceita o segredo em `x-cron-secret`
  * ou, por compatibilidade com os jobs já cadastrados, em `apikey`.
+ *
+ * Sem CRON_SECRET configurada, recusa com 503: os hooks ficam desabilitados até
+ * o segredo dedicado existir, em vez de aceitar a chave anon (que é pública).
  */
 export function authorizeCronRequest(request: Request): CronAuthResult {
   const cronSecret = process.env.CRON_SECRET;
-  const received = request.headers.get("x-cron-secret") ?? request.headers.get("apikey") ?? "";
-
-  if (cronSecret) {
-    return secretsMatch(received, cronSecret)
-      ? { ok: true }
-      : { ok: false, response: unauthorized() };
+  if (!cronSecret) {
+    console.error(
+      "[cron-auth] CRON_SECRET não configurada: os hooks de cron estão " +
+        "DESABILITADOS (503). Defina CRON_SECRET nos secrets do projeto e " +
+        "faça os jobs do pg_cron mandarem o header x-cron-secret.",
+    );
+    return { ok: false, response: serviceUnavailable() };
   }
 
-  // Modo legado — ainda vulnerável, por isso o aviso é ruidoso de propósito.
-  const legacy = process.env.SUPABASE_PUBLISHABLE_KEY;
-  console.warn(
-    "[cron-auth] CRON_SECRET não configurada: os hooks continuam aceitando a " +
-      "chave anon, que é pública. Defina CRON_SECRET e atualize os jobs do pg_cron.",
-  );
-  if (!legacy || !secretsMatch(received, legacy)) {
-    return { ok: false, response: unauthorized() };
-  }
-  return { ok: true };
+  const received =
+    request.headers.get("x-cron-secret") ?? request.headers.get("apikey") ?? "";
+  return secretsMatch(received, cronSecret)
+    ? { ok: true }
+    : { ok: false, response: unauthorized() };
 }
 
-/** Segredo que as chamadas internas (runDispatch) devem apresentar. */
+/**
+ * Segredo que as chamadas internas (runDispatch) devem apresentar.
+ *
+ * Só CRON_SECRET. Se ela não existir, devolve string vazia — e o hook recusa
+ * com 503, sinalizando a configuração faltando em vez de rodar sem proteção.
+ */
 export function internalCronSecret(): string {
-  return process.env.CRON_SECRET ?? process.env.SUPABASE_PUBLISHABLE_KEY ?? "";
+  return process.env.CRON_SECRET ?? "";
 }
