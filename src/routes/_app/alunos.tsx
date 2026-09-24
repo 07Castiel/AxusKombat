@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useSomenteLeitura } from "@/hooks/use-somente-leitura";
+import { neutralizarFormula } from "@/lib/csv-safe";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -333,7 +334,11 @@ function AlunosPage() {
       // Linha 1 carrega o aviso, linha 3 e o cabecalho: a matricula e a unica
       // credencial do aluno, entao quem imprimir a planilha ve isso antes dos nomes.
       const cabecalho = ["Nome do aluno", "Matrícula", "Status do aluno", "Acesso", "Portal"];
-      const corpo = result.rows.map((row) => [row.nome, row.matricula, row.status, row.acesso, portalUrl]);
+      // Neutraliza injeção de fórmula: o nome do aluno pode começar com = + - @
+      // e a planilha é aberta no Excel (#23).
+      const corpo = result.rows.map((row) =>
+        [row.nome, row.matricula, row.status, row.acesso, portalUrl].map(neutralizarFormula),
+      );
       const sheet = XLSX.utils.aoa_to_sheet([[AVISO_CONFIDENCIAL], [], cabecalho, ...corpo]);
       const ultimaLinha = LINHA_CABECALHO + corpo.length;
       sheet["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: cabecalho.length - 1 } }];

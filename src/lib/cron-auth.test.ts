@@ -2,15 +2,15 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { authorizeCronRequest, internalCronSecret } from "./cron-auth";
 
 /**
- * Autenticação dos hooks de cron (C1).
+ * Autenticação dos hooks de cron (C1 / #21).
  *
- * Estes endpoints disparam envio de WhatsApp para todas as academias. Até a
- * correção, o "segredo" era `SUPABASE_PUBLISHABLE_KEY` — o mesmo JWT `role:anon`
+ * Estes endpoints disparam envio de WhatsApp para todas as academias. O
+ * "segredo" NUNCA pode ser `SUPABASE_PUBLISHABLE_KEY` — o mesmo JWT `role:anon`
  * que o Vite injeta no bundle e que qualquer visitante lê no DevTools.
  *
- * O teste mais importante deste arquivo é o que garante que a chave anon deixa
- * de ser aceita assim que CRON_SECRET existe. Se alguém, por descuido, fizer a
- * verificação voltar a aceitar as duas, é aqui que aparece.
+ * CRON_SECRET é obrigatória: sem ela os hooks respondem 503 e não executam. O
+ * teste mais importante é o que garante que a chave anon nunca é aceita, com ou
+ * sem CRON_SECRET.
  */
 
 const ANON_FALSA = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.chave-publica";
@@ -46,7 +46,7 @@ describe("com CRON_SECRET configurada", () => {
     expect(authorizeCronRequest(req({ apikey: SEGREDO })).ok).toBe(true);
   });
 
-  it("REGRESSÃO: a chave anon deixa de ser aceita", () => {
+  it("REGRESSÃO: a chave anon não é aceita", () => {
     // O ponto inteiro do C1. Se este teste ficar verde com a chave anon, o
     // endpoint voltou a ser publico.
     const r = authorizeCronRequest(req({ apikey: ANON_FALSA }));
@@ -75,47 +75,57 @@ describe("com CRON_SECRET configurada", () => {
   });
 });
 
-describe("sem CRON_SECRET — modo legado da transição", () => {
+describe("sem CRON_SECRET — hooks desabilitados", () => {
   beforeEach(() => {
     delete process.env.CRON_SECRET;
     process.env.SUPABASE_PUBLISHABLE_KEY = ANON_FALSA;
   });
 
-  it("ainda aceita a chave anon, para o cron não parar antes da virada", () => {
-    // Comportamento deliberado: o codigo sobe antes de CRON_SECRET existir.
-    // Continua vulneravel neste intervalo, e por isso o modulo grita no log.
-    expect(authorizeCronRequest(req({ apikey: ANON_FALSA })).ok).toBe(true);
-  });
-
-  it("recusa qualquer outro valor", () => {
-    expect(authorizeCronRequest(req({ apikey: "qualquer-coisa" })).ok).toBe(false);
-  });
-
-  it("recusa tudo quando também não há chave publicável configurada", () => {
-    delete process.env.SUPABASE_PUBLISHABLE_KEY;
+  it("REGRESSÃO: a chave anon NÃO destranca o hook", () => {
+    // Sem CRON_SECRET não há fallback: a chave anon (pública) nunca abre o hook.
     expect(authorizeCronRequest(req({ apikey: ANON_FALSA })).ok).toBe(false);
+    expect(authorizeCronRequest(req({ "x-cron-secret": ANON_FALSA })).ok).toBe(false);
+  });
+
+  it("recusa qualquer chamada, com ou sem header", () => {
+    expect(authorizeCronRequest(req({ apikey: "qualquer-coisa" })).ok).toBe(false);
     expect(authorizeCronRequest(req({})).ok).toBe(false);
+  });
+
+  it("responde 503, sinalizando a configuração faltando", async () => {
+    const r = authorizeCronRequest(req({}));
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.response.status).toBe(503);
+    await expect(r.response.json()).resolves.toEqual({
+      error: "cron_secret_nao_configurado",
+    });
   });
 });
 
 describe("internalCronSecret", () => {
-  it("prefere CRON_SECRET e cai na chave publicável enquanto ela não existe", () => {
+  it("devolve CRON_SECRET quando existe", () => {
     process.env.CRON_SECRET = SEGREDO;
     process.env.SUPABASE_PUBLISHABLE_KEY = ANON_FALSA;
     expect(internalCronSecret()).toBe(SEGREDO);
-
-    delete process.env.CRON_SECRET;
-    expect(internalCronSecret()).toBe(ANON_FALSA);
   });
 
-  it("as chamadas internas do painel passam na própria verificação", () => {
-    // runDispatch monta uma requisicao com internalCronSecret(). Se as duas
-    // pontas divergirem, o botao "Verificar agora" devolve 401 em producao.
-    process.env.CRON_SECRET = SEGREDO;
-    expect(authorizeCronRequest(req({ "x-cron-secret": internalCronSecret() })).ok).toBe(true);
-
+  it("nunca cai na chave publicável: string vazia sem CRON_SECRET", () => {
     delete process.env.CRON_SECRET;
     process.env.SUPABASE_PUBLISHABLE_KEY = ANON_FALSA;
+    expect(internalCronSecret()).toBe("");
+  });
+
+  it("a chamada interna do painel passa na própria verificação quando configurado", () => {
+    // runDispatch monta uma requisicao com internalCronSecret(). Se as duas
+    // pontas divergirem, o botao "Verificar agora" devolve erro em producao.
+    process.env.CRON_SECRET = SEGREDO;
     expect(authorizeCronRequest(req({ "x-cron-secret": internalCronSecret() })).ok).toBe(true);
+  });
+
+  it("sem CRON_SECRET, a chamada interna também é recusada (503)", () => {
+    delete process.env.CRON_SECRET;
+    const r = authorizeCronRequest(req({ "x-cron-secret": internalCronSecret() }));
+    expect(r.ok).toBe(false);
   });
 });
