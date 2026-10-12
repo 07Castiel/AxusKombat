@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.tg_exigir_assinatura_ativa() FROM PUBLIC, anon, authenticated;

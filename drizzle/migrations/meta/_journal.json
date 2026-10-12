@@ -29,6 +29,13 @@
       "when": 1789223400000,
       "tag": "0003_matricula_numerica",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791823389908,
+      "tag": "0004_revoke_public_trigger_exec",
+      "breakpoints": true
     }
   ]
 }
