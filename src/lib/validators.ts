@@ -1,5 +1,6 @@
 // Schemas Zod centralizados para validação dos formulários do sistema.
 import { z } from "zod";
+import { normalizeBirthDate } from "./student-portal.matricula";
 
 const requiredString = (label: string, max = 255) =>
   z.string({ required_error: `${label} é obrigatório.` })
@@ -44,11 +45,21 @@ export const passwordChangeSchema = z.object({
   path: ["confirma"],
 });
 
+// Telefone e data de nascimento sao obrigatorios porque o resto do sistema
+// depende deles: o Portal do Aluno entra com matricula + data de nascimento, e
+// o acesso chega pelo WhatsApp, que descarta numero com menos de 10 digitos
+// (DDD + numero). Sem eles o cadastro salvava, mas o aluno ficava sem portal.
 export const alunoSchema = z.object({
   nome_completo: requiredString("Nome completo", 120),
   email: z.string().trim().email("Formato de e-mail inválido.").max(255).optional().or(z.literal("")),
-  telefone: optionalString(20),
-  data_nascimento: z.string().optional().or(z.literal("")),
+  telefone: requiredString("Telefone", 20)
+    .refine((v) => v.replace(/\D/g, "").length >= 10, "Telefone deve ter DDD e número (mínimo 10 dígitos)."),
+  // Mesma regra do login do portal: uma data que o portal recusaria tem que
+  // ser recusada aqui, senao o aluno recebe uma matricula que nunca entra.
+  data_nascimento: z.string({ required_error: "Data de nascimento é obrigatória." })
+    .trim()
+    .min(1, "Data de nascimento é obrigatória.")
+    .refine((v) => normalizeBirthDate(v) !== null, "Data de nascimento inválida."),
   cpf: z.string().trim().max(20, "CPF muito longo.").optional().or(z.literal("")),
   endereco: optionalString(255),
   categoria: z.enum(["adulto", "kids"], { required_error: "Selecione a categoria." }),
@@ -60,14 +71,12 @@ export const alunoSchema = z.object({
   peso: z.string().optional().or(z.literal("")),
   altura: z.string().optional().or(z.literal("")),
 }).superRefine((data, ctx) => {
-  if (data.data_nascimento) {
+  if (!data.responsavel_nome) {
     const dn = new Date(data.data_nascimento);
-    if (isNaN(dn.getTime())) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Data de nascimento inválida.", path: ["data_nascimento"] });
-      return;
-    }
     const isMenor = dn > new Date(Date.now() - 18 * 365 * 24 * 3600 * 1000);
-    if (isMenor && !data.responsavel_nome) {
+    if (data.categoria === "kids") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Responsável obrigatório para alunos Kids.", path: ["responsavel_nome"] });
+    } else if (isMenor) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Responsável obrigatório para menores de 18 anos.", path: ["responsavel_nome"] });
     }
   }

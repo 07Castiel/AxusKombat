@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Outlet, createRootRouteWithContext, HeadContent, Scripts, Link } from "@tanstack/react-router";
+import { Outlet, createRootRouteWithContext, HeadContent, Scripts, Link, type ErrorComponentProps } from "@tanstack/react-router";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { useVisitorTracking } from "@/hooks/use-visitor-tracking";
@@ -65,7 +65,7 @@ function TrackingBridge() {
   return null;
 }
 
-function RootErrorBoundary({ error, reset }: { error: Error; reset: () => void }) {
+function RootErrorBoundary({ error, reset }: ErrorComponentProps) {
   const msg = translateError(error);
   if (typeof console !== "undefined") console.error("[AppError]", error);
   return (
